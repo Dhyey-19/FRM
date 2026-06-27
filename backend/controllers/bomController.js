@@ -8,7 +8,7 @@ exports.getAllBOMReport = async (req, res) => {
       SELECT 
         b.ParentItemCode,
         p.ItemName AS ParentItemName,
-        p.BrandName AS ParentBrandName,
+        p.Series AS ParentBrandName,
         b.ChildItemCode,
         c.ItemName AS ChildItemName,
         b.Quantity,
@@ -96,6 +96,92 @@ exports.saveBOM = async (req, res) => {
     }
   } catch (error) {
     console.error('Error saving BOM:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// DELETE /api/bom/:parentCode
+exports.deleteBOM = async (req, res) => {
+  const { parentCode } = req.params;
+
+  try {
+    const pool = await connectDB();
+    const result = await pool.request()
+      .input('ParentItemCode', sql.VarChar(10), parentCode)
+      .query('DELETE FROM BOM_Master WHERE ParentItemCode = @ParentItemCode');
+
+    if (result.rowsAffected && result.rowsAffected[0] === 0) {
+      return res.status(404).json({ message: 'BOM not found for this item' });
+    }
+
+    res.status(200).json({ message: 'BOM deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting BOM:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/bom/bulk
+exports.bulkCreateBOM = async (req, res) => {
+  const boms = req.body;
+  if (!Array.isArray(boms) || boms.length === 0) {
+    return res.status(400).json({ message: 'BOM array is required' });
+  }
+
+  const results = {
+    added: [],
+    updated: [],
+    failed: []
+  };
+
+  try {
+    const pool = await connectDB();
+    const request = new sql.Request(pool);
+
+    for (const bom of boms) {
+      const { ParentItemCode, ChildItemCode, Quantity } = bom;
+
+      if (!ParentItemCode || !ChildItemCode || Quantity === undefined) {
+        results.failed.push({ item: bom, reason: 'ParentItemCode, ChildItemCode, and Quantity are required' });
+        continue;
+      }
+
+      try {
+        const checkBOM = await request
+          .input('CheckParent', sql.VarChar(10), ParentItemCode)
+          .input('CheckChild', sql.VarChar(10), ChildItemCode)
+          .query('SELECT ParentItemCode FROM BOM_Master WHERE ParentItemCode = @CheckParent AND ChildItemCode = @CheckChild');
+        
+        request.parameters = {};
+
+        if (checkBOM.recordset.length > 0) {
+          // Update
+          await request
+            .input('UpdParent', sql.VarChar(10), ParentItemCode)
+            .input('UpdChild', sql.VarChar(10), ChildItemCode)
+            .input('UpdQty', sql.Numeric(10, 3), parseFloat(Quantity) || 0)
+            .query('UPDATE BOM_Master SET Quantity = @UpdQty WHERE ParentItemCode = @UpdParent AND ChildItemCode = @UpdChild');
+          request.parameters = {};
+          results.updated.push(bom);
+        } else {
+          // Insert
+          await request
+            .input('InsParent', sql.VarChar(10), ParentItemCode)
+            .input('InsChild', sql.VarChar(10), ChildItemCode)
+            .input('InsQty', sql.Numeric(10, 3), parseFloat(Quantity) || 0)
+            .query('INSERT INTO BOM_Master (ParentItemCode, ChildItemCode, Quantity) VALUES (@InsParent, @InsChild, @InsQty)');
+          request.parameters = {};
+          results.added.push(bom);
+        }
+      } catch (err) {
+        request.parameters = {};
+        results.failed.push({ item: bom, reason: err.message });
+      }
+    }
+    
+    res.status(200).json(results);
+  } catch (error) {
+    console.error('Error in bulk BOM import:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

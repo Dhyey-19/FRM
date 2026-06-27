@@ -25,8 +25,8 @@ const PriceReport = () => {
       if (!response.ok) throw new Error('Failed to fetch items');
       const data = await response.json();
       
-      // Filter to fetch only records where BRANDNAME != NULL AND NOT EMPTY
-      const filteredData = data.filter(item => item.BrandName && item.BrandName.trim() !== '');
+      // Filter to fetch only records where Series != NULL AND NOT EMPTY
+      const filteredData = data.filter(item => item.Series && item.Series.trim() !== '');
       
       setItems(filteredData.map(item => ({ ...item, id: item.ItemCode }))); // DataGrid requires 'id'
     } catch (error) {
@@ -39,7 +39,7 @@ const PriceReport = () => {
   const columns = [
     { field: 'ItemCode', headerName: 'Item Code', width: 150 },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
-    { field: 'BrandName', headerName: 'Series Name', width: 150 },
+    { field: 'Series', headerName: 'Series Name', width: 150 },
     { field: 'MRP', headerName: 'MRP', width: 120, type: 'number', align: 'right', headerAlign: 'right' },
   ];
 
@@ -64,7 +64,7 @@ const PriceReport = () => {
     doc.setLineWidth(0.5);
     doc.line(14, 40, 196, 40);
 
-    const tableData = items.map(row => [row.ItemCode, row.ItemName, row.BrandName || 'N/A', row.MRP]);
+    const tableData = items.map(row => [row.ItemCode, row.ItemName, row.Series || 'N/A', row.MRP]);
     
     autoTable(doc, {
       head: [['Item Code', 'Item Name', 'Series Name', 'MRP']],
@@ -112,7 +112,7 @@ const PriceReport = () => {
     const worksheet = XLSX.utils.json_to_sheet(items.map(i => ({ 
       'Item Code': i.ItemCode, 
       'Item Name': i.ItemName, 
-      'Series Name': i.BrandName,
+      'Series Name': i.Series,
       'MRP': i.MRP
     })));
     const workbook = XLSX.utils.book_new();

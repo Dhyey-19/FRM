@@ -26,8 +26,8 @@ const ItemReport = () => {
       const data = await response.json();
       
       const sortedData = data.sort((a, b) => {
-        const brandA = a.BrandName || 'ZZZ_Unbranded';
-        const brandB = b.BrandName || 'ZZZ_Unbranded';
+        const brandA = a.Series || 'ZZZ_Unbranded';
+        const brandB = b.Series || 'ZZZ_Unbranded';
         
         if (brandA < brandB) return -1;
         if (brandA > brandB) return 1;
@@ -51,7 +51,7 @@ const ItemReport = () => {
   const columns = [
     { field: 'ItemCode', headerName: 'Item Code', width: 150 },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
-    { field: 'BrandName', headerName: 'Series Name', width: 200 },
+    { field: 'Series', headerName: 'Series Name', width: 200 },
   ];
 
   const handleExportPDF = (action = 'download') => {
@@ -75,7 +75,7 @@ const ItemReport = () => {
     doc.setLineWidth(0.5);
     doc.line(14, 40, 196, 40);
 
-    const tableData = items.map(row => [row.ItemCode, row.ItemName, row.BrandName]);
+    const tableData = items.map(row => [row.ItemCode, row.ItemName, row.Series]);
     
     autoTable(doc, {
       head: [['Item Code', 'Item Name', 'Series Name']],
@@ -120,7 +120,7 @@ const ItemReport = () => {
   };
 
   const handleExportExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(items.map(i => ({ 'Item Code': i.ItemCode, 'Item Name': i.ItemName, 'Series Name': i.BrandName })));
+    const worksheet = XLSX.utils.json_to_sheet(items.map(i => ({ 'Item Code': i.ItemCode, 'Item Name': i.ItemName, 'Series Name': i.Series })));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Items');
     XLSX.writeFile(workbook, 'item_report.xlsx');
@@ -193,7 +193,7 @@ const ItemReport = () => {
             initialState={{
               pagination: { paginationModel: { pageSize: 10 } },
               sorting: {
-                sortModel: [{ field: 'BrandName', sort: 'asc' }],
+                sortModel: [{ field: 'Series', sort: 'asc' }],
               },
             }}
             pageSizeOptions={[10, 25, 50]}

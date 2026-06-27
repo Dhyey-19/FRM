@@ -70,7 +70,7 @@ const StockReport = () => {
 
   // Unique filter lists
   const uniqueTypes = ['All', ...new Set(data.map(d => d.ItemType).filter(Boolean))];
-  const uniqueBrands = ['All', ...new Set(data.map(d => d.BrandName).filter(Boolean))];
+  const uniqueBrands = ['All', ...new Set(data.map(d => d.Series).filter(Boolean))];
   const uniqueDepts = ['All', ...new Set(data.map(d => d.DeptName).filter(Boolean))];
 
   // Filter Data
@@ -78,7 +78,7 @@ const StockReport = () => {
     // Dropdown filters
     if (reportType === 'item') {
       if (typeFilter !== 'All' && row.ItemType !== typeFilter) return false;
-      if (brandFilter !== 'All' && row.BrandName !== brandFilter) return false;
+      if (brandFilter !== 'All' && row.Series !== brandFilter) return false;
     } else {
       if (deptFilter !== 'All' && row.DeptName !== deptFilter) return false;
     }
@@ -91,7 +91,7 @@ const StockReport = () => {
       return (row.ItemCode?.toLowerCase().includes(search) || 
               row.ItemName?.toLowerCase().includes(search) ||
               row.ItemType?.toLowerCase().includes(search) ||
-              row.BrandName?.toLowerCase().includes(search));
+              row.Series?.toLowerCase().includes(search));
     } else {
       return (row.DeptName?.toLowerCase().includes(search) || 
               row.ItemCode?.toLowerCase().includes(search) ||
@@ -153,7 +153,7 @@ const StockReport = () => {
           row.ItemCode, 
           row.ItemName, 
           row.ItemType || '-', 
-          row.BrandName || '-', 
+          row.Series || '-', 
           row.Unit || '-', 
           row.MRP?.toFixed(2) || '0.00', 
           row.Costing?.toFixed(2) || '0.00', 
@@ -239,7 +239,7 @@ const StockReport = () => {
           'Code': row.ItemCode,
           'Item Name': row.ItemName,
           'Type': row.ItemType || '-',
-          'Brand': row.BrandName || '-',
+          'Series': row.Series || '-',
           'Unit': row.Unit || '-',
           'MRP': row.MRP || 0,
           'Costing': row.Costing || 0,
@@ -392,7 +392,7 @@ const StockReport = () => {
                       <SortableTableCell label="Code" property="ItemCode" width="10%" />
                       <SortableTableCell label="Item Name" property="ItemName" width="20%" />
                       <SortableTableCell label="Type" property="ItemType" width="10%" />
-                      <SortableTableCell label="Series" property="BrandName" width="10%" />
+                      <SortableTableCell label="Series" property="Series" width="10%" />
                       <SortableTableCell label="Unit" property="Unit" width="10%" />
                       <SortableTableCell label="MRP" property="MRP" align="right" width="10%" />
                       <SortableTableCell label="Costing" property="Costing" align="right" width="10%" />
@@ -425,7 +425,7 @@ const StockReport = () => {
                           <TableCell sx={{ fontWeight: 500 }}>{row.ItemCode}</TableCell>
                           <TableCell>{row.ItemName}</TableCell>
                           <TableCell>{row.ItemType || '-'}</TableCell>
-                          <TableCell>{row.BrandName || '-'}</TableCell>
+                          <TableCell>{row.Series || '-'}</TableCell>
                           <TableCell>{row.Unit || '-'}</TableCell>
                           <TableCell align="right">{row.MRP || 0}</TableCell>
                           <TableCell align="right">{row.Costing || 0}</TableCell>

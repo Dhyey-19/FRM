@@ -81,7 +81,7 @@ exports.getInwardReport = async (req, res) => {
 };
 
 exports.addInward = async (req, res) => {
-  const { INWARDNO, INWARDDATE, LEDGERID, EXPENSE, GST, GSTAMOUNT, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
+  const { Bill, INWARDNO, INWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
 
   if (!INWARDNO || !INWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'InwardNo, Date, Ledger, and at least one detail row are required' });
@@ -97,21 +97,24 @@ exports.addInward = async (req, res) => {
       // Insert Header
       const headerReq = new sql.Request(transaction);
       const headerRes = await headerReq
+        .input('Bill', sql.Bit, Bill !== undefined ? Bill : 1)
         .input('INWARDNO', sql.VarChar(10), INWARDNO)
         .input('INWARDDATE', sql.Date, INWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
         .input('EXPENSE', sql.Numeric(10,2), EXPENSE || 0)
-        .input('GST', sql.Numeric(10,2), GST || 0)
-        .input('GSTAMOUNT', sql.Numeric(10,2), GSTAMOUNT || 0)
+        .input('SGST', sql.Numeric(10,2), SGST || 0)
+        .input('CGST', sql.Numeric(10,2), CGST || 0)
+        .input('IGST', sql.Numeric(10,2), IGST || 0)
+        .input('GSTPER', sql.Numeric(10,2), GSTPER || 0)
         .input('ROUNDOFF', sql.Numeric(10,2), ROUNDOFF || 0)
         .input('TOTALAMOUNT', sql.Numeric(12,2), TOTALAMOUNT || 0)
         .input('REMARK', sql.VarChar(100), REMARK || null)
         .input('CREATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .input('UPDATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .query(`
-          INSERT INTO InwardHeader (INWARDNO, INWARDDATE, LEDGERID, EXPENSE, GST, GSTAMOUNT, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
+          INSERT INTO InwardHeader (Bill, INWARDNO, INWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
           OUTPUT INSERTED.ID
-          VALUES (@INWARDNO, @INWARDDATE, @LEDGERID, @EXPENSE, @GST, @GSTAMOUNT, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
+          VALUES (@Bill, @INWARDNO, @INWARDDATE, @LEDGERID, @EXPENSE, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
         `);
 
       const newInwardId = headerRes.recordset[0].ID;
@@ -128,15 +131,13 @@ exports.addInward = async (req, res) => {
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
-          .input('SAMPLEPCS', sql.Numeric(5,2), d.SAMPLEPCS || 0)
-          .input('SAMPLEWT', sql.Numeric(10,3), d.SAMPLEWT || 0)
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, SAMPLEPCS, SAMPLEWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @SAMPLEPCS, @SAMPLEWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
@@ -213,7 +214,7 @@ exports.addInward = async (req, res) => {
 
 exports.updateInward = async (req, res) => {
   const { id } = req.params;
-  const { INWARDNO, INWARDDATE, LEDGERID, EXPENSE, GST, GSTAMOUNT, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
+  const { Bill, INWARDNO, INWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
 
   if (!INWARDNO || !INWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'InwardNo, Date, Ledger, and at least one detail row are required' });
@@ -277,20 +278,23 @@ exports.updateInward = async (req, res) => {
       const headerReq = new sql.Request(transaction);
       await headerReq
         .input('ID', sql.Numeric(8,0), id)
+        .input('Bill', sql.Bit, Bill !== undefined ? Bill : 1)
         .input('INWARDNO', sql.VarChar(10), INWARDNO)
         .input('INWARDDATE', sql.Date, INWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
         .input('EXPENSE', sql.Numeric(10,2), EXPENSE || 0)
-        .input('GST', sql.Numeric(10,2), GST || 0)
-        .input('GSTAMOUNT', sql.Numeric(10,2), GSTAMOUNT || 0)
+        .input('SGST', sql.Numeric(10,2), SGST || 0)
+        .input('CGST', sql.Numeric(10,2), CGST || 0)
+        .input('IGST', sql.Numeric(10,2), IGST || 0)
+        .input('GSTPER', sql.Numeric(10,2), GSTPER || 0)
         .input('ROUNDOFF', sql.Numeric(10,2), ROUNDOFF || 0)
         .input('TOTALAMOUNT', sql.Numeric(12,2), TOTALAMOUNT || 0)
         .input('REMARK', sql.VarChar(100), REMARK || null)
         .input('UPDATEDBY', sql.VarChar(40), getSignature(UPDATEDBY))
         .query(`
           UPDATE InwardHeader 
-          SET INWARDNO = @INWARDNO, INWARDDATE = @INWARDDATE, LEDGERID = @LEDGERID, 
-              EXPENSE = @EXPENSE, GST = @GST, GSTAMOUNT = @GSTAMOUNT, ROUNDOFF = @ROUNDOFF, 
+          SET Bill = @Bill, INWARDNO = @INWARDNO, INWARDDATE = @INWARDDATE, LEDGERID = @LEDGERID, 
+              EXPENSE = @EXPENSE, SGST = @SGST, CGST = @CGST, IGST = @IGST, GSTPER = @GSTPER, ROUNDOFF = @ROUNDOFF, 
               TOTALAMOUNT = @TOTALAMOUNT, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY
           WHERE ID = @ID
         `);
@@ -307,15 +311,13 @@ exports.updateInward = async (req, res) => {
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
-          .input('SAMPLEPCS', sql.Numeric(5,2), d.SAMPLEPCS || 0)
-          .input('SAMPLEWT', sql.Numeric(10,3), d.SAMPLEWT || 0)
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, SAMPLEPCS, SAMPLEWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @SAMPLEPCS, @SAMPLEWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 

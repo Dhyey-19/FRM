@@ -96,20 +96,20 @@ exports.getDashboardKPIs = async (req, res) => {
 
     // 6. Total Receivable
     const receivableResult = await pool.request().query(`
-      SELECT ISNULL(SUM(ABS(l.ClosingBalance)), 0) AS totalReceivable
+      SELECT ISNULL(SUM(l.ClosingBalance), 0) AS totalReceivable
       FROM LedgerMaster l
       LEFT JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      WHERE l.ClosingBalance < 0 
+      WHERE l.ClosingBalance > 0 
         AND a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
     `);
     const totalReceivable = receivableResult.recordset[0].totalReceivable || 0;
 
     // 7. Total Payable
     const payableResult = await pool.request().query(`
-      SELECT ISNULL(SUM(l.ClosingBalance), 0) AS totalPayable
+      SELECT ISNULL(SUM(ABS(l.ClosingBalance)), 0) AS totalPayable
       FROM LedgerMaster l
       LEFT JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      WHERE l.ClosingBalance > 0 
+      WHERE l.ClosingBalance < 0 
         AND a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
     `);
     const totalPayable = payableResult.recordset[0].totalPayable || 0;

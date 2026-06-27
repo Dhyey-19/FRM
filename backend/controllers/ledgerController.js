@@ -74,7 +74,7 @@ exports.getReceivableReport = async (req, res) => {
 
 exports.addLedger = async (req, res) => {
   const { 
-    LedgerCode, LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email, 
+    LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email, 
     OpeningBalance, ClosingBalance, BankName, AccountNo, IFSC, UPI, OwnBrand, OtherBrand, 
     Discount, CD, Bill, PaymentTerm, Transport, Remark 
   } = req.body;
@@ -86,10 +86,6 @@ exports.addLedger = async (req, res) => {
   try {
     const pool = await connectDB();
     
-    if (LedgerCode && LedgerCode.toLowerCase() === 'system') {
-      return res.status(400).json({ message: "Cannot use 'System' as Ledger Code" });
-    }
-    
     // Check if name exists
     const check = await pool.request()
       .input('LedgerName', sql.VarChar(100), LedgerName)
@@ -100,7 +96,6 @@ exports.addLedger = async (req, res) => {
     }
 
     await pool.request()
-      .input('LedgerCode', sql.VarChar(15), LedgerCode || null)
       .input('LedgerName', sql.VarChar(100), LedgerName)
       .input('AccountGroupID', sql.Int, parseInt(AccountGroupID))
       .input('Address', sql.VarChar(255), Address || null)
@@ -120,16 +115,16 @@ exports.addLedger = async (req, res) => {
       .input('Discount', sql.Decimal(5,2), Discount || null)
       .input('CD', sql.Numeric(3,0), CD || null)
       .input('Bill', sql.Decimal(5,2), Bill || null)
-      .input('PaymentTerm', sql.VarChar(10), PaymentTerm || null)
+      .input('PaymentTerm', sql.Numeric(3,0), PaymentTerm || null)
       .input('Transport', sql.VarChar(50), Transport || null)
       .input('Remark', sql.VarChar(100), Remark || null)
       .query(`
         INSERT INTO LedgerMaster (
-          LedgerCode, LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email,
+          LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email,
           OpeningBalance, ClosingBalance, BankName, AccountNo, IFSC, UPI, OwnBrand, OtherBrand,
           Discount, CD, Bill, PaymentTerm, Transport, Remark
         ) VALUES (
-          @LedgerCode, @LedgerName, @AccountGroupID, @Address, @City, @State, @GSTIN, @MobileNo, @Email,
+          @LedgerName, @AccountGroupID, @Address, @City, @State, @GSTIN, @MobileNo, @Email,
           @OpeningBalance, @ClosingBalance, @BankName, @AccountNo, @IFSC, @UPI, @OwnBrand, @OtherBrand,
           @Discount, @CD, @Bill, @PaymentTerm, @Transport, @Remark
         )
@@ -145,7 +140,7 @@ exports.addLedger = async (req, res) => {
 exports.updateLedger = async (req, res) => {
   const { id } = req.params; // This is the numeric Id now
   const { 
-    LedgerCode, LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email, 
+    LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email, 
     OpeningBalance, ClosingBalance, BankName, AccountNo, IFSC, UPI, OwnBrand, OtherBrand, 
     Discount, CD, Bill, PaymentTerm, Transport, Remark 
   } = req.body;
@@ -157,25 +152,16 @@ exports.updateLedger = async (req, res) => {
   try {
     const pool = await connectDB();
     
-    if (LedgerCode && LedgerCode.toLowerCase() === 'system') {
-      return res.status(400).json({ message: "Cannot use 'System' as Ledger Code" });
-    }
-
     const checkSys = await pool.request()
       .input('Id', sql.Numeric(10,0), id)
-      .query('SELECT LedgerCode FROM LedgerMaster WHERE Id = @Id');
+      .query('SELECT Id FROM LedgerMaster WHERE Id = @Id');
       
     if (checkSys.recordset.length === 0) {
       return res.status(404).json({ message: 'Ledger not found' });
     }
-    
-    if (checkSys.recordset[0].LedgerCode && checkSys.recordset[0].LedgerCode.toLowerCase() === 'system') {
-      return res.status(403).json({ message: 'System ledgers cannot be edited' });
-    }
 
     await pool.request()
       .input('Id', sql.Numeric(10,0), id)
-      .input('LedgerCode', sql.VarChar(15), LedgerCode || null)
       .input('LedgerName', sql.VarChar(100), LedgerName)
       .input('AccountGroupID', sql.Int, parseInt(AccountGroupID))
       .input('Address', sql.VarChar(255), Address || null)
@@ -195,12 +181,12 @@ exports.updateLedger = async (req, res) => {
       .input('Discount', sql.Decimal(5,2), Discount || null)
       .input('CD', sql.Numeric(3,0), CD || null)
       .input('Bill', sql.Decimal(5,2), Bill || null)
-      .input('PaymentTerm', sql.VarChar(10), PaymentTerm || null)
+      .input('PaymentTerm', sql.Numeric(3,0), PaymentTerm || null)
       .input('Transport', sql.VarChar(50), Transport || null)
       .input('Remark', sql.VarChar(100), Remark || null)
       .query(`
         UPDATE LedgerMaster SET 
-          LedgerCode = @LedgerCode, LedgerName = @LedgerName, AccountGroupID = @AccountGroupID, Address = @Address, 
+          LedgerName = @LedgerName, AccountGroupID = @AccountGroupID, Address = @Address, 
           City = @City, State = @State, GSTIN = @GSTIN, MobileNo = @MobileNo, Email = @Email,
           OpeningBalance = @OpeningBalance, ClosingBalance = @ClosingBalance, BankName = @BankName, 
           AccountNo = @AccountNo, IFSC = @IFSC, UPI = @UPI, OwnBrand = @OwnBrand, OtherBrand = @OtherBrand,
@@ -224,14 +210,10 @@ exports.deleteLedger = async (req, res) => {
     
     const checkSys = await pool.request()
       .input('Id', sql.Numeric(10,0), id)
-      .query('SELECT LedgerCode FROM LedgerMaster WHERE Id = @Id');
+      .query('SELECT Id FROM LedgerMaster WHERE Id = @Id');
       
     if (checkSys.recordset.length === 0) {
       return res.status(404).json({ message: 'Ledger not found' });
-    }
-    
-    if (checkSys.recordset[0].LedgerCode && checkSys.recordset[0].LedgerCode.toLowerCase() === 'system') {
-      return res.status(403).json({ message: 'System ledgers cannot be deleted' });
     }
 
     await pool.request()
@@ -461,7 +443,7 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
           l.AccountNo,
           l.IFSC,
           l.UPI,
-          ISNULL(l.CD, 0) AS CreditDays,
+          ISNULL(l.PaymentTerm, 0) AS CreditDays,
           ISNULL(l.ClosingBalance, 0) AS VendorClosingBalance
       FROM OutwardHeader h
       INNER JOIN LedgerMaster l ON h.LEDGERID = l.Id
@@ -567,7 +549,7 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
           h.TOTALAMOUNT AS InvoiceAmount,
           l.Id AS LedgerId,
           l.LedgerName AS PartyName,
-          ISNULL(l.CD, 0) AS CreditDays,
+          ISNULL(l.PaymentTerm, 0) AS CreditDays,
           ISNULL(l.ClosingBalance, 0) AS PartyClosingBalance
       FROM InwardHeader h
       INNER JOIN LedgerMaster l ON h.LEDGERID = l.Id

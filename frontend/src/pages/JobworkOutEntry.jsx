@@ -217,31 +217,41 @@ const JobworkOutEntry = () => {
       format: 'a4'
     });
 
-    // Vendor Header (top-left)
-    const vendorName = ledgerObj.LedgerName || 'Walk-in Party';
+    // Company Header (top-left)
+    const compName = companyProfile ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    doc.text(vendorName, 14, 20);
+    doc.text(compName, 14, 20);
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100);
     let headerY = 25;
-    if (ledgerObj.Address) {
-      doc.text(ledgerObj.Address, 14, headerY);
+    if (companyProfile) {
+      const addr = [companyProfile.Address1, companyProfile.Address2].filter(Boolean).join(', ');
+      const cityDetails = [companyProfile.City, companyProfile.StateName, companyProfile.Pincode].filter(Boolean).join(', ');
+      
+      if (addr) {
+        doc.text(addr, 14, headerY);
+        headerY += 4;
+      }
+      if (cityDetails) {
+        doc.text(cityDetails, 14, headerY);
+        headerY += 4;
+      }
+      
+      const headerTaxDetails = [];
+      if (companyProfile.GSTIN) headerTaxDetails.push(`GSTIN: ${companyProfile.GSTIN}`);
+      if (companyProfile.PANNo) headerTaxDetails.push(`PAN: ${companyProfile.PANNo}`);
+      if (companyProfile.MobileNo) headerTaxDetails.push(`Phone: ${companyProfile.MobileNo}`);
+      if (headerTaxDetails.length > 0) {
+        doc.text(headerTaxDetails.join(' | '), 14, headerY);
+      }
+    } else {
+      doc.text('Factory Site Address, City, State, ZIP', 14, headerY);
       headerY += 4;
-    }
-    const vendorLoc = [ledgerObj.City, ledgerObj.State].filter(Boolean).join(', ');
-    if (vendorLoc) {
-      doc.text(vendorLoc, 14, headerY);
-      headerY += 4;
-    }
-    const headerTaxDetails = [];
-    if (ledgerObj.GSTIN) headerTaxDetails.push(`GSTIN: ${ledgerObj.GSTIN}`);
-    if (ledgerObj.MobileNo) headerTaxDetails.push(`Phone: ${ledgerObj.MobileNo}`);
-    if (headerTaxDetails.length > 0) {
-      doc.text(headerTaxDetails.join(' | '), 14, headerY);
+      doc.text('GSTIN: 27AAAAA0000A1Z5 | Phone: +91 9876543210', 14, headerY);
     }
 
     // Title
@@ -264,45 +274,35 @@ const JobworkOutEntry = () => {
     const dividerY = Math.max(headerY + 2, 33);
     doc.line(14, dividerY, 196, dividerY);
 
-    // Sender Details (Factory Flow/Company details)
+    // Receiver Details (Vendor details)
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    doc.text('SENDER DETAILS', 14, dividerY + 7);
+    doc.text('RECEIVER DETAILS', 14, dividerY + 7);
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0);
-    const compName = companyProfile ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
-    doc.text(compName, 14, dividerY + 12);
+    const vendorName = ledgerObj.LedgerName || 'Walk-in Party';
+    doc.text(vendorName, 14, dividerY + 12);
 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(80);
-    let senderY = dividerY + 16;
-    if (companyProfile) {
-      const addr = [companyProfile.Address1, companyProfile.Address2].filter(Boolean).join(', ');
-      const cityDetails = [companyProfile.City, companyProfile.StateName, companyProfile.Pincode].filter(Boolean).join(', ');
-      
-      if (addr) {
-        doc.text(addr, 14, senderY);
-        senderY += 4;
-      }
-      if (cityDetails) {
-        doc.text(cityDetails, 14, senderY);
-        senderY += 4;
-      }
-      
-      const senderTax = [];
-      if (companyProfile.GSTIN) senderTax.push(`GSTIN: ${companyProfile.GSTIN}`);
-      if (companyProfile.PANNo) senderTax.push(`PAN: ${companyProfile.PANNo}`);
-      if (companyProfile.MobileNo) senderTax.push(`Mobile: ${companyProfile.MobileNo}`);
-      if (senderTax.length > 0) {
-        doc.text(senderTax.join(' | '), 14, senderY);
-      }
-    } else {
-      doc.text('Factory Site Address, City, State, ZIP', 14, senderY);
-      senderY += 4;
-      doc.text('GSTIN: 27AAAAA0000A1Z5 | Phone: +91 9876543210', 14, senderY);
+    let receiverY = dividerY + 16;
+    if (ledgerObj.Address) {
+      doc.text(ledgerObj.Address, 14, receiverY);
+      receiverY += 4;
+    }
+    const vendorLoc = [ledgerObj.City, ledgerObj.State].filter(Boolean).join(', ');
+    if (vendorLoc) {
+      doc.text(vendorLoc, 14, receiverY);
+      receiverY += 4;
+    }
+    const receiverTax = [];
+    if (ledgerObj.GSTIN) receiverTax.push(`GSTIN: ${ledgerObj.GSTIN}`);
+    if (ledgerObj.MobileNo) receiverTax.push(`Phone: ${ledgerObj.MobileNo}`);
+    if (receiverTax.length > 0) {
+      doc.text(receiverTax.join(' | '), 14, receiverY);
     }
 
     // Table Column & Rows
@@ -329,7 +329,7 @@ const JobworkOutEntry = () => {
       ];
     });
 
-    const tableStartY = Math.max(70, senderY + 8);
+    const tableStartY = Math.max(70, receiverY + 8);
 
     autoTable(doc, {
       head: [tableColumn],

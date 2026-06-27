@@ -4,7 +4,7 @@ import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
-  Autocomplete, Grid, Divider, MenuItem, Select, FormControl, InputLabel
+  Autocomplete, Grid, Divider, MenuItem, Select, FormControl, InputLabel, Checkbox, FormControlLabel
 } from '@mui/material';
 import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Input as InputIcon, Visibility as ViewIcon, Close as CloseIcon, AddCircle as AddCircleIcon,
   Description as DescriptionIcon, Print as PrintIcon
@@ -18,8 +18,6 @@ const emptyRow = {
   ITEMCODE: '',
   GROSSWT: '',
   NETWT: '',
-  SAMPLEPCS: '',
-  SAMPLEWT: '',
   QUANTITY: '',
   UNIT: '',
   RATE: '',
@@ -47,13 +45,15 @@ const OutwardEntry = () => {
   const [dialogError, setDialogError] = useState('');
   const [editingId, setEditingId] = useState(null);
   
-  // Form States
+  const [bill, setBill] = useState(true);
   const [outwardNo, setOutwardNo] = useState('');
   const [outwardDate, setOutwardDate] = useState(todayDate);
   const [ledgerId, setLedgerId] = useState(null);
   const [expense, setExpense] = useState('');
-  const [gst, setGst] = useState('');
-  const [gstAmount, setGstAmount] = useState('');
+  const [sgst, setSgst] = useState('');
+  const [cgst, setCgst] = useState('');
+  const [igst, setIgst] = useState('');
+  const [gstPer, setGstPer] = useState('');
   const [roundOff, setRoundOff] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [remark, setRemark] = useState('');
@@ -132,27 +132,42 @@ const OutwardEntry = () => {
     fetchCompanyProfile();
   }, []);
 
-  // Calculate totals whenever gridRows, expense, or gst changes
+  // Calculate totals whenever gridRows, expense, gstPer, or ledgerId changes
   useEffect(() => {
     const sumAmount = gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
     const exp = parseFloat(expense) || 0;
     const taxable = sumAmount + exp;
     
-    let calcGstAmount = 0;
-    if (gst) {
-      calcGstAmount = taxable * (parseFloat(gst) / 100);
-      setGstAmount(calcGstAmount.toFixed(2));
-    } else {
-      setGstAmount('');
+    let calcSgst = 0;
+    let calcCgst = 0;
+    let calcIgst = 0;
+    let totalTax = 0;
+
+    if (gstPer && parseFloat(gstPer) > 0) {
+      const selectedLedger = ledgers.find(l => l.Id === ledgerId);
+      const stateName = selectedLedger && selectedLedger.State ? selectedLedger.State.toUpperCase() : '';
+      const gstRate = parseFloat(gstPer);
+      
+      if (stateName === 'GUJARAT') {
+        calcSgst = taxable * ((gstRate / 2) / 100);
+        calcCgst = taxable * ((gstRate / 2) / 100);
+      } else {
+        calcIgst = taxable * (gstRate / 100);
+      }
+      totalTax = calcSgst + calcCgst + calcIgst;
     }
 
-    const totalBeforeRound = taxable + calcGstAmount;
+    setSgst(calcSgst > 0 ? calcSgst.toFixed(2) : '');
+    setCgst(calcCgst > 0 ? calcCgst.toFixed(2) : '');
+    setIgst(calcIgst > 0 ? calcIgst.toFixed(2) : '');
+
+    const totalBeforeRound = taxable + totalTax;
     const totalRounded = Math.round(totalBeforeRound);
     const roundOffDiff = (totalRounded - totalBeforeRound).toFixed(2);
     
     setRoundOff(roundOffDiff);
     setTotalAmount(totalRounded.toFixed(2));
-  }, [gridRows, expense, gst]);
+  }, [gridRows, expense, gstPer, ledgerId, ledgers]);
 
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
@@ -175,9 +190,12 @@ const OutwardEntry = () => {
     setOutwardNo('');
     setOutwardDate(new Date().toISOString().split('T')[0]);
     setLedgerId(null);
+    setBill(true);
     setExpense('');
-    setGst('');
-    setGstAmount('');
+    setSgst('');
+    setCgst('');
+    setIgst('');
+    setGstPer('');
     setRoundOff('');
     setTotalAmount('');
     setRemark('');
@@ -191,9 +209,12 @@ const OutwardEntry = () => {
     setOutwardNo(outward.OUTWARDNO || '');
     setOutwardDate(outward.OUTWARDDATE ? outward.OUTWARDDATE.split('T')[0] : new Date().toISOString().split('T')[0]);
     setLedgerId(outward.LEDGERID);
+    setBill(outward.Bill !== false);
     setExpense(outward.EXPENSE || '');
-    setGst(outward.GST || '');
-    setGstAmount(outward.GSTAMOUNT || '');
+    setSgst(outward.SGST || '');
+    setCgst(outward.CGST || '');
+    setIgst(outward.IGST || '');
+    setGstPer(outward.GSTPER || '');
     setRoundOff(outward.ROUNDOFF || '');
     setTotalAmount(outward.TOTALAMOUNT || '');
     setRemark(outward.REMARK || '');
@@ -203,8 +224,6 @@ const OutwardEntry = () => {
         ITEMCODE: d.ITEMCODE || '',
         GROSSWT: d.GROSSWT || '',
         NETWT: d.NETWT || '',
-        SAMPLEPCS: d.SAMPLEPCS || '',
-        SAMPLEWT: d.SAMPLEWT || '',
         QUANTITY: d.QUANTITY || '',
         UNIT: d.UNIT || '',
         RATE: d.RATE || '',
@@ -228,11 +247,17 @@ const OutwardEntry = () => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
     
-    // Auto calculate Amount if Qty and Rate change
-    if (field === 'QUANTITY' || field === 'RATE') {
-      const qty = parseFloat(newRows[index].QUANTITY) || 0;
+    // Auto calculate Amount if Qty, NetWt, Rate or Unit changes
+    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT'].includes(field)) {
+      const unit = newRows[index].UNIT ? newRows[index].UNIT.toUpperCase() : '';
       const rate = parseFloat(newRows[index].RATE) || 0;
-      newRows[index].AMOUNT = (qty * rate).toFixed(2);
+      if (unit === 'KGS' || unit === 'KG') {
+        const netwt = parseFloat(newRows[index].NETWT) || 0;
+        newRows[index].AMOUNT = (netwt * rate).toFixed(2);
+      } else {
+        const qty = parseFloat(newRows[index].QUANTITY) || 0;
+        newRows[index].AMOUNT = (qty * rate).toFixed(2);
+      }
     }
     
     setGridRows(newRows);
@@ -242,6 +267,22 @@ const OutwardEntry = () => {
     const newRows = [...gridRows];
     newRows[index].ITEMCODE = item ? item.ItemCode : '';
     newRows[index].UNIT = item ? item.Unit : '';
+    
+    if (item && item.MRP !== undefined && item.MRP !== null) {
+      newRows[index].RATE = item.MRP.toString();
+    } else if (!item) {
+      newRows[index].RATE = '';
+    }
+    
+    const unit = newRows[index].UNIT ? newRows[index].UNIT.toUpperCase() : '';
+    const rate = parseFloat(newRows[index].RATE) || 0;
+    if (unit === 'KGS' || unit === 'KG') {
+      const netwt = parseFloat(newRows[index].NETWT) || 0;
+      newRows[index].AMOUNT = (netwt * rate).toFixed(2);
+    } else {
+      const qty = parseFloat(newRows[index].QUANTITY) || 0;
+      newRows[index].AMOUNT = (qty * rate).toFixed(2);
+    }
     setGridRows(newRows);
   };
 
@@ -424,8 +465,10 @@ const OutwardEntry = () => {
     // Summary calculation
     const subTotal = detailsSource.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
     const exp = parseFloat(outward.EXPENSE) || 0;
-    const gstPct = parseFloat(outward.GST) || 0;
-    const gstAmt = parseFloat(outward.GSTAMOUNT) || 0;
+    const gstPct = parseFloat(outward.GSTPER) || 0;
+    const sgstAmt = parseFloat(outward.SGST) || 0;
+    const cgstAmt = parseFloat(outward.CGST) || 0;
+    const igstAmt = parseFloat(outward.IGST) || 0;
     const roundOffDiff = parseFloat(outward.ROUNDOFF) || 0;
     const totalRounded = parseFloat(outward.TOTALAMOUNT) || 0;
 
@@ -441,7 +484,9 @@ const OutwardEntry = () => {
 
     drawTotalLine('Sub Total:', subTotal.toFixed(2));
     if (exp > 0) drawTotalLine('Expense:', exp.toFixed(2));
-    if (gstPct > 0) drawTotalLine(`GST (${gstPct}%):`, gstAmt.toFixed(2));
+    if (sgstAmt > 0) drawTotalLine('SGST:', sgstAmt.toFixed(2));
+    if (cgstAmt > 0) drawTotalLine('CGST:', cgstAmt.toFixed(2));
+    if (igstAmt > 0) drawTotalLine('IGST:', igstAmt.toFixed(2));
     if (roundOffDiff !== 0) drawTotalLine('Round Off:', roundOffDiff.toFixed(2));
     labelY += 1;
     doc.line(120, labelY - 3, 196, labelY - 3);
@@ -537,12 +582,15 @@ const OutwardEntry = () => {
     const username = localUser.Username || localUser.username || 'System';
 
     const payload = {
+      Bill: bill,
       OUTWARDNO: outwardNo,
       OUTWARDDATE: outwardDate,
       LEDGERID: ledgerId,
       EXPENSE: expense ? parseFloat(expense) : 0,
-      GST: gst ? parseFloat(gst) : 0,
-      GSTAMOUNT: gstAmount ? parseFloat(gstAmount) : 0,
+      SGST: sgst ? parseFloat(sgst) : 0,
+      CGST: cgst ? parseFloat(cgst) : 0,
+      IGST: igst ? parseFloat(igst) : 0,
+      GSTPER: gstPer ? parseFloat(gstPer) : 0,
       ROUNDOFF: roundOff ? parseFloat(roundOff) : 0,
       TOTALAMOUNT: totalAmount ? parseFloat(totalAmount) : 0,
       REMARK: remark,
@@ -552,8 +600,6 @@ const OutwardEntry = () => {
         ...r,
         GROSSWT: parseFloat(r.GROSSWT) || 0,
         NETWT: parseFloat(r.NETWT) || 0,
-        SAMPLEPCS: parseFloat(r.SAMPLEPCS) || 0,
-        SAMPLEWT: parseFloat(r.SAMPLEWT) || 0,
         QUANTITY: parseFloat(r.QUANTITY) || 0,
         RATE: parseFloat(r.RATE) || 0,
         AMOUNT: parseFloat(r.AMOUNT) || 0
@@ -723,7 +769,13 @@ const OutwardEntry = () => {
           
           {/* Header Section */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
-            <Grid container spacing={2}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={1}>
+                <FormControlLabel
+                  control={<Checkbox checked={bill} onChange={(e) => setBill(e.target.checked)} />}
+                  label="Bill"
+                />
+              </Grid>
               <Grid item xs={12} sm={3} md={2}>
                 <TextField fullWidth label="Outward No" size="small" value={outwardNo} onChange={(e) => setOutwardNo(e.target.value)} required />
               </Grid>
@@ -750,56 +802,72 @@ const OutwardEntry = () => {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '8%' }}>Gross Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '8%' }}>Net Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Sample Pcs</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Sample Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '6%' }}>Qty</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Unit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '8%' }}>Rate</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '30%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Gross Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Net Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Qty</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '15%' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Rate</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Amount</TableCell>
                   <TableCell sx={{ width: '5%' }}></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {gridRows.map((row, index) => (
-                  <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
-                    <TableCell>
-                      <Autocomplete
-                        options={items}
-                        getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
-                        value={items.find(i => i.ItemCode === row.ITEMCODE) || null}
-                        onChange={(e, newValue) => handleItemSelect(index, newValue)}
-                        renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
-                        fullWidth
-                        slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
-                      />
-                    </TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.SAMPLEPCS} onChange={(e) => handleRowChange(index, 'SAMPLEPCS', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.SAMPLEWT} onChange={(e) => handleRowChange(index, 'SAMPLEWT', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
-                    <TableCell>
-                      <Autocomplete
-                        options={dbUnits}
-                        getOptionLabel={(option) => option.Unit || ''}
-                        value={dbUnits.find(u => u.Unit === row.UNIT) || null}
-                        onChange={(e, newValue) => handleRowChange(index, 'UNIT', newValue ? newValue.Unit : '')}
-                        renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
-                        fullWidth
-                      />
-                    </TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.AMOUNT} onChange={(e) => handleRowChange(index, 'AMOUNT', e.target.value)} fullWidth InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}/></TableCell>
-                    <TableCell align="center">
-                      <IconButton color="error" size="small" onClick={() => removeGridRow(index)} disabled={!hasDeletePermission() || gridRows.length === 1}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {gridRows.map((row, index) => {
+                  const selectedItem = items.find(i => i.ItemCode === row.ITEMCODE);
+                  let warningMsg = null;
+                  if (selectedItem && selectedItem.StdWeight) {
+                    const netWt = parseFloat(row.NETWT) || 0;
+                    const qty = parseFloat(row.QUANTITY) || 0;
+                    if (qty > 0 && netWt > 0) {
+                      const perPcsWeight = netWt / qty;
+                      const stdWt = parseFloat(selectedItem.StdWeight);
+                      if (perPcsWeight > stdWt) {
+                         const diff = (perPcsWeight - stdWt).toFixed(3);
+                         warningMsg = `+${diff} above std (${stdWt})`;
+                      }
+                    }
+                  }
+                  
+                  return (
+                    <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
+                      <TableCell>
+                        <Autocomplete
+                          options={items}
+                          getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
+                          value={selectedItem || null}
+                          onChange={(e, newValue) => handleItemSelect(index, newValue)}
+                          renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
+                          fullWidth
+                          slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                        />
+                      </TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
+                      <TableCell>
+                        <TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth />
+                        {warningMsg && <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, lineHeight: 1.1 }}>{warningMsg}</Typography>}
+                      </TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
+                      <TableCell>
+                        <Autocomplete
+                          options={dbUnits}
+                          getOptionLabel={(option) => option.Unit || ''}
+                          value={dbUnits.find(u => u.Unit === row.UNIT) || null}
+                          onChange={(e, newValue) => handleRowChange(index, 'UNIT', newValue ? newValue.Unit : '')}
+                          renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
+                          fullWidth
+                        />
+                      </TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.AMOUNT} onChange={(e) => handleRowChange(index, 'AMOUNT', e.target.value)} fullWidth InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}/></TableCell>
+                      <TableCell align="center">
+                        <IconButton color="error" size="small" onClick={() => removeGridRow(index)} disabled={!hasDeletePermission() || gridRows.length === 1}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -825,11 +893,19 @@ const OutwardEntry = () => {
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                     <Typography variant="body2">GST %:</Typography>
-                    <TextField size="small" type="number" value={gst} onChange={(e) => setGst(e.target.value)} sx={{ width: '100px' }} inputProps={{ style: { textAlign: 'right' } }} />
+                    <TextField size="small" type="number" value={gstPer} onChange={(e) => setGstPer(e.target.value)} sx={{ width: '100px' }} inputProps={{ style: { textAlign: 'right' } }} />
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2">GST Amount:</Typography>
-                    <Typography variant="body2">{gstAmount || '0.00'}</Typography>
+                    <Typography variant="body2">SGST:</Typography>
+                    <Typography variant="body2">{sgst || '0.00'}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2">CGST:</Typography>
+                    <Typography variant="body2">{cgst || '0.00'}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2">IGST:</Typography>
+                    <Typography variant="body2">{igst || '0.00'}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2">Round Off:</Typography>

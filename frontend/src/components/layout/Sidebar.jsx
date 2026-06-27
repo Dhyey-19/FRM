@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import appLogo from '../../assets/app_logo.jpeg';
 import { 
   Drawer, 
@@ -40,13 +40,15 @@ import {
   ExpandLess, 
   ExpandMore,
   Logout,
-  KeyOff as KeyOffIcon
+  KeyOff as KeyOffIcon,
+  Menu as MenuIcon,
+  MenuOpen as MenuOpenIcon,
+  AccountCircle as AccountCircleIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const drawerWidth = 300;
-
-const Sidebar = ({ user }) => {
+const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [openMenu, setOpenMenu] = useState('');
@@ -58,13 +60,22 @@ const Sidebar = ({ user }) => {
   const userRole = String(user?.role || '').toUpperCase();
   const isAdmin = userRole === 'ADMIN' || userRole === 'ADMINISTRATOR';
 
-  const handleAdminClick = () => {
-    setOpenMenu(openMenu === 'admin' ? '' : 'admin');
+  useEffect(() => {
+    if (isCollapsed) {
+      setOpenMenu('');
+    }
+  }, [isCollapsed]);
+
+  const handleMenuClick = (menuName) => {
+    if (isCollapsed) {
+      toggleSidebar();
+      setOpenMenu(menuName);
+    } else {
+      setOpenMenu(openMenu === menuName ? '' : menuName);
+    }
   };
 
-  const handleReportsClick = () => {
-    setOpenMenu(openMenu === 'reports' ? '' : 'reports');
-  };
+
 
   const handleCloseSurrenderDialog = () => {
     setOpenSurrenderDialog(false);
@@ -114,56 +125,79 @@ const Sidebar = ({ user }) => {
       sx={{
         width: drawerWidth,
         flexShrink: 0,
+        transition: 'width 0.3s ease',
+        whiteSpace: 'nowrap',
         [`& .MuiDrawer-paper`]: { 
           width: drawerWidth, 
+          transition: 'width 0.3s ease',
           boxSizing: 'border-box', 
           backgroundColor: '#051322', // Deep Navy Dark Theme
           color: '#ffffff', // White text
           borderRight: 'none', 
           display: 'flex', 
-          flexDirection: 'column' 
+          flexDirection: 'column',
+          overflowX: 'hidden'
         },
       }}
     >
       <Box sx={{ py: 0.5, overflow: 'auto', flex: 1 }}>
         
         {/* Company Branding */}
-        <Box sx={{ py: 0.5, p: 3, display: 'flex', alignItems: 'center', gap: 2, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          <img 
-            src={user.companyLogo || appLogo} 
-            alt="Logo" 
-            style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
-          />
-          <Typography variant="h6" sx={{ py: 0.5, fontWeight: 700, letterSpacing: 0.5 }}>
-            {user.companyName ? user.companyName.replace(' ERP', '') : 'FactoryFlow'}
-          </Typography>
+        <Box sx={{ p: isCollapsed ? 1 : 3, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          {isCollapsed ? (
+            <img 
+              src={user.companyLogo || appLogo} 
+              alt="Logo" 
+              style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
+            />
+          ) : (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+              <img 
+                src={user.companyLogo || appLogo} 
+                alt="Logo" 
+                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
+              />
+              <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+                {user.companyName ? user.companyName.replace(' ERP', '') : 'FactoryFlow'}
+              </Typography>
+            </Box>
+          )}
         </Box>
 
         {/* User Card */}
-        <Box sx={{ py: 0.5, p: 2, display: 'flex', alignItems: 'center', gap: 2, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          <Avatar sx={{ py: 0.5, width: 40, height: 40, bgcolor: '#F88A01', color: 'white', fontWeight: 600 }}>
-            {(user.username || 'D')[0].toUpperCase()}
-          </Avatar>
-          <Box sx={{ py: 0.5, display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-            <Typography variant="subtitle2" sx={{ py: 0.5, fontWeight: 600, lineHeight: 1.2 }}>
-              {user.username || 'Dhyey Shah'}
-            </Typography>
-            <Typography variant="caption" sx={{ py: 0.5, color: 'rgba(255,255,255,0.7)' }}>
-              {user.role || 'Administrator'}
-            </Typography>
-          </Box>
-          <IconButton 
-            size="small" 
-            onClick={() => {
-              localStorage.removeItem('user');
-              sessionStorage.removeItem('user');
-              navigate('/');
-            }}
-            sx={{ color: '#ff8a8a', '&:hover': { bgcolor: 'rgba(255,138,138,0.1)' } }}
-            title="Logout"
-          >
-            <Logout fontSize="small" />
-          </IconButton>
+        <Box sx={{ p: isCollapsed ? 1 : 2, display: 'flex', flexDirection: isCollapsed ? 'column' : 'row', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start', gap: 1, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <AccountCircleIcon sx={{ fontSize: isCollapsed ? 32 : 40, color: '#F88A01' }} />
+          {!isCollapsed ? (
+            <>
+              <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user.username || 'Dhyey Shah'}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
+                  {user.role || 'Administrator'}
+                </Typography>
+              </Box>
+              <IconButton onClick={toggleSidebar} sx={{ color: 'white', p: 0.5 }}>
+                <MenuOpenIcon fontSize="small" />
+              </IconButton>
+              <IconButton 
+                size="small" 
+                onClick={() => {
+                  localStorage.removeItem('user');
+                  sessionStorage.removeItem('user');
+                  navigate('/');
+                }}
+                sx={{ color: '#ff8a8a', p: 0.5, '&:hover': { bgcolor: 'rgba(255,138,138,0.1)' } }}
+                title="Logout"
+              >
+                <Logout fontSize="small" />
+              </IconButton>
+            </>
+          ) : (
+            <IconButton onClick={toggleSidebar} sx={{ color: 'white', p: 0.5 }}>
+              <MenuIcon />
+            </IconButton>
+          )}
         </Box>
 
         {/* Navigation Menu */}
@@ -179,14 +213,15 @@ const Sidebar = ({ user }) => {
                 <DashboardIcon />
               </ListItemIcon>
               <ListItemText primary="Dashboard" primaryTypographyProps={{ fontWeight: isSelected('/dashboard') ? 600 : 400 }} />
-            </ListItemButton>
+              {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
+              </ListItemButton>
           </ListItem>
 
           {/* Admin Nested Menu */}
           {isAdmin && (
             <>
               <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }}>
-                <ListItemButton onClick={() => setOpenMenu(openMenu === 'admin' ? '' : 'admin')} sx={{ py: 0.5, borderRadius: 2 }}>
+                <ListItemButton onClick={() => handleMenuClick('admin')} sx={{ py: 0.5, borderRadius: 2 }}>
                   <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: 'rgba(255,255,255,0.7)' }}>
                     <AdminIcon />
                   </ListItemIcon>
@@ -209,7 +244,8 @@ const Sidebar = ({ user }) => {
                       <SettingsIcon />
                     </ListItemIcon>
                     <ListItemText primary="Company Profile" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/company-profile') ? 600 : 400 }} />
-                  </ListItemButton>
+                    {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/company-profile', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
+              </ListItemButton>
 
                   <ListItemButton 
                     selected={isSelected('/dashboard/users')} 
@@ -223,7 +259,8 @@ const Sidebar = ({ user }) => {
                       <PeopleIcon />
                     </ListItemIcon>
                     <ListItemText primary="User Master" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/users') ? 600 : 400 }} />
-                  </ListItemButton>
+                    {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/users', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
+              </ListItemButton>
 
                   <ListItemButton 
                     selected={isSelected('/dashboard/assets')} 
@@ -237,7 +274,8 @@ const Sidebar = ({ user }) => {
                       <InventoryIcon />
                     </ListItemIcon>
                     <ListItemText primary="Assets" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/assets') ? 600 : 400 }} />
-                  </ListItemButton>
+                    {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/assets', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
+              </ListItemButton>
 
                   <ListItemButton 
                     onClick={() => setOpenSurrenderDialog(true)}
@@ -257,7 +295,7 @@ const Sidebar = ({ user }) => {
 
           {/* Inventory Masters Menu */}
           <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }}>
-            <ListItemButton onClick={() => setOpenMenu(openMenu === 'inventoryMasters' ? '' : 'inventoryMasters')} sx={{ py: 0.5, borderRadius: 2 }}>
+            <ListItemButton onClick={() => handleMenuClick('inventoryMasters')} sx={{ py: 0.5, borderRadius: 2 }}>
               <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: 'rgba(255,255,255,0.7)' }}>
                 <InventoryIcon />
               </ListItemIcon>
@@ -280,6 +318,7 @@ const Sidebar = ({ user }) => {
                   <BrandIcon />
                 </ListItemIcon>
                 <ListItemText primary="Series Master" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/brands') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/brands', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -294,6 +333,7 @@ const Sidebar = ({ user }) => {
                   <UnitIcon />
                 </ListItemIcon>
                 <ListItemText primary="Unit Master" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/units') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/units', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -308,6 +348,7 @@ const Sidebar = ({ user }) => {
                   <ItemIcon />
                 </ListItemIcon>
                 <ListItemText primary="Item Type" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/item-types') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/item-types', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -322,6 +363,7 @@ const Sidebar = ({ user }) => {
                   <ItemIcon />
                 </ListItemIcon>
                 <ListItemText primary="Item Master" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/items') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/items', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -336,6 +378,7 @@ const Sidebar = ({ user }) => {
                   <BOMIcon />
                 </ListItemIcon>
                 <ListItemText primary="BOM" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/bom') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/bom', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -350,13 +393,14 @@ const Sidebar = ({ user }) => {
                   <DepartmentIcon />
                 </ListItemIcon>
                 <ListItemText primary="Departments" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/departments') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/departments', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
             </List>
           </Collapse>
 
           {/* Transactions Nested Menu */}
           <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }}>
-            <ListItemButton onClick={() => setOpenMenu(openMenu === 'transactions' ? '' : 'transactions')} sx={{ py: 0.5, borderRadius: 2 }}>
+            <ListItemButton onClick={() => handleMenuClick('transactions')} sx={{ py: 0.5, borderRadius: 2 }}>
               <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: 'rgba(255,255,255,0.7)' }}>
                 <TransactionIcon />
               </ListItemIcon>
@@ -379,6 +423,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon />
                 </ListItemIcon>
                 <ListItemText primary="Inward" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/inwards') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/inwards', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -393,6 +438,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon />
                 </ListItemIcon>
                 <ListItemText primary="Outward" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/outwards') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/outwards', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -407,6 +453,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon />
                 </ListItemIcon>
                 <ListItemText primary="Job Work Out" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/jobwork-outs') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/jobwork-outs', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -421,6 +468,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon />
                 </ListItemIcon>
                 <ListItemText primary="Job Work In" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/jobwork-ins') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/jobwork-ins', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -435,6 +483,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon />
                 </ListItemIcon>
                 <ListItemText primary="Stock Journal" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/stock-journal') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/stock-journal', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -449,6 +498,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon />
                 </ListItemIcon>
                 <ListItemText primary="Stock Transfer" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/stock-transfer') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/stock-transfer', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -463,13 +513,14 @@ const Sidebar = ({ user }) => {
                   <AssemblyIcon />
                 </ListItemIcon>
                 <ListItemText primary="Assembly" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/assembly') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/assembly', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
             </List>
           </Collapse>
 
           {/* Accounts Nested Menu */}
           <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }}>
-            <ListItemButton onClick={() => setOpenMenu(openMenu === 'accounts' ? '' : 'accounts')} sx={{ py: 0.5, borderRadius: 2 }}>
+            <ListItemButton onClick={() => handleMenuClick('accounts')} sx={{ py: 0.5, borderRadius: 2 }}>
               <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: 'rgba(255,255,255,0.7)' }}>
                 <AccountGroupIcon />
               </ListItemIcon>
@@ -492,6 +543,7 @@ const Sidebar = ({ user }) => {
                   <AccountGroupIcon />
                 </ListItemIcon>
                 <ListItemText primary="Account Group" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/account-groups') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/account-groups', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -506,6 +558,7 @@ const Sidebar = ({ user }) => {
                   <PeopleIcon /> 
                 </ListItemIcon>
                 <ListItemText primary="Account Ledger" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/ledgers') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/ledgers', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -520,13 +573,14 @@ const Sidebar = ({ user }) => {
                   <TransactionIcon /> 
                 </ListItemIcon>
                 <ListItemText primary="Vouchers" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/vouchers') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/vouchers', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
             </List>
           </Collapse>
 
           {/* Reports Nested Menu */}
           <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }}>
-            <ListItemButton onClick={() => setOpenMenu(openMenu === 'reports' ? '' : 'reports')} sx={{ py: 0.5, borderRadius: 2 }}>
+            <ListItemButton onClick={() => handleMenuClick('reports')} sx={{ py: 0.5, borderRadius: 2 }}>
               <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: 'rgba(255,255,255,0.7)' }}>
                 <ReportsIcon />
               </ListItemIcon>
@@ -557,6 +611,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Series List" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/brands') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/brands', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -571,6 +626,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Item List" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/items') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/items', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -585,6 +641,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Price" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/prices') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/prices', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               {/* Category: Inventory & Production */}
@@ -606,6 +663,7 @@ const Sidebar = ({ user }) => {
                   <ListIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Stock" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/stock') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/stock', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -620,6 +678,7 @@ const Sidebar = ({ user }) => {
                   <BOMIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="BOM" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/bom') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/bom', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -634,6 +693,7 @@ const Sidebar = ({ user }) => {
                   <AssemblyIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Assembly" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/assembly') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/assembly', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -648,6 +708,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Stock Journal" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/stock-journal') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/stock-journal', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -662,6 +723,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Job Work Out" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/jobwork-out') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/jobwork-out', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -676,6 +738,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Job Work In" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/jobwork-in') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/jobwork-in', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -690,6 +753,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Job Work Stock" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/jobwork-stock') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/jobwork-stock', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               {/* Category: Logistical Transactions */}
@@ -711,6 +775,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Inward Log" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/inward') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/inward', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -725,6 +790,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Outward Log" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/outward') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/outward', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               {/* Category: Financial Statements */}
@@ -746,6 +812,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Account Ledger" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/account-ledger') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/account-ledger', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -760,6 +827,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Trial Balance" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/trial-balance') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/trial-balance', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -774,6 +842,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Receivable Summary" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/receivable') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/receivable', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -788,6 +857,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Payable Summary" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/payable') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/payable', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -802,6 +872,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Inward Payable" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/invoice-payable') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/invoice-payable', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -816,6 +887,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Outward Receivable" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/invoice-receivable') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/invoice-receivable', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -830,6 +902,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Profit & Loss" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/profit-loss') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/profit-loss', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
               <ListItemButton 
@@ -844,6 +917,7 @@ const Sidebar = ({ user }) => {
                   <ReportsIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText primary="Balance Sheet" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/balance-sheet') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/balance-sheet', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
             </List>
           </Collapse>

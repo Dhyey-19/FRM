@@ -102,71 +102,75 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
   itemResult.recordset.forEach(i => { units[i.ItemCode] = i.Unit ? i.Unit.toUpperCase() : '' });
 
   // --- OUT ITEM LOGIC ---
-  if (fromDeptName === 'stock') {
-    // Reduce ClosingStock
-    const unit = units[detail.OutItemCode];
-    let qtyToReduce = 0;
-    if (unit === 'KG' || unit === 'KGS') qtyToReduce = detail.OutWeight || 0;
-    else qtyToReduce = detail.OutPcs || 0;
+  if (detail.OutItemCode) {
+    if (fromDeptName === 'stock') {
+      // Reduce ClosingStock
+      const unit = units[detail.OutItemCode];
+      let qtyToReduce = 0;
+      if (unit === 'KG' || unit === 'KGS') qtyToReduce = detail.OutWeight || 0;
+      else qtyToReduce = detail.OutPcs || 0;
 
-    // Multiplier: 1 = add transfer (reduce stock), -1 = reverse transfer (increase stock)
-    const change = -1 * multiplier * qtyToReduce;
-    await request.query(`
-      UPDATE ItemMaster 
-      SET ClosingStock = ISNULL(ClosingStock, 0) + (${change})
-      WHERE ItemCode = '${detail.OutItemCode}'
-    `);
-  } else {
-    // Reduce DepartmentStock
-    const pcsChange = -1 * multiplier * (detail.OutPcs || 0);
-    const wtChange = -1 * multiplier * (detail.OutWeight || 0);
-
-    const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}'`);
-    if (check.recordset.length > 0) {
+      // Multiplier: 1 = add transfer (reduce stock), -1 = reverse transfer (increase stock)
+      const change = -1 * multiplier * qtyToReduce;
       await request.query(`
-        UPDATE DepartmentStock
-        SET Pcs = ISNULL(Pcs, 0) + (${pcsChange}), Weight = ISNULL(Weight, 0) + (${wtChange})
-        WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}'
+        UPDATE ItemMaster 
+        SET ClosingStock = ISNULL(ClosingStock, 0) + (${change})
+        WHERE ItemCode = '${detail.OutItemCode}'
       `);
     } else {
-      await request.query(`
-        INSERT INTO DepartmentStock (DeptID, ItemCode, Pcs, Weight)
-        VALUES (${FromDeptID}, '${detail.OutItemCode}', ${pcsChange}, ${wtChange})
-      `);
+      // Reduce DepartmentStock
+      const pcsChange = -1 * multiplier * (detail.OutPcs || 0);
+      const wtChange = -1 * multiplier * (detail.OutWeight || 0);
+
+      const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}'`);
+      if (check.recordset.length > 0) {
+        await request.query(`
+          UPDATE DepartmentStock
+          SET Pcs = ISNULL(Pcs, 0) + (${pcsChange}), Weight = ISNULL(Weight, 0) + (${wtChange})
+          WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}'
+        `);
+      } else {
+        await request.query(`
+          INSERT INTO DepartmentStock (DeptID, ItemCode, Pcs, Weight)
+          VALUES (${FromDeptID}, '${detail.OutItemCode}', ${pcsChange}, ${wtChange})
+        `);
+      }
     }
   }
 
   // --- IN ITEM LOGIC ---
-  if (toDeptName === 'stock') {
-    // Increase ClosingStock
-    const unit = units[detail.InItemCode];
-    let qtyToAdd = 0;
-    if (unit === 'KG' || unit === 'KGS') qtyToAdd = detail.InWeight || 0;
-    else qtyToAdd = detail.InPcs || 0;
+  if (detail.InItemCode) {
+    if (toDeptName === 'stock') {
+      // Increase ClosingStock
+      const unit = units[detail.InItemCode];
+      let qtyToAdd = 0;
+      if (unit === 'KG' || unit === 'KGS') qtyToAdd = detail.InWeight || 0;
+      else qtyToAdd = detail.InPcs || 0;
 
-    const change = 1 * multiplier * qtyToAdd;
-    await request.query(`
-      UPDATE ItemMaster 
-      SET ClosingStock = ISNULL(ClosingStock, 0) + (${change})
-      WHERE ItemCode = '${detail.InItemCode}'
-    `);
-  } else {
-    // Increase DepartmentStock
-    const pcsChange = 1 * multiplier * (detail.InPcs || 0);
-    const wtChange = 1 * multiplier * (detail.InWeight || 0);
-
-    const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}'`);
-    if (check.recordset.length > 0) {
+      const change = 1 * multiplier * qtyToAdd;
       await request.query(`
-        UPDATE DepartmentStock
-        SET Pcs = ISNULL(Pcs, 0) + (${pcsChange}), Weight = ISNULL(Weight, 0) + (${wtChange})
-        WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}'
+        UPDATE ItemMaster 
+        SET ClosingStock = ISNULL(ClosingStock, 0) + (${change})
+        WHERE ItemCode = '${detail.InItemCode}'
       `);
     } else {
-      await request.query(`
-        INSERT INTO DepartmentStock (DeptID, ItemCode, Pcs, Weight)
-        VALUES (${ToDeptID}, '${detail.InItemCode}', ${pcsChange}, ${wtChange})
-      `);
+      // Increase DepartmentStock
+      const pcsChange = 1 * multiplier * (detail.InPcs || 0);
+      const wtChange = 1 * multiplier * (detail.InWeight || 0);
+
+      const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}'`);
+      if (check.recordset.length > 0) {
+        await request.query(`
+          UPDATE DepartmentStock
+          SET Pcs = ISNULL(Pcs, 0) + (${pcsChange}), Weight = ISNULL(Weight, 0) + (${wtChange})
+          WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}'
+        `);
+      } else {
+        await request.query(`
+          INSERT INTO DepartmentStock (DeptID, ItemCode, Pcs, Weight)
+          VALUES (${ToDeptID}, '${detail.InItemCode}', ${pcsChange}, ${wtChange})
+        `);
+      }
     }
   }
 
@@ -186,10 +190,10 @@ exports.createStockTransfers = async (req, res) => {
   let pool;
   let transaction;
   try {
-    const { MoveDate, FromDeptID, ToDeptID, Remarks, Details, CreatedBy } = req.body;
+    const { MoveDate, FromDeptID, ToDeptID, Remarks, outItems = [], inItems = [], scrapItems = [], LossWeight = 0, CreatedBy } = req.body;
 
-    if (!MoveDate || !FromDeptID || !ToDeptID || !Details || Details.length === 0) {
-      return res.status(400).json({ message: 'Missing required fields or details.' });
+    if (!MoveDate || !FromDeptID || !ToDeptID || outItems.length === 0) {
+      return res.status(400).json({ message: 'Missing required fields or Out Items.' });
     }
 
     pool = await connectDB();
@@ -211,42 +215,43 @@ exports.createStockTransfers = async (req, res) => {
       }
     }
 
-    for (const detail of Details) {
-      if (!detail.OutItemCode || !detail.InItemCode) continue;
+    const remarksEscaped = Remarks ? `'${Remarks.replace(/'/g, "''")}'` : 'NULL';
+    const sig = getSignature(CreatedBy);
 
-      const outPcs = parseFloat(detail.OutPcs) || 0;
-      const inPcs = parseFloat(detail.InPcs) || 0;
-      const outWt = parseFloat(detail.OutWeight) || 0;
-      const inWt = parseFloat(detail.InWeight) || 0;
-
-      if (inPcs > outPcs) {
-        throw new Error(`In Pcs (${inPcs}) cannot be greater than Out Pcs (${outPcs}).`);
-      }
-      if (inWt > outWt) {
-        throw new Error(`In Weight (${inWt}) cannot be greater than Out Weight (${outWt}).`);
-      }
-
-      const scrapWt = parseFloat(detail.ScrapWeight) || 0;
-      const lossWeight = Math.max(0, outWt - inWt - scrapWt);
-
+    // Insert Out Items
+    for (let i = 0; i < outItems.length; i++) {
+      const item = outItems[i];
+      if (!item.ItemCode) continue;
+      const lossWt = i === 0 ? parseFloat(LossWeight) || 0 : 0;
       await request.query(`
-        INSERT INTO StockTransfer (
-          TransferID, MoveDate, FromDeptID, ToDeptID, OutItemCode, OutPcs, OutWeight,
-          InItemCode, InPcs, InWeight, ScrapItemCode, ScrapPcs, ScrapWeight, LossWeight, Remarks, CreatedBy, UpdatedBy
-        )
-        VALUES (
-          '${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${detail.OutItemCode}', ${outPcs}, ${outWt},
-          '${detail.InItemCode}', ${inPcs}, ${inWt}, 
-          ${detail.ScrapItemCode ? "'" + detail.ScrapItemCode + "'" : 'NULL'}, ${detail.ScrapPcs || 0}, ${scrapWt}, 
-          ${lossWeight}, ${Remarks ? "'" + Remarks + "'" : 'NULL'}, '${getSignature(CreatedBy)}', '${getSignature(CreatedBy)}'
-        )
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, OutItemCode, OutPcs, OutWeight, LossWeight, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${lossWt}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
-      
-      await modifyStock(request, detail, FromDeptID, ToDeptID, 1);
+      await modifyStock(request, { OutItemCode: item.ItemCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+    }
+
+    // Insert In Items
+    for (const item of inItems) {
+      if (!item.ItemCode) continue;
+      await request.query(`
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, InItemCode, InPcs, InWeight, LossWeight, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, 0, ${remarksEscaped}, '${sig}', '${sig}')
+      `);
+      await modifyStock(request, { InItemCode: item.ItemCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+    }
+
+    // Insert Scrap Items
+    for (const item of scrapItems) {
+      if (!item.ItemCode) continue;
+      await request.query(`
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ScrapItemCode, ScrapPcs, ScrapWeight, LossWeight, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, 0, ${remarksEscaped}, '${sig}', '${sig}')
+      `);
+      await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
 
     await transaction.commit();
-    res.status(201).json({ message: 'Stock transfers created successfully.' });
+    res.status(201).json({ message: 'Stock transfers created successfully.', TransferID: nextTransferId });
   } catch (error) {
     console.error('Error creating stock transfers:', error);
     if (transaction) await transaction.rollback();
@@ -258,13 +263,11 @@ exports.updateStockTransfer = async (req, res) => {
   let pool;
   let transaction;
   try {
-    const { id } = req.params;
-    const { MoveDate, FromDeptID, ToDeptID, Remarks, Details, UpdatedBy } = req.body;
-    
-    const detail = Details && Details.length > 0 ? Details[0] : req.body;
+    const { id } = req.params; // id is now TransferID
+    const { MoveDate, FromDeptID, ToDeptID, Remarks, outItems = [], inItems = [], scrapItems = [], LossWeight = 0, UpdatedBy } = req.body;
 
-    if (!MoveDate || !FromDeptID || !ToDeptID || !detail.OutItemCode || !detail.InItemCode) {
-      return res.status(400).json({ message: 'Missing required fields.' });
+    if (!MoveDate || !FromDeptID || !ToDeptID || outItems.length === 0) {
+      return res.status(400).json({ message: 'Missing required fields or Out Items.' });
     }
 
     pool = await connectDB();
@@ -273,56 +276,57 @@ exports.updateStockTransfer = async (req, res) => {
 
     const request = new sql.Request(transaction);
 
-    const oldRecordResult = await request.query(`SELECT * FROM StockTransfer WHERE MoveID = ${id}`);
+    // 1. Find old records and reverse stock
+    const oldRecordResult = await request.query(`SELECT * FROM StockTransfer WHERE TransferID = '${id}'`);
     if (oldRecordResult.recordset.length === 0) {
       throw new Error('Stock transfer not found');
     }
-    const oldRecord = oldRecordResult.recordset[0];
-
-    // Reverse old stock
-    await modifyStock(request, oldRecord, oldRecord.FromDeptID, oldRecord.ToDeptID, -1);
-
-    const outPcs = parseFloat(detail.OutPcs) || 0;
-    const inPcs = parseFloat(detail.InPcs) || 0;
-    const outWt = parseFloat(detail.OutWeight) || 0;
-    const inWt = parseFloat(detail.InWeight) || 0;
-
-    if (inPcs > outPcs) {
-      throw new Error(`In Pcs (${inPcs}) cannot be greater than Out Pcs (${outPcs}).`);
-    }
-    if (inWt > outWt) {
-      throw new Error(`In Weight (${inWt}) cannot be greater than Out Weight (${outWt}).`);
+    
+    for (const oldRecord of oldRecordResult.recordset) {
+      await modifyStock(request, oldRecord, oldRecord.FromDeptID, oldRecord.ToDeptID, -1);
     }
 
-    const scrapWt = parseFloat(detail.ScrapWeight) || 0;
-    const lossWeight = Math.max(0, outWt - inWt - scrapWt);
+    // 2. Delete old records
+    await request.query(`DELETE FROM StockTransfer WHERE TransferID = '${id}'`);
 
-    // Update the record
-    await request.query(`
-      UPDATE StockTransfer SET
-        MoveDate = '${MoveDate}',
-        FromDeptID = ${FromDeptID},
-        ToDeptID = ${ToDeptID},
-        OutItemCode = '${detail.OutItemCode}',
-        OutPcs = ${outPcs},
-        OutWeight = ${outWt},
-        InItemCode = '${detail.InItemCode}',
-        InPcs = ${inPcs},
-        InWeight = ${inWt},
-        ScrapItemCode = ${detail.ScrapItemCode ? "'" + detail.ScrapItemCode + "'" : 'NULL'},
-        ScrapPcs = ${detail.ScrapPcs || 0},
-        ScrapWeight = ${scrapWt},
-        LossWeight = ${lossWeight},
-        Remarks = ${Remarks ? "'" + Remarks + "'" : 'NULL'},
-        UpdatedBy = '${getSignature(UpdatedBy)}'
-      WHERE MoveID = ${id}
-    `);
+    // 3. Insert new records (similar to create)
+    const remarksEscaped = Remarks ? `'${Remarks.replace(/'/g, "''")}'` : 'NULL';
+    const sig = getSignature(UpdatedBy);
 
-    // Apply new stock
-    await modifyStock(request, detail, FromDeptID, ToDeptID, 1);
+    // Insert Out Items
+    for (let i = 0; i < outItems.length; i++) {
+      const item = outItems[i];
+      if (!item.ItemCode) continue;
+      const lossWt = i === 0 ? parseFloat(LossWeight) || 0 : 0;
+      await request.query(`
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, OutItemCode, OutPcs, OutWeight, LossWeight, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${lossWt}, ${remarksEscaped}, '${sig}', '${sig}')
+      `);
+      await modifyStock(request, { OutItemCode: item.ItemCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+    }
+
+    // Insert In Items
+    for (const item of inItems) {
+      if (!item.ItemCode) continue;
+      await request.query(`
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, InItemCode, InPcs, InWeight, LossWeight, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, 0, ${remarksEscaped}, '${sig}', '${sig}')
+      `);
+      await modifyStock(request, { InItemCode: item.ItemCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+    }
+
+    // Insert Scrap Items
+    for (const item of scrapItems) {
+      if (!item.ItemCode) continue;
+      await request.query(`
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ScrapItemCode, ScrapPcs, ScrapWeight, LossWeight, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, 0, ${remarksEscaped}, '${sig}', '${sig}')
+      `);
+      await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+    }
 
     await transaction.commit();
-    res.json({ message: 'Stock transfer updated successfully.' });
+    res.json({ message: 'Stock transfer updated successfully.', TransferID: id });
   } catch (error) {
     console.error('Error updating stock transfer:', error);
     if (transaction) await transaction.rollback();
@@ -334,24 +338,25 @@ exports.deleteStockTransfer = async (req, res) => {
   let pool;
   let transaction;
   try {
-    const { id } = req.params;
+    const { id } = req.params; // id is now TransferID
     pool = await connectDB();
     transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     const request = new sql.Request(transaction);
 
-    const oldRecordResult = await request.query(`SELECT * FROM StockTransfer WHERE MoveID = ${id}`);
+    const oldRecordResult = await request.query(`SELECT * FROM StockTransfer WHERE TransferID = '${id}'`);
     if (oldRecordResult.recordset.length === 0) {
       throw new Error('Stock transfer not found');
     }
-    const oldRecord = oldRecordResult.recordset[0];
 
-    // Reverse old stock
-    await modifyStock(request, oldRecord, oldRecord.FromDeptID, oldRecord.ToDeptID, -1);
+    for (const oldRecord of oldRecordResult.recordset) {
+      // Reverse old stock
+      await modifyStock(request, oldRecord, oldRecord.FromDeptID, oldRecord.ToDeptID, -1);
+    }
 
     // Delete record
-    await request.query(`DELETE FROM StockTransfer WHERE MoveID = ${id}`);
+    await request.query(`DELETE FROM StockTransfer WHERE TransferID = '${id}'`);
 
     await transaction.commit();
     res.json({ message: 'Stock transfer deleted successfully.' });

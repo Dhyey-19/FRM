@@ -70,9 +70,10 @@ const JobworkInEntry = () => {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
 
-  const getItemBalance = (itemCode) => {
-    if (!jwOutwardNo) return { qty: 0, wt: 0 };
-    const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
+  const getItemBalance = (itemCode, specificOutwardNo = null) => {
+    const targetOutwardNo = specificOutwardNo || jwOutwardNo;
+    if (!targetOutwardNo) return { qty: 0, wt: 0 };
+    const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === targetOutwardNo);
     if (!selectedOutward || !selectedOutward.Details) return { qty: 0, wt: 0 };
     
     const detail = selectedOutward.Details.find(d => d.ITEMCODE === itemCode);
@@ -84,7 +85,7 @@ const JobworkInEntry = () => {
     let receivedQty = 0;
     let receivedNetWt = 0;
     jwInwards.forEach(inward => {
-      if (inward.JWOUTWARDNO === jwOutwardNo && inward.ID !== editingId) {
+      if (inward.JWOUTWARDNO === targetOutwardNo && inward.ID !== editingId) {
         if (inward.Details) {
           inward.Details.forEach(d => {
             if (d.OUTITEMCODE === itemCode) {
@@ -749,7 +750,15 @@ const JobworkInEntry = () => {
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
                 <Autocomplete
-                  options={jobworkOuts.filter(jw => jw.LEDGERID === ledgerId)}
+                  options={jobworkOuts.filter(jw => {
+                    if (jw.LEDGERID !== ledgerId) return false;
+                    if (editingId && jw.JWOUTWARDNO === jwOutwardNo) return true;
+                    if (!jw.Details || jw.Details.length === 0) return false;
+                    return jw.Details.some(d => {
+                      const bal = getItemBalance(d.ITEMCODE, jw.JWOUTWARDNO);
+                      return bal.qty > 0 || bal.wt > 0;
+                    });
+                  })}
                   getOptionLabel={(option) => option.JWOUTWARDNO || ''}
                   value={jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo) || null}
                   onChange={(e, newValue) => {

@@ -314,7 +314,7 @@ const VoucherEntry = ({ user }) => {
     if (voucherItems.length === 0) return;
 
     const voucherDate = voucherItems[0].VoucherDate ? voucherItems[0].VoucherDate.split('T')[0] : '';
-    const voucherType = voucherItems[0].VoucherType || 'General';
+    const voucherType = voucherItems[0].VoucherType === 'General' ? 'Journal' : (voucherItems[0].VoucherType || 'Journal');
     let tDebit = 0;
     let tCredit = 0;
 
@@ -532,8 +532,10 @@ const VoucherEntry = ({ user }) => {
         return mode === 'Debit' ? !isCashOrBank : isCashOrBank;
       } else if (globalVoucherType === 'Contra') {
         return isCashOrBank;
+      } else if (globalVoucherType === 'Journal' || globalVoucherType === 'General') {
+        // Journal allows all ledgers
+        return true;
       } else {
-        // General
         return !isCashOrBank;
       }
     });
@@ -619,7 +621,7 @@ const VoucherEntry = ({ user }) => {
                       V{row.VoucherNo}
                     </Typography>
                   </TableCell>
-                  <TableCell>{row.VoucherType || 'General'}</TableCell>
+                  <TableCell>{row.VoucherType === 'General' ? 'Journal' : (row.VoucherType || 'Journal')}</TableCell>
                   <TableCell>{row.VoucherDate ? row.VoucherDate.split('T')[0] : ''}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ 
@@ -709,7 +711,7 @@ const VoucherEntry = ({ user }) => {
                   <MenuItem value="Receipt">Receipt</MenuItem>
                   <MenuItem value="Payment">Payment</MenuItem>
                   <MenuItem value="Contra">Contra</MenuItem>
-                  <MenuItem value="General">General</MenuItem>
+                  <MenuItem value="Journal">Journal</MenuItem>
                 </Select>
               </FormControl>
               <Typography variant="body1" sx={{ ml: 2 }}>Date:</Typography>

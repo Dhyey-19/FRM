@@ -124,6 +124,38 @@ exports.getTodayAssemblies = async (req, res) => {
     }
 };
 
+// GET /api/assembly/filter
+exports.getFilteredAssemblies = async (req, res) => {
+    const { fromDate, toDate } = req.query;
+    try {
+        const pool = await connectDB();
+        let query = `
+            SELECT a.Id, a.AssemblyNo, a.AssemblyDate, a.ItemCode, a.Quantity, CAST(a.Remark AS VARCHAR(50)) AS Remark, a.CreatedBy, a.UpdatedBy, i.ItemName 
+            FROM AssemblyTransactions a
+            INNER JOIN ItemMaster i ON a.ItemCode = i.ItemCode
+            WHERE 1=1
+        `;
+        const request = pool.request();
+        
+        if (fromDate) {
+            query += ` AND CAST(a.AssemblyDate AS DATE) >= CAST(@FromDate AS DATE)`;
+            request.input('FromDate', sql.Date, fromDate);
+        }
+        if (toDate) {
+            query += ` AND CAST(a.AssemblyDate AS DATE) <= CAST(@ToDate AS DATE)`;
+            request.input('ToDate', sql.Date, toDate);
+        }
+
+        query += ` ORDER BY a.AssemblyNo DESC`;
+
+        const result = await request.query(query);
+        res.status(200).json(result.recordset);
+    } catch (error) {
+        console.error('Error fetching filtered assemblies:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 // GET /api/assembly/report
 exports.getAllAssembliesReport = async (req, res) => {
     try {

@@ -10,7 +10,7 @@ import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as Delet
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 
 const initialFormState = {
-  LedgerCode: '', LedgerName: '', AccountGroupID: '', Address: '', City: '', State: '', GSTIN: '',
+  LedgerName: '', AccountGroupID: '', Address: '', City: '', State: '', GSTIN: '',
   MobileNo: '', Email: '', OpeningBalance: '', BankName: '', AccountNo: '',
   IFSC: '', UPI: '', OwnBrand: '', OtherBrand: '', Discount: '', CD: '', Bill: '',
   PaymentTerm: '', Transport: '', Remark: ''
@@ -80,7 +80,6 @@ const LedgerMaster = () => {
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
 
   const filteredLedgers = ledgers.filter(l => 
-    (l.LedgerCode && l.LedgerCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (l.LedgerName && l.LedgerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (l.AccountGroupName && l.AccountGroupName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -250,8 +249,8 @@ const LedgerMaster = () => {
                       color="primary" 
                       size="small" 
                       onClick={() => handleOpenDialog('edit', row)}
-                      disabled={!hasEditPermission() || (row.LedgerCode && row.LedgerCode.toLowerCase() === 'system')}
-                      title={row.LedgerCode && row.LedgerCode.toLowerCase() === 'system' ? "System ledgers cannot be edited" : "Edit Ledger"}
+                      disabled={!hasEditPermission()}
+                      title="Edit Ledger"
                     >
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -261,8 +260,8 @@ const LedgerMaster = () => {
                       color="error" 
                       size="small" 
                       onClick={() => openDeleteConfirm(row.Id)}
-                      disabled={!hasDeletePermission() || (row.LedgerCode && row.LedgerCode.toLowerCase() === 'system')}
-                      title={row.LedgerCode && row.LedgerCode.toLowerCase() === 'system' ? "System ledgers cannot be deleted" : "Delete Ledger"}
+                      disabled={!hasDeletePermission()}
+                      title="Delete Ledger"
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -308,7 +307,6 @@ const LedgerMaster = () => {
             
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.5, mt: 1 }}>General Details</Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField label="Ledger Code" name="LedgerCode" value={formData.LedgerCode || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Ledger Name" name="LedgerName" value={formData.LedgerName} onChange={handleInputChange} fullWidth size="small" required />
               
               <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
@@ -373,9 +371,9 @@ const LedgerMaster = () => {
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField label="Credit Days (CD)" name="CD" type="number" value={formData.CD || ''} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="Cash Discount (CD) %" name="CD" type="number" value={formData.CD || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Bill (%)" name="Bill" type="number" value={formData.Bill || ''} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="Payment Term" name="PaymentTerm" value={formData.PaymentTerm || ''} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="Payment Term" name="PaymentTerm" type="number" value={formData.PaymentTerm || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2 }}>

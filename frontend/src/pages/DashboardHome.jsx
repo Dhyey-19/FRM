@@ -16,7 +16,12 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
 } from '@mui/material';
 import {
   AccountBalanceWallet as ValueIcon,
@@ -39,7 +44,29 @@ const DashboardHome = () => {
   const [receivables, setReceivables] = useState([]);
   const [payables, setPayables] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(true);
+  
+  const [cashBankDialogOpen, setCashBankDialogOpen] = useState(false);
+  const [cashBankLedgers, setCashBankLedgers] = useState([]);
+  const [cashBankLoading, setCashBankLoading] = useState(false);
+
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
+
+  const fetchCashBankLedgers = async () => {
+    setCashBankDialogOpen(true);
+    setCashBankLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/ledgers`);
+      if (response.ok) {
+        const data = await response.json();
+        const filtered = data.filter(l => l.AccountGroupName === 'Cash-in-Hand' || l.AccountGroupName === 'Bank Accounts');
+        setCashBankLedgers(filtered);
+      }
+    } catch (error) {
+      console.error('Error fetching cash/bank ledgers:', error);
+    } finally {
+      setCashBankLoading(false);
+    }
+  };
 
   const fetchKPIs = async () => {
     try {
@@ -181,7 +208,7 @@ const DashboardHome = () => {
       icon: <ValueIcon sx={{ fontSize: 40 }} />,
       color: '#8b5cf6', // Purple
       bgColor: '#f3e8ff',
-      link: '/dashboard/reports/account-ledger'
+      onClick: fetchCashBankLedgers
     },
     {
       title: 'Total Asset Value',
@@ -319,7 +346,7 @@ const DashboardHome = () => {
               transition: 'transform 0.2s',
               '&:hover': { transform: 'translateY(-4px)' }
             }}>
-              <CardActionArea onClick={() => navigate(card.link)} sx={{ height: '100%', p: 0 }}>
+              <CardActionArea onClick={() => card.onClick ? card.onClick() : navigate(card.link)} sx={{ height: '100%', p: 0 }}>
                 <CardContent sx={{ p: 3, '&:last-child': { pb: 3 }, height: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <Box>
@@ -618,6 +645,62 @@ const DashboardHome = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      <Dialog open={cashBankDialogOpen} onClose={() => setCashBankDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 2 }}>
+          Cash & Bank Balances
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {cashBankLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
+          ) : cashBankLedgers.length === 0 ? (
+            <Typography align="center" color="text.secondary" sx={{ py: 3 }}>No Cash or Bank accounts found.</Typography>
+          ) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Account Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Account Type</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>Balance</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {cashBankLedgers.map((l, index) => (
+                    <TableRow key={index} hover>
+                      <TableCell>{l.LedgerName}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={l.AccountGroupName} 
+                          size="small" 
+                          color={l.AccountGroupName === 'Cash-in-Hand' ? 'success' : 'primary'}
+                          variant="outlined" 
+                        />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(l.ClosingBalance || 0)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={2} align="right" sx={{ fontWeight: 700 }}>Total:</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: '#8b5cf6' }}>
+                      {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
+                        cashBankLedgers.reduce((sum, l) => sum + (l.ClosingBalance || 0), 0)
+                      )}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #e2e8f0' }}>
+          <Button onClick={() => setCashBankDialogOpen(false)} variant="contained" color="primary">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

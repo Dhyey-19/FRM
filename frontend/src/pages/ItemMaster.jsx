@@ -23,7 +23,11 @@ import {
   DialogContentText,
   Alert,
   Autocomplete,
-  TableSortLabel
+  TableSortLabel,
+  LinearProgress,
+  Tabs,
+  Tab,
+  MenuItem
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -47,6 +51,10 @@ const ItemMaster = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'ItemCode', direction: 'asc' });
   
+  // Filter States
+  const [filterItemType, setFilterItemType] = useState('All');
+  const [filterSeries, setFilterSeries] = useState('All');
+  
   // Dialog States
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState('add'); // 'add' or 'edit'
@@ -59,16 +67,24 @@ const ItemMaster = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
+  // Import States
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importResults, setImportResults] = useState({ added: [], updated: [], failed: [] });
+  const [showImportResults, setShowImportResults] = useState(false);
+  const [resultTab, setResultTab] = useState(0);
+
 
 
   const [formData, setFormData] = useState({
     ItemCode: '',
     ItemName: '',
     ItemType: '',
-    BrandName: '',
+    Series: '',
+    StdWeight: '',
     Unit: '',
     MRP: '',
-    COSTING: '',
+    Costing: '',
     OpeningStock: '',
     ClosingStock: ''
   });
@@ -141,14 +157,19 @@ const ItemMaster = () => {
     setPage(0);
   };
 
-  // Filter items based on search
+  // Filter items based on search and dropdowns
+  const uniqueSeries = ['All', ...new Set(items.map(i => i.Series).filter(Boolean))];
+
   const filteredItems = items.filter(item => {
     const searchLower = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       (item.ItemName && item.ItemName.toLowerCase().includes(searchLower)) ||
       (item.ItemCode && item.ItemCode.toLowerCase().includes(searchLower)) ||
-      (item.BrandName && item.BrandName.toLowerCase().includes(searchLower))
+      (item.Series && item.Series.toLowerCase().includes(searchLower))
     );
+    const matchesType = filterItemType === 'All' || item.ItemType === filterItemType;
+    const matchesSeries = filterSeries === 'All' || item.Series === filterSeries;
+    return matchesSearch && matchesType && matchesSeries;
   });
 
   const handleSort = (key) => {
@@ -178,16 +199,17 @@ const ItemMaster = () => {
         ItemCode: item.ItemCode,
         ItemName: item.ItemName,
         ItemType: item.ItemType || '',
-        BrandName: item.BrandName,
+        Series: item.Series || '',
+        StdWeight: item.StdWeight != null ? Number(item.StdWeight).toFixed(3) : '',
         Unit: item.Unit || '',
         MRP: item.MRP || '',
-        COSTING: item.COSTING || '',
+        Costing: item.Costing || '',
         OpeningStock: item.OpeningStock || '',
         ClosingStock: item.ClosingStock || ''
       });
     } else {
       setOriginalItemCode(null);
-      setFormData({ ItemCode: '', ItemName: '', ItemType: '', BrandName: '', Unit: '', MRP: '', COSTING: '', OpeningStock: '', ClosingStock: '' });
+      setFormData({ ItemCode: '', ItemName: '', ItemType: '', Series: '', StdWeight: '', Unit: '', MRP: '', Costing: '', OpeningStock: '', ClosingStock: '' });
     }
     setOpenDialog(true);
   };
@@ -238,10 +260,11 @@ const ItemMaster = () => {
         ItemCode: formData.ItemCode,
         ItemName: formData.ItemName,
         ItemType: formData.ItemType,
-        BrandName: formData.BrandName,
+        Series: formData.Series,
+        StdWeight: formData.StdWeight ? parseFloat(formData.StdWeight) : null,
         Unit: formData.Unit,
         MRP: parseFloat(formData.MRP) || 0,
-        COSTING: parseFloat(formData.COSTING) || 0,
+        Costing: parseFloat(formData.Costing) || 0,
         OpeningStock: formData.OpeningStock ? parseFloat(formData.OpeningStock) : null,
         ClosingStock: formData.ClosingStock ? parseFloat(formData.ClosingStock) : null
       };
@@ -296,10 +319,11 @@ const ItemMaster = () => {
       ItemCode: item.ItemCode,
       ItemName: item.ItemName,
       ItemType: item.ItemType || '',
-      BrandName: item.BrandName || '',
+      Series: item.Series || '',
+      StdWeight: item.StdWeight || 0,
       Unit: item.Unit || '',
       MRP: item.MRP || 0,
-      COSTING: item.COSTING || 0,
+      Costing: item.Costing || 0,
       OpeningStock: item.OpeningStock || 0,
       ClosingStock: item.ClosingStock || 0
     }));
@@ -322,25 +346,51 @@ const ItemMaster = () => {
         const ws = workbook.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
         
-        // Ensure data exists
         if (data.length > 0) {
-          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/bulk`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-          });
+          setImporting(true);
+          setImportProgress(0);
+          setImportResults({ added: [], updated: [], failed: [] });
           
-          if (response.ok) {
-            fetchItems();
-            alert('Items imported successfully!');
-          } else {
-            const resData = await response.json();
-            alert(`Error importing items: ${resData.message}`);
+          const BATCH_SIZE = 50;
+          let processed = 0;
+          const results = { added: [], updated: [], failed: [] };
+
+          for (let i = 0; i < data.length; i += BATCH_SIZE) {
+            const chunk = data.slice(i, i + BATCH_SIZE);
+            
+            try {
+              const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(chunk)
+              });
+              
+              if (response.ok) {
+                const resData = await response.json();
+                results.added.push(...(resData.added || []));
+                results.updated.push(...(resData.updated || []));
+                results.failed.push(...(resData.failed || []));
+              } else {
+                const resData = await response.json();
+                chunk.forEach(item => results.failed.push({ item, reason: resData.message || 'Server error' }));
+              }
+            } catch (err) {
+              chunk.forEach(item => results.failed.push({ item, reason: err.message || 'Network error' }));
+            }
+            
+            processed += chunk.length;
+            setImportProgress(Math.round((processed / data.length) * 100));
           }
+          
+          setImportResults(results);
+          setImporting(false);
+          setShowImportResults(true);
+          fetchItems();
         }
       } catch (error) {
         console.error('Error parsing file:', error);
         alert('Error parsing the Excel file.');
+        setImporting(false);
       }
     };
     reader.readAsBinaryString(file);
@@ -359,21 +409,48 @@ const ItemMaster = () => {
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
         
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2 }}>
-          <TextField
-            size="small"
-            placeholder="Search items..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="action" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ width: '300px' }}
-          />
+        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', pt: 2, pb: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            <TextField
+              size="small"
+              placeholder="Search items..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ width: '250px' }}
+            />
+            <TextField
+              select
+              size="small"
+              label="Item Type"
+              value={filterItemType}
+              onChange={(e) => setFilterItemType(e.target.value)}
+              sx={{ minWidth: 150 }}
+            >
+              <MenuItem value="All">All Types</MenuItem>
+              {itemTypes.map(t => (
+                <MenuItem key={t} value={t}>{t}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="Series"
+              value={filterSeries}
+              onChange={(e) => setFilterSeries(e.target.value)}
+              sx={{ minWidth: 150 }}
+            >
+              {uniqueSeries.map(s => (
+                <MenuItem key={s} value={s}>{s}</MenuItem>
+              ))}
+            </TextField>
+          </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <input
               accept=".xlsx, .xls"
@@ -445,11 +522,20 @@ const ItemMaster = () => {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel
-                    active={sortConfig.key === 'BrandName'}
-                    direction={sortConfig.key === 'BrandName' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('BrandName')}
+                    active={sortConfig.key === 'Series'}
+                    direction={sortConfig.key === 'Series' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('Series')}
                   >
                     Series
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <TableSortLabel
+                    active={sortConfig.key === 'StdWeight'}
+                    direction={sortConfig.key === 'StdWeight' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('StdWeight')}
+                  >
+                    Std Wt
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
@@ -472,9 +558,9 @@ const ItemMaster = () => {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel
-                    active={sortConfig.key === 'COSTING'}
-                    direction={sortConfig.key === 'COSTING' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('COSTING')}
+                    active={sortConfig.key === 'Costing'}
+                    direction={sortConfig.key === 'Costing' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('Costing')}
                   >
                     Costing
                   </TableSortLabel>
@@ -497,8 +583,7 @@ const ItemMaster = () => {
                     Closing
                   </TableSortLabel>
                 </TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Edit</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Delete</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -510,28 +595,29 @@ const ItemMaster = () => {
                       <TableCell sx={{ fontWeight: 500 }}>{row.ItemCode}</TableCell>
                       <TableCell>{row.ItemName}</TableCell>
                       <TableCell>{row.ItemType}</TableCell>
-                      <TableCell>{row.BrandName}</TableCell>
+                      <TableCell>{row.Series}</TableCell>
+                      <TableCell>{row.StdWeight != null && row.StdWeight !== '' ? Number(row.StdWeight).toFixed(3) : ''}</TableCell>
                       <TableCell>{row.Unit}</TableCell>
                       <TableCell>{row.MRP}</TableCell>
-                      <TableCell>{row.COSTING}</TableCell>
+                      <TableCell>{row.Costing}</TableCell>
                       <TableCell>{row.OpeningStock}</TableCell>
                       <TableCell>{row.ClosingStock}</TableCell>
                       <TableCell align="center">
-                        <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton color="error" size="small" onClick={() => openDeleteConfirm(row.ItemCode)} disabled={!hasDeletePermission()}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
+                          <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton color="error" size="small" onClick={() => openDeleteConfirm(row.ItemCode)} disabled={!hasDeletePermission()}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   );
                 })}
               {sortedItems.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={11} align="center" sx={{ py: 3 }}>
                     No items found.
                   </TableCell>
                 </TableRow>
@@ -601,9 +687,9 @@ const ItemMaster = () => {
                 autoSelect
                 freeSolo={false}
                 options={brands}
-                value={formData.BrandName}
+                value={formData.Series}
                 onChange={(event, newValue) => {
-                  setFormData({ ...formData, BrandName: newValue || '' });
+                  setFormData({ ...formData, Series: newValue || '' });
                 }}
                 fullWidth
                 size="small"
@@ -612,8 +698,9 @@ const ItemMaster = () => {
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField label="Std Weight" name="StdWeight" type="number" inputProps={{ step: "0.001" }} value={formData.StdWeight} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="MRP" name="MRP" type="number" value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="Costing" name="COSTING" type="number" value={formData.COSTING} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="Costing" name="Costing" type="number" value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
@@ -638,6 +725,104 @@ const ItemMaster = () => {
         title="Confirm Deletion"
         itemName="this item"
       />
+
+      {/* Import Progress Dialog */}
+      <Dialog open={importing} disableEscapeKeyDown>
+        <DialogTitle>Importing Items...</DialogTitle>
+        <DialogContent sx={{ minWidth: 400 }}>
+          <Box sx={{ width: '100%', mt: 2 }}>
+            <LinearProgress variant="determinate" value={importProgress} />
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
+              {importProgress}% Complete
+            </Typography>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Results Dialog */}
+      <Dialog open={showImportResults} onClose={() => setShowImportResults(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Import Results</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs value={resultTab} onChange={(e, val) => setResultTab(val)}>
+              <Tab label={`Added (${importResults.added.length})`} />
+              <Tab label={`Updated (${importResults.updated.length})`} />
+              <Tab label={`Failed (${importResults.failed.length})`} sx={{ color: importResults.failed.length > 0 ? 'error.main' : 'inherit' }} />
+            </Tabs>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            {resultTab === 0 && (
+              <TableContainer sx={{ maxHeight: 400 }}>
+                <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Item Code</TableCell>
+                      <TableCell>Item Name</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {importResults.added.map((item, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{item.ItemCode}</TableCell>
+                        <TableCell>{item.ItemName}</TableCell>
+                      </TableRow>
+                    ))}
+                    {importResults.added.length === 0 && <TableRow><TableCell colSpan={2} align="center">No items added</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+            {resultTab === 1 && (
+              <TableContainer sx={{ maxHeight: 400 }}>
+                <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Item Code</TableCell>
+                      <TableCell>Item Name</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {importResults.updated.map((item, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{item.ItemCode}</TableCell>
+                        <TableCell>{item.ItemName}</TableCell>
+                      </TableRow>
+                    ))}
+                    {importResults.updated.length === 0 && <TableRow><TableCell colSpan={2} align="center">No items updated</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+            {resultTab === 2 && (
+              <TableContainer sx={{ maxHeight: 400 }}>
+                <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Item Code</TableCell>
+                      <TableCell>Item Name</TableCell>
+                      <TableCell sx={{ color: 'error.main' }}>Reason</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {importResults.failed.map((fail, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{fail.item?.ItemCode || 'Unknown'}</TableCell>
+                        <TableCell>{fail.item?.ItemName || 'Unknown'}</TableCell>
+                        <TableCell sx={{ color: 'error.main' }}>{fail.reason}</TableCell>
+                      </TableRow>
+                    ))}
+                    {importResults.failed.length === 0 && <TableRow><TableCell colSpan={3} align="center">No failed items</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowImportResults(false)} variant="contained">Close</Button>
+        </DialogActions>
+      </Dialog>
+
     </Box>
   );
 };

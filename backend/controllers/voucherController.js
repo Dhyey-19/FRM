@@ -41,7 +41,7 @@ exports.addVoucher = async (req, res) => {
 
     await pool.request()
       .input('VoucherNo', sql.Numeric(8,0), voucherNo)
-      .input('VoucherType', sql.VarChar(10), req.body.VoucherType || 'General')
+      .input('VoucherType', sql.VarChar(10), req.body.VoucherType || 'Journal')
       .input('VoucherDate', sql.Date, VoucherDate)
       .input('Mode', sql.VarChar(6), Mode)
       .input('LedgerId', sql.Numeric(10,0), LedgerId)
@@ -87,7 +87,7 @@ exports.addVouchersBulk = async (req, res) => {
         const request = new sql.Request(transaction);
         await request
           .input('VoucherNo', sql.Numeric(8,0), voucherNo)
-          .input('VoucherType', sql.VarChar(10), v.VoucherType || 'General')
+          .input('VoucherType', sql.VarChar(10), v.VoucherType || 'Journal')
           .input('VoucherDate', sql.Date, v.VoucherDate)
           .input('Mode', sql.VarChar(6), v.Mode)
           .input('LedgerId', sql.Numeric(10,0), v.LedgerId)
@@ -166,7 +166,7 @@ exports.updateVouchersBulk = async (req, res) => {
         const request = new sql.Request(transaction);
         await request
           .input('VoucherNo', sql.Numeric(8,0), voucherNo)
-          .input('VoucherType', sql.VarChar(10), v.VoucherType || 'General')
+          .input('VoucherType', sql.VarChar(10), v.VoucherType || 'Journal')
           .input('VoucherDate', sql.Date, v.VoucherDate)
           .input('Mode', sql.VarChar(6), v.Mode)
           .input('LedgerId', sql.Numeric(10,0), v.LedgerId)

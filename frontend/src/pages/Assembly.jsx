@@ -25,6 +25,8 @@ const Assembly = ({ user }) => {
     const [success, setSuccess] = useState('');
     
     const [todayAssemblies, setTodayAssemblies] = useState([]);
+    const [filterFromDate, setFilterFromDate] = useState(todayDate);
+    const [filterToDate, setFilterToDate] = useState(todayDate);
     const [editingId, setEditingId] = useState(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [assemblyToDelete, setAssemblyToDelete] = useState(null);
@@ -34,7 +36,11 @@ const Assembly = ({ user }) => {
 
     const fetchTodayAssemblies = async () => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/assembly/today`);
+            const queryParams = new URLSearchParams({
+                fromDate: filterFromDate,
+                toDate: filterToDate
+            }).toString();
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/assembly/filter?${queryParams}`);
             if (response.ok) {
                 const data = await response.json();
                 setTodayAssemblies(data);
@@ -84,8 +90,11 @@ const Assembly = ({ user }) => {
         fetchItems();
         fetchNextAssemblyNo();
         fetchBomMaster();
-        fetchTodayAssemblies();
     }, []);
+
+    useEffect(() => {
+        fetchTodayAssemblies();
+    }, [filterFromDate, filterToDate]);
 
 
     const handleSubmit = async () => {
@@ -342,12 +351,31 @@ const Assembly = ({ user }) => {
                 </Box>
             </Paper>
 
-            {todayAssemblies.length > 0 && (
-                <Paper sx={{ width: '100%', p: 3, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#0F3B66', mb: 2 }}>
-                        Today's Assembly Transactions
+            <Paper sx={{ width: '100%', p: 3, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                        Assembly Transactions
                     </Typography>
-                    <TableContainer>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField
+                            label="From Date"
+                            type="date"
+                            size="small"
+                            value={filterFromDate}
+                            onChange={(e) => setFilterFromDate(e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                        <TextField
+                            label="To Date"
+                            type="date"
+                            size="small"
+                            value={filterToDate}
+                            onChange={(e) => setFilterToDate(e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                    </Box>
+                </Box>
+                <TableContainer>
                         <Table size="small">
                             <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
                                 <TableRow>
@@ -374,11 +402,15 @@ const Assembly = ({ user }) => {
                                         </TableCell>
                                     </TableRow>
                                 ))}
+                                {todayAssemblies.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={4} align="center">No transactions found.</TableCell>
+                                    </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                     </TableContainer>
                 </Paper>
-            )}
 
             <DeleteConfirmModal
                 open={deleteDialogOpen}

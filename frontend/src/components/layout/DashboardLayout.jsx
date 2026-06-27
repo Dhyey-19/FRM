@@ -64,6 +64,8 @@ const theme = createTheme({
 
 const DashboardLayout = () => {
   const [localUser, setLocalUser] = useState(() => JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {});
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const drawerWidth = isCollapsed ? 70 : 300;
 
   useEffect(() => {
     const fetchCompany = async () => {
@@ -100,10 +102,10 @@ const DashboardLayout = () => {
         <CssBaseline />
         
         {/* Side Navigation Drawer */}
-        <Sidebar user={user} />
+        <Sidebar user={user} isCollapsed={isCollapsed} toggleSidebar={() => setIsCollapsed(!isCollapsed)} drawerWidth={drawerWidth} />
         
         {/* Main Content */}
-        <Box component="main" sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - 300px)` } }}>
+        <Box component="main" sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` }, transition: 'width 0.3s ease' }}>
           <Outlet />
         </Box>
       </Box>

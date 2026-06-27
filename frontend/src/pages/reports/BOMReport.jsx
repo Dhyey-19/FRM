@@ -3,10 +3,13 @@ import {
   Box, Typography, Button, Paper, CircularProgress, 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, InputAdornment, Toolbar, TableSortLabel,
-  FormControl, InputLabel, Select, MenuItem
+  FormControl, InputLabel, Select, MenuItem, IconButton
 } from '@mui/material';
-import { PictureAsPdf, Visibility, TableView, Share, Search as SearchIcon, KeyboardArrowDown, KeyboardArrowRight } from '@mui/icons-material';
+import { PictureAsPdf, Visibility, TableView, Share, Search as SearchIcon, KeyboardArrowDown, KeyboardArrowRight, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { hasEditPermission, hasDeletePermission } from '../../utils/auth';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
+import DeleteConfirmModal from '../../components/common/DeleteConfirmModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -15,6 +18,10 @@ const BOMReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const navigate = useNavigate();
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [bomToDelete, setBomToDelete] = useState(null);
 
   const [boms, setBoms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +41,38 @@ const BOMReport = () => {
 
   const toggleGroup = (code) => {
     setExpandedGroups(prev => ({...prev, [code]: !prev[code]}));
+  };
+
+  const handleEdit = (e, parentCode) => {
+    e.stopPropagation();
+    navigate('/dashboard/bom', { state: { editParentCode: parentCode } });
+  };
+
+  const openDeleteConfirm = (e, parentCode) => {
+    e.stopPropagation();
+    setBomToDelete(parentCode);
+    setDeleteConfirmOpen(true);
+  };
+
+  const closeDeleteConfirm = () => {
+    setBomToDelete(null);
+    setDeleteConfirmOpen(false);
+  };
+
+  const handleDeleteBOM = async () => {
+    if (bomToDelete) {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bom/${bomToDelete}`, { method: 'DELETE' });
+        if (response.ok) {
+          fetchBOMs();
+          closeDeleteConfirm();
+        } else {
+          console.error('Error deleting BOM');
+        }
+      } catch (error) {
+        console.error('Error deleting BOM:', error);
+      }
+    }
   };
 
   const fetchBOMs = async () => {
@@ -341,12 +380,15 @@ const BOMReport = () => {
                       Total Cost
                     </TableSortLabel>
                   </TableCell>
+                  <TableCell align="center" sx={{ backgroundColor: '#0F3B66', width: '10%' }}>
+                    <Typography sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '0.875rem' }}>Actions</Typography>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {sortedBoms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                       No BOM records found.
                     </TableCell>
                   </TableRow>
@@ -366,6 +408,16 @@ const BOMReport = () => {
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f', fontSize: '0.95rem' }}>
                           ₹{group.ParentTotalCost.toFixed(2)}
+                        </TableCell>
+                        <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
+                            <IconButton color="primary" size="small" onClick={(e) => handleEdit(e, group.ParentItemCode)} disabled={!hasEditPermission()}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton color="error" size="small" onClick={(e) => openDeleteConfirm(e, group.ParentItemCode)} disabled={!hasDeletePermission()}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
                         </TableCell>
                       </TableRow>
                       
@@ -387,6 +439,7 @@ const BOMReport = () => {
                           <TableCell align="right" sx={{ color: 'text.secondary' }}>
                             {parseFloat(child.TotalChildCost).toFixed(2)}
                           </TableCell>
+                          <TableCell />
                         </TableRow>
                       ))}
                     </React.Fragment>
@@ -403,6 +456,14 @@ const BOMReport = () => {
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
         title="B O M Preview" 
+      />
+
+      <DeleteConfirmModal
+        open={deleteConfirmOpen}
+        onClose={closeDeleteConfirm}
+        onConfirm={handleDeleteBOM}
+        title="Confirm Deletion"
+        itemName="this BOM"
       />
     </Box>
   );
