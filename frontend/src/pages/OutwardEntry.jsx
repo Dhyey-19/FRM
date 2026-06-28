@@ -184,10 +184,37 @@ const OutwardEntry = () => {
     return matchesSearch && matchesDate;
   });
 
+  const generateNextOutwardNo = (isBill, currentOutwards) => {
+    const filtered = currentOutwards.filter(o => (o.Bill !== false) === isBill);
+    if (filtered.length === 0) return '1';
+    
+    const latest = filtered.sort((a, b) => b.ID - a.ID)[0];
+    const lastNo = latest.OUTWARDNO;
+    
+    if (!lastNo) return '1';
+
+    const match = lastNo.match(/(\d+)(?!.*\d)/);
+    if (match) {
+      const numStr = match[1];
+      const num = parseInt(numStr, 10) + 1;
+      const paddedNum = String(num).padStart(numStr.length, '0');
+      return lastNo.substring(0, match.index) + paddedNum + lastNo.substring(match.index + numStr.length);
+    }
+    return lastNo + '-1';
+  };
+
+  const handleBillChange = (e) => {
+    const newBill = e.target.checked;
+    setBill(newBill);
+    if (!editingId) {
+      setOutwardNo(generateNextOutwardNo(newBill, outwards));
+    }
+  };
+
   const handleOpenDialog = () => {
     setDialogError('');
     setEditingId(null);
-    setOutwardNo('');
+    setOutwardNo(generateNextOutwardNo(true, outwards));
     setOutwardDate(new Date().toISOString().split('T')[0]);
     setLedgerId(null);
     setBill(true);
@@ -772,7 +799,7 @@ const OutwardEntry = () => {
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} sm={1}>
                 <FormControlLabel
-                  control={<Checkbox checked={bill} onChange={(e) => setBill(e.target.checked)} />}
+                  control={<Checkbox checked={bill} onChange={handleBillChange} />}
                   label="Bill"
                 />
               </Grid>
