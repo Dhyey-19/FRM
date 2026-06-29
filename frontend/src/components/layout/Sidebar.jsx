@@ -40,6 +40,7 @@ import {
   ExpandLess, 
   ExpandMore,
   Logout,
+  SaveAlt as BackupIcon,
   KeyOff as KeyOffIcon,
   Menu as MenuIcon,
   MenuOpen as MenuOpenIcon,
@@ -75,7 +76,39 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
     }
   };
 
-
+  const handleBackup = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/backup`, {
+        method: 'GET'
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'Factory Flow Backup.xlsx';
+        if (contentDisposition && contentDisposition.includes('filename=')) {
+          const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+          if (filenameMatch && filenameMatch.length > 1) {
+            filename = filenameMatch[1];
+          }
+        }
+        
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+      } else {
+        alert('Failed to download backup');
+      }
+    } catch (err) {
+      console.error('Backup error:', err);
+      alert('Failed to connect to server for backup');
+    }
+  };
 
   const handleCloseSurrenderDialog = () => {
     setOpenSurrenderDialog(false);
@@ -276,6 +309,18 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
                     <ListItemText primary="Assets" primaryTypographyProps={{ fontWeight: isSelected('/dashboard/assets') ? 600 : 400 }} />
                     {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/assets', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
+
+                  <ListItemButton 
+                    onClick={handleBackup}
+                    sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2,
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+                    }}
+                  >
+                    <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#4caf50' }}>
+                      <BackupIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Backup Database" primaryTypographyProps={{ color: '#4caf50', fontWeight: 500 }} />
+                  </ListItemButton>
 
                   <ListItemButton 
                     onClick={() => setOpenSurrenderDialog(true)}

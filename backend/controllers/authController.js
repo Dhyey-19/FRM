@@ -244,3 +244,50 @@ exports.surrenderApp = async (req, res) => {
     res.status(500).json({ message: 'Server error surrendering license' });
   }
 };
+
+const exceljs = require('exceljs');
+
+exports.backupDatabase = async (req, res) => {
+  try {
+    const pool = await connectDB();
+    const tablesResult = await pool.request().query("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'");
+    const tables = tablesResult.recordset.map(row => row.TABLE_NAME);
+
+    const workbook = new exceljs.Workbook();
+
+    for (const table of tables) {
+      const dataResult = await pool.request().query(`SELECT * FROM [${table}]`);
+      const data = dataResult.recordset;
+
+      const worksheet = workbook.addWorksheet(table);
+
+      if (data.length > 0) {
+        // Add headers
+        const columns = Object.keys(data[0]).map(key => ({ header: key, key: key }));
+        worksheet.columns = columns;
+
+        // Add rows
+        worksheet.addRows(data);
+      } else {
+        worksheet.addRow(['No Data']);
+      }
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    
+    // Generate filename with current date and time
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+    const filename = `Factory Flow Backup ${dateStr} ${timeStr}.xlsx`;
+
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Backup database error:', error);
+    res.status(500).json({ message: 'Server error backing up database' });
+  }
+};

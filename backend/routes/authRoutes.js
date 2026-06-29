@@ -23,4 +23,7 @@ router.post('/surrender', authController.surrenderApp);
 // POST /api/auth/share-pdf
 router.post('/share-pdf', authController.sharePDF);
 
+// GET /api/auth/backup
+router.get('/backup', authController.backupDatabase);
+
 module.exports = router;
