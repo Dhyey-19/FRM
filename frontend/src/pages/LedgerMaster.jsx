@@ -16,6 +16,16 @@ const initialFormState = {
   PaymentTerm: '', Transport: '', Remark: ''
 };
 
+const indianStates = [
+  "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam",
+  "Bihar", "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir",
+  "Jharkhand", "Karnataka", "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh",
+  "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Puducherry",
+  "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh",
+  "Uttarakhand", "West Bengal"
+];
+
 const LedgerMaster = () => {
   const [ledgers, setLedgers] = useState([]);
   const [accountGroups, setAccountGroups] = useState([]);
@@ -335,7 +345,16 @@ const LedgerMaster = () => {
 
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField label="City" name="City" value={formData.City || ''} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="State" name="State" value={formData.State || ''} onChange={handleInputChange} fullWidth size="small" />
+              <Autocomplete
+                options={indianStates}
+                value={formData.State || null}
+                onChange={(event, newValue) => {
+                  handleInputChange({ target: { name: 'State', value: newValue || '' } });
+                }}
+                renderInput={(params) => <TextField {...params} label="State" size="small" />}
+                fullWidth
+                size="small"
+              />
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2 }}>

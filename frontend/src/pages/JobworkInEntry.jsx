@@ -60,7 +60,7 @@ const JobworkInEntry = () => {
   const [jwInwardNo, setJwInwardNo] = useState('');
   const [jwInwardDate, setJwInwardDate] = useState(todayDate);
   const [ledgerId, setLedgerId] = useState(null);
-  const [jwOutwardNo, setJwOutwardNo] = useState('');
+  const jwOutwardNo = 'All';
   const [jobworkOuts, setJobworkOuts] = useState([]);
   const [totalAmount, setTotalAmount] = useState('');
   const [remark, setRemark] = useState('');
@@ -73,6 +73,40 @@ const JobworkInEntry = () => {
   const getItemBalance = (itemCode, specificOutwardNo = null) => {
     const targetOutwardNo = specificOutwardNo || jwOutwardNo;
     if (!targetOutwardNo) return { qty: 0, wt: 0 };
+
+    if (targetOutwardNo === 'All') {
+      let outwardQty = 0;
+      let outwardNetWt = 0;
+      jobworkOuts.filter(jw => jw.LEDGERID === ledgerId).forEach(jw => {
+        if (jw.Details) {
+          jw.Details.forEach(d => {
+            if (d.ITEMCODE === itemCode) {
+              outwardQty += parseFloat(d.QUANTITY) || 0;
+              outwardNetWt += parseFloat(d.NETWT) || 0;
+            }
+          });
+        }
+      });
+
+      let receivedQty = 0;
+      let receivedNetWt = 0;
+      jwInwards.filter(jw => jw.LEDGERID === ledgerId && jw.ID !== editingId).forEach(inward => {
+        if (inward.Details) {
+          inward.Details.forEach(d => {
+            if (d.OUTITEMCODE === itemCode) {
+              receivedQty += parseFloat(d.QUANTITY) || 0;
+              receivedNetWt += parseFloat(d.NETWT) || 0;
+            }
+          });
+        }
+      });
+
+      return {
+        qty: Math.max(0, outwardQty - receivedQty),
+        wt: Math.max(0, outwardNetWt - receivedNetWt)
+      };
+    }
+
     const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === targetOutwardNo);
     if (!selectedOutward || !selectedOutward.Details) return { qty: 0, wt: 0 };
     
@@ -105,10 +139,31 @@ const JobworkInEntry = () => {
 
   const getOutItemOptions = () => {
     if (!jwOutwardNo) return [];
+    if (jwOutwardNo === 'All') {
+      const outItemCodes = new Set();
+      const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
+      allOutwards.forEach(jw => {
+        if (jw.Details) {
+          jw.Details.forEach(d => {
+            const bal = getItemBalance(d.ITEMCODE, 'All');
+            if (bal.qty > 0 || bal.wt > 0) {
+              outItemCodes.add(d.ITEMCODE);
+            }
+          });
+        }
+      });
+      return items.filter(i => outItemCodes.has(i.ItemCode));
+    }
     const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
     if (!selectedOutward || !selectedOutward.Details) return [];
-    const outItemCodes = selectedOutward.Details.map(d => d.ITEMCODE);
-    return items.filter(i => outItemCodes.includes(i.ItemCode));
+    const outItemCodes = new Set();
+    selectedOutward.Details.forEach(d => {
+      const bal = getItemBalance(d.ITEMCODE, jwOutwardNo);
+      if (bal.qty > 0 || bal.wt > 0) {
+        outItemCodes.add(d.ITEMCODE);
+      }
+    });
+    return items.filter(i => outItemCodes.has(i.ItemCode));
   };
 
   const fetchJwInwards = async () => {
@@ -216,7 +271,6 @@ const JobworkInEntry = () => {
     setJwInwardNo('');
     setJwInwardDate(new Date().toISOString().split('T')[0]);
     setLedgerId(null);
-    setJwOutwardNo('');
     setRemark('');
     setGridRows([{ ...emptyRow }]);
     setOpenDialog(true);
@@ -228,7 +282,6 @@ const JobworkInEntry = () => {
     setJwInwardNo(jw.JWINWARDNO || '');
     setJwInwardDate(jw.JWINWARDDATE ? jw.JWINWARDDATE.split('T')[0] : new Date().toISOString().split('T')[0]);
     setLedgerId(jw.LEDGERID);
-    setJwOutwardNo(jw.JWOUTWARDNO || '');
     setRemark(jw.REMARK || '');
     
     if (jw.Details && jw.Details.length > 0) {
@@ -279,8 +332,25 @@ const JobworkInEntry = () => {
     if (field === 'OUTITEMCODE') {
       newRows[index].INITEMCODE = item ? item.ItemCode : '';
       if (jwOutwardNo && item) {
-        const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
-        const outwardDetail = selectedOutward?.Details?.find(d => d.ITEMCODE === item.ItemCode);
+        let outwardDetail = null;
+        if (jwOutwardNo === 'All') {
+          const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
+          for (let jw of allOutwards) {
+            if (jw.Details) {
+              const det = jw.Details.find(d => d.ITEMCODE === item.ItemCode);
+              if (det) {
+                const bal = getItemBalance(item.ItemCode, jw.JWOUTWARDNO);
+                if (bal.qty > 0 || bal.wt > 0) {
+                  outwardDetail = det;
+                  break;
+                }
+              }
+            }
+          }
+        } else {
+          const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
+          outwardDetail = selectedOutward?.Details?.find(d => d.ITEMCODE === item.ItemCode);
+        }
         if (outwardDetail) {
           newRows[index].PROCESS = outwardDetail.PROCESS || '';
           newRows[index].RATE = outwardDetail.RATE !== null && outwardDetail.RATE !== undefined ? outwardDetail.RATE.toString() : '';
@@ -543,7 +613,7 @@ const JobworkInEntry = () => {
       JWINWARDNO: jwInwardNo,
       JWINWARDDATE: jwInwardDate,
       LEDGERID: ledgerId,
-      JWOUTWARDNO: jwOutwardNo || null,
+      JWOUTWARDNO: jwOutwardNo === 'All' ? null : (jwOutwardNo || null),
       TOTALAMOUNT: totalAmount ? parseFloat(totalAmount) : 0,
       REMARK: remark,
       CREATEDBY: username,
@@ -732,41 +802,19 @@ const JobworkInEntry = () => {
               <Grid item xs={12} sm={3} md={2}>
                 <TextField fullWidth label="Date" type="date" size="small" value={jwInwardDate} onChange={(e) => setJwInwardDate(e.target.value)} InputLabelProps={{ shrink: true }} required />
               </Grid>
-              <Grid item xs={12} sm={6} md={5}>
+              <Grid item xs={12} sm={6} md={8}>
                 <Autocomplete
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
                   value={ledgers.find(l => l.Id === ledgerId) || null}
                   onChange={(e, newValue) => {
                     setLedgerId(newValue ? newValue.Id : null);
-                    setJwOutwardNo('');
                     setGridRows([{ ...emptyRow }]);
                   }}
                   renderInput={(params) => <TextField {...params} label="Ledger / Party" size="small" required fullWidth />}
                   fullWidth
                   sx={{ minWidth: `${Math.max(20, maxLedgerLength) + 6}ch` }}
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Autocomplete
-                  options={jobworkOuts.filter(jw => {
-                    if (jw.LEDGERID !== ledgerId) return false;
-                    if (editingId && jw.JWOUTWARDNO === jwOutwardNo) return true;
-                    if (!jw.Details || jw.Details.length === 0) return false;
-                    return jw.Details.some(d => {
-                      const bal = getItemBalance(d.ITEMCODE, jw.JWOUTWARDNO);
-                      return bal.qty > 0 || bal.wt > 0;
-                    });
-                  })}
-                  getOptionLabel={(option) => option.JWOUTWARDNO || ''}
-                  value={jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo) || null}
-                  onChange={(e, newValue) => {
-                    setJwOutwardNo(newValue ? newValue.JWOUTWARDNO : '');
-                  }}
-                  disabled={!ledgerId}
-                  renderInput={(params) => <TextField {...params} label="Outward Challan Ref" size="small" placeholder={ledgerId ? "Select Challan" : "Select Ledger First"} />}
-                  fullWidth
                 />
               </Grid>
             </Grid>

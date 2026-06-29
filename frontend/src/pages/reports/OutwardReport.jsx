@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, Button, Paper, CircularProgress, TextField } from '@mui/material';
-import { DataGrid, GridToolbar } from '@mui/x-data-grid';
+import { DataGrid, GridToolbar, useGridApiRef, gridFilteredSortedRowEntriesSelector } from '@mui/x-data-grid';
 import { PictureAsPdf, Visibility, TableView, Share } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -69,6 +69,44 @@ const OutwardReport = () => {
     { field: 'AMOUNT', headerName: 'Amount', width: 110, type: 'number' },
   ];
 
+  const filteredOutwards = useMemo(() => {
+    return outwards.filter(row => {
+      if (!row.OUTWARDDATE) return true;
+      const rowDate = new Date(row.OUTWARDDATE);
+      rowDate.setHours(0,0,0,0);
+      const start = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
+      const end = endDate ? new Date(endDate).setHours(23,59,59,999) : null;
+      
+      const isAfterFrom = start ? rowDate.getTime() >= start : true;
+      const isBeforeTo = end ? rowDate.getTime() <= end : true;
+      return isAfterFrom && isBeforeTo;
+    });
+  }, [outwards, startDate, endDate]);
+
+  const calculateTotals = (rows) => ({
+    totalQty: rows.reduce((sum, row) => sum + (parseFloat(row.QUANTITY) || 0), 0),
+    totalGrossWt: rows.reduce((sum, row) => sum + (parseFloat(row.GROSSWT) || 0), 0),
+    totalNetWt: rows.reduce((sum, row) => sum + (parseFloat(row.NETWT) || 0), 0),
+    totalAmount: rows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0),
+  });
+
+  const [displayedTotals, setDisplayedTotals] = useState({ totalQty: 0, totalGrossWt: 0, totalNetWt: 0, totalAmount: 0 });
+
+  useEffect(() => {
+    setDisplayedTotals(calculateTotals(filteredOutwards));
+  }, [filteredOutwards]);
+
+  const apiRef = useGridApiRef();
+
+  const handleFilterModelChange = () => {
+    setTimeout(() => {
+      if (apiRef.current) {
+        const visibleRows = gridFilteredSortedRowEntriesSelector(apiRef).map(entry => entry.model);
+        setDisplayedTotals(calculateTotals(visibleRows));
+      }
+    }, 0);
+  };
+
   const handleExportPDF = (action = 'download') => {
     const doc = new jsPDF('landscape');
     
@@ -90,18 +128,6 @@ const OutwardReport = () => {
     doc.setLineWidth(0.5);
     doc.line(14, 40, 283, 40); // landscape width is 297
 
-    const filteredOutwards = outwards.filter(row => {
-      if (!row.OUTWARDDATE) return true;
-      const rowDate = new Date(row.OUTWARDDATE);
-              rowDate.setHours(0,0,0,0);
-              const start = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
-              const end = endDate ? new Date(endDate).setHours(23,59,59,999) : null;
-              
-              const isAfterFrom = start ? rowDate.getTime() >= start : true;
-              const isBeforeTo = end ? rowDate.getTime() <= end : true;
-              return isAfterFrom && isBeforeTo;
-    });
-
     const tableData = filteredOutwards.map(row => [
       row.OUTWARDNO,
       row.OUTWARDDATE ? new Date(row.OUTWARDDATE).toLocaleDateString() : '',
@@ -116,6 +142,10 @@ const OutwardReport = () => {
       row.AMOUNT
     ]);
     
+    tableData.push([
+      '', '', '', '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), '', displayedTotals.totalAmount.toFixed(2)
+    ]);
+
     autoTable(doc, {
       head: [['Outward No', 'Date', 'Ledger', 'Item Code', 'Item Name', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Amount']],
       body: tableData,
@@ -124,7 +154,13 @@ const OutwardReport = () => {
       styles: { fontSize: 8, cellPadding: 3, halign: 'left' },
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [245, 247, 249] },
-      margin: { top: 45 }
+      margin: { top: 45 },
+      didParseCell: function(data) {
+        if (data.row.index === tableData.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [220, 230, 240];
+        }
+      }
     });
 
     if (action === 'share') {
@@ -159,18 +195,6 @@ const OutwardReport = () => {
   };
 
   const handleExportExcel = () => {
-    const filteredOutwards = outwards.filter(row => {
-      if (!row.OUTWARDDATE) return true;
-      const rowDate = new Date(row.OUTWARDDATE);
-              rowDate.setHours(0,0,0,0);
-              const start = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
-              const end = endDate ? new Date(endDate).setHours(23,59,59,999) : null;
-              
-              const isAfterFrom = start ? rowDate.getTime() >= start : true;
-              const isBeforeTo = end ? rowDate.getTime() <= end : true;
-              return isAfterFrom && isBeforeTo;
-    });
-
     const exportData = filteredOutwards.map(row => ({
       'Outward No': row.OUTWARDNO,
       'Date': row.OUTWARDDATE ? new Date(row.OUTWARDDATE).toLocaleDateString() : '',
@@ -185,6 +209,20 @@ const OutwardReport = () => {
       'Amount': row.AMOUNT
     }));
     
+    exportData.push({
+      'Outward No': '',
+      'Date': '',
+      'Ledger Name': '',
+      'Item Code': '',
+      'Item Name': 'GRAND TOTAL',
+      'Unit': '',
+      'Qty': displayedTotals.totalQty,
+      'Gross Wt': displayedTotals.totalGrossWt,
+      'Net Wt': displayedTotals.totalNetWt,
+      'Rate': '',
+      'Amount': displayedTotals.totalAmount
+    });
+
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Outward');
@@ -245,24 +283,17 @@ const OutwardReport = () => {
         </Box>
       </Box>
 
-      <Box sx={{ flexGrow: 1, height: 500, width: '100%' }}>
+      <Box sx={{ flexGrow: 1, height: 500, width: '100%', display: 'flex', flexDirection: 'column' }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
             <CircularProgress />
           </Box>
         ) : (
+          <>
           <DataGrid
-            rows={outwards.filter(row => {
-              if (!row.OUTWARDDATE) return true;
-              const rowDate = new Date(row.OUTWARDDATE);
-              rowDate.setHours(0,0,0,0);
-              const start = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
-              const end = endDate ? new Date(endDate).setHours(23,59,59,999) : null;
-              
-              const isAfterFrom = start ? rowDate.getTime() >= start : true;
-              const isBeforeTo = end ? rowDate.getTime() <= end : true;
-              return isAfterFrom && isBeforeTo;
-            })}
+            apiRef={apiRef}
+            onFilterModelChange={handleFilterModelChange}
+            rows={filteredOutwards}
             columns={columns}
             rowHeight={40}
             columnHeaderHeight={35}
@@ -317,6 +348,14 @@ const OutwardReport = () => {
               },
             }}
           />
+          <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 4, bgcolor: '#f0f4f8', borderTop: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', borderRadius: '0 0 4px 4px' }}>
+            <Typography variant="subtitle2" fontWeight="bold" sx={{ mr: 'auto', color: '#0F3B66' }}>GRAND TOTAL</Typography>
+            <Typography variant="subtitle2" fontWeight="bold" color="#0F3B66">Qty: {displayedTotals.totalQty.toFixed(2)}</Typography>
+            <Typography variant="subtitle2" fontWeight="bold" color="#0F3B66">Gross Wt: {displayedTotals.totalGrossWt.toFixed(3)}</Typography>
+            <Typography variant="subtitle2" fontWeight="bold" color="#0F3B66">Net Wt: {displayedTotals.totalNetWt.toFixed(3)}</Typography>
+            <Typography variant="subtitle2" fontWeight="bold" color="#0F3B66">Amount: {displayedTotals.totalAmount.toFixed(2)}</Typography>
+          </Box>
+          </>
         )}
       </Box>
     

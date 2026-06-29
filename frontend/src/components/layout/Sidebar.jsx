@@ -793,6 +793,21 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
                 {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/outward', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
               </ListItemButton>
 
+              <ListItemButton 
+                selected={isSelected('/dashboard/reports/itemwise-outward')} 
+                onClick={() => navigate('/dashboard/reports/itemwise-outward')}
+                sx={{ py: 0.3, pl: 4, mb: 0.1, borderRadius: 2,
+                  '&.Mui-selected': { bgcolor: 'rgba(255, 255, 255, 0.15)', color: '#ffffff' },
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, color: isSelected('/dashboard/reports/itemwise-outward') ? '#ffffff' : 'rgba(255,255,255,0.6)' }}>
+                  <ReportsIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Item-wise Sales" primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected('/dashboard/reports/itemwise-outward') ? 600 : 400 }} />
+                {!isCollapsed && (<IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + '/dashboard/reports/itemwise-outward', '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window"><OpenInNewIcon fontSize="small" /></IconButton>)}
+              </ListItemButton>
+
               {/* Category: Financial Statements */}
               <Box sx={{ px: 3, pt: 1.5, pb: 0.5 }}>
                 <Typography variant="caption" sx={{ color: '#F88A01', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.7rem' }}>
