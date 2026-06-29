@@ -194,6 +194,9 @@ exports.requestActivation = async (req, res) => {
       auth: {
         user: emailUser,
         pass: emailPass
+      },
+      tls: {
+        rejectUnauthorized: false
       }
     });
 
