@@ -235,7 +235,7 @@ const DashboardHome = () => {
           Dashboard Overview
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.875rem' }}>
-          20260614 is the version
+          20260629 is the version
         </Typography>
       </Box>
 
