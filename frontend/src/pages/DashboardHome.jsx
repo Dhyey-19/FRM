@@ -31,7 +31,8 @@ import {
   Receipt as TransactionIcon,
   List as ListIcon,
   Build as AssemblyIcon,
-  Assessment as ReportsIcon
+  Assessment as ReportsIcon,
+  Storefront as StockIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
@@ -175,6 +176,15 @@ const DashboardHome = () => {
 
   const kpiCards = [
     {
+      title: 'Total Stock Valuation',
+      subtitle: 'Closing Stock * Costing',
+      value: formatCurrency(kpis?.totalValue || 0),
+      icon: <StockIcon sx={{ fontSize: 40 }} />,
+      color: '#10b981', // Emerald
+      bgColor: '#d1fae5',
+      link: '/dashboard/reports/stock'
+    },
+    {
       title: 'Total Turnover',
       subtitle: 'Total Outward Value',
       value: formatCurrency(kpis?.totalTurnover || 0),
@@ -185,8 +195,12 @@ const DashboardHome = () => {
     },
     {
       title: 'Total Receivable',
-      subtitle: 'Debtors + Party',
+      subtitle: 'Combined Net',
       value: formatCurrency(kpis?.totalReceivable || 0),
+      breakdown: {
+        withBill: kpis?.totalReceivableWithBill || 0,
+        withoutBill: kpis?.totalReceivableWithoutBill || 0
+      },
       icon: <ReceivableIcon sx={{ fontSize: 40 }} />,
       color: '#3b82f6', // Blue
       bgColor: '#eff6ff',
@@ -194,8 +208,12 @@ const DashboardHome = () => {
     },
     {
       title: 'Total Payable',
-      subtitle: 'Creditors + Vendor',
+      subtitle: 'Combined Net',
       value: formatCurrency(kpis?.totalPayable || 0),
+      breakdown: {
+        withBill: kpis?.totalPayableWithBill || 0,
+        withoutBill: kpis?.totalPayableWithoutBill || 0
+      },
       icon: <PayableIcon sx={{ fontSize: 40 }} />,
       color: '#ef4444', // Red
       bgColor: '#fef2f2',
@@ -221,11 +239,8 @@ const DashboardHome = () => {
     }
   ];
 
-  // Helper for Monthly Outward custom bar chart
   const monthlyData = kpis?.monthlyOutward || [];
   const maxMonthlyAmount = monthlyData.length > 0 ? Math.max(...monthlyData.map(d => d.totalAmount)) : 1;
-
-  // Helper for Top 5 Parties
   const topParties = kpis?.topParties || [];
 
   return (
@@ -233,9 +248,6 @@ const DashboardHome = () => {
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#0F3B66' }}>
           Dashboard Overview
-        </Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.875rem' }}>
-          20260629 is the version
         </Typography>
       </Box>
 
@@ -300,8 +312,8 @@ const DashboardHome = () => {
         </Grid>
       </Paper>
 
-      {/* Quick Actions */}
-      <Box sx={{ mb: 4, display: 'flex', gap: 2, overflowX: 'auto', pb: 1 }}>
+      {/* Quick Action Navigation Buttons */}
+      <Box sx={{ display: 'flex', gap: 2, mb: 4, overflowX: 'auto', pb: 1 }}>
         {[
           { label: 'New Inward', path: '/dashboard/inwards', icon: <TransactionIcon /> },
           { label: 'New Outward', path: '/dashboard/outwards', icon: <TransactionIcon /> },
@@ -309,9 +321,9 @@ const DashboardHome = () => {
           { label: 'Job Work Out', path: '/dashboard/jobwork-outs', icon: <ListIcon /> },
           { label: 'Assembly', path: '/dashboard/assembly', icon: <AssemblyIcon /> },
           { label: 'Stock Journal', path: '/dashboard/stock-journal', icon: <ReportsIcon /> }
-        ].map((action, idx) => (
+        ].map((action, index) => (
           <Button
-            key={idx}
+            key={index}
             variant="contained"
             startIcon={action.icon}
             onClick={() => navigate(action.path)}
@@ -349,7 +361,7 @@ const DashboardHome = () => {
               <CardActionArea onClick={() => card.onClick ? card.onClick() : navigate(card.link)} sx={{ height: '100%', p: 0 }}>
                 <CardContent sx={{ p: 3, '&:last-child': { pb: 3 }, height: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box>
+                    <Box sx={{ flexGrow: 1 }}>
                       <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                         {card.title}
                       </Typography>
@@ -365,6 +377,26 @@ const DashboardHome = () => {
                               {card.subtitle}
                             </Typography>
                           )}
+                          {card.breakdown && (
+                            <Box sx={{ mt: 1.5, pt: 1, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                                  🧾 With Bill:
+                                </Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66', fontSize: '0.85rem' }}>
+                                  {formatCurrency(card.breakdown.withBill || 0)}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                                  📋 Without Bill:
+                                </Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706', fontSize: '0.85rem' }}>
+                                  {formatCurrency(card.breakdown.withoutBill || 0)}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
                         </>
                       )}
                     </Box>
@@ -372,8 +404,10 @@ const DashboardHome = () => {
                       bgcolor: card.bgColor, 
                       color: card.color, 
                       width: 56, 
-                      height: 56,
-                      borderRadius: 2
+                      height: 56, 
+                      borderRadius: 2,
+                      ml: 1.5,
+                      flexShrink: 0
                     }}>
                       {card.icon}
                     </Avatar>

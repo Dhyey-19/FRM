@@ -40,6 +40,7 @@ import {
   VisibilityOff
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+import { MENU_STRUCTURE, getAllMenuPaths } from '../config/menuConfig';
 
 // We will fetch users from the backend
 const UserMaster = () => {
@@ -69,7 +70,8 @@ const UserMaster = () => {
     IsActive: false,
     IsAdd: false,
     IsEdit: false,
-    IsDelete: false
+    IsDelete: false,
+    AllowedMenus: []
   });
 
   const fetchUsers = async () => {
@@ -145,10 +147,11 @@ const UserMaster = () => {
         IsActive: user.IsActive,
         IsAdd: isAdmin ? true : !!user.IsAdd,
         IsEdit: isAdmin ? true : !!user.IsEdit,
-        IsDelete: isAdmin ? true : !!user.IsDelete
+        IsDelete: isAdmin ? true : !!user.IsDelete,
+        AllowedMenus: user.AllowedMenus ? user.AllowedMenus.split(',') : getAllMenuPaths()
       });
     } else {
-      setFormData({ Username: '', Password: '', MobileNo: '', UserRole: 'OPERATOR', IsActive: false, IsAdd: false, IsEdit: false, IsDelete: false });
+      setFormData({ Username: '', Password: '', MobileNo: '', UserRole: 'OPERATOR', IsActive: false, IsAdd: false, IsEdit: false, IsDelete: false, AllowedMenus: getAllMenuPaths() });
     }
     setOpenDialog(true);
   };
@@ -174,6 +177,24 @@ const UserMaster = () => {
     }
   };
 
+  const handleMenuToggle = (path) => {
+    setFormData(prev => {
+      const current = prev.AllowedMenus;
+      if (current.includes(path)) {
+        return { ...prev, AllowedMenus: current.filter(p => p !== path) };
+      } else {
+        return { ...prev, AllowedMenus: [...current, path] };
+      }
+    });
+  };
+
+  const handleSelectAllMenus = (select) => {
+    setFormData(prev => ({
+      ...prev,
+      AllowedMenus: select ? getAllMenuPaths() : []
+    }));
+  };
+
   const handleSaveUser = async () => {
     try {
       const url = dialogMode === 'add' ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users` : `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/${selectedUserId}`;
@@ -183,7 +204,8 @@ const UserMaster = () => {
         ...formData,
         IsAdd: formData.UserRole === 'ADMIN' ? true : formData.IsAdd,
         IsEdit: formData.UserRole === 'ADMIN' ? true : formData.IsEdit,
-        IsDelete: formData.UserRole === 'ADMIN' ? true : formData.IsDelete
+        IsDelete: formData.UserRole === 'ADMIN' ? true : formData.IsDelete,
+        AllowedMenus: formData.AllowedMenus.join(',')
       };
 
       const response = await fetch(url, {
@@ -429,6 +451,64 @@ const UserMaster = () => {
                 control={<Checkbox name="IsDelete" checked={formData.UserRole === 'ADMIN' ? true : formData.IsDelete} onChange={handleInputChange} disabled={formData.UserRole === 'ADMIN'} />}
                 label="Delete Permission"
               />
+            </Box>
+
+            {/* Menus Access Section */}
+            <Box sx={{ mt: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                  Menu Access Permissions
+                </Typography>
+                <Box>
+                  <Button size="small" onClick={() => handleSelectAllMenus(true)} disabled={formData.UserRole === 'ADMIN'}>Select All</Button>
+                  <Button size="small" onClick={() => handleSelectAllMenus(false)} disabled={formData.UserRole === 'ADMIN'}>Deselect All</Button>
+                </Box>
+              </Box>
+              <Box sx={{ maxHeight: 250, overflowY: 'auto', p: 1.5, border: '1px solid #e2e8f0', borderRadius: 1, bgcolor: formData.UserRole === 'ADMIN' ? '#f8fafc' : '#ffffff' }}>
+                {MENU_STRUCTURE.map((section, idx) => {
+                  if (section.adminOnly) return null;
+                  
+                  const renderCheckbox = (item) => {
+                    if (!item.path) return null;
+                    return (
+                      <FormControlLabel
+                        key={item.path}
+                        control={
+                          <Checkbox 
+                            checked={formData.UserRole === 'ADMIN' || formData.AllowedMenus.includes(item.path)}
+                            onChange={() => handleMenuToggle(item.path)}
+                            disabled={formData.UserRole === 'ADMIN'}
+                            size="small"
+                            sx={{ padding: '4px' }}
+                          />
+                        }
+                        label={<Typography variant="body2" sx={{ fontSize: '0.85rem' }}>{item.title}</Typography>}
+                        sx={{ minWidth: '160px', m: 0, mr: 2 }}
+                      />
+                    );
+                  };
+
+                  return (
+                    <Box key={idx} sx={{ mb: 1.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                        {section.title}
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', ml: 1, mt: 0.5 }}>
+                        {section.path && renderCheckbox(section)}
+                        {section.children && section.children.map(renderCheckbox)}
+                        {section.groups && section.groups.map(group => (
+                          <Box key={group.groupTitle} sx={{ width: '100%', mt: 0.5 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600, color: '#94a3b8' }}>{group.groupTitle}</Typography>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', ml: 1 }}>
+                              {group.children.map(renderCheckbox)}
+                            </Box>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
             </Box>
           </Box>
         </DialogContent>

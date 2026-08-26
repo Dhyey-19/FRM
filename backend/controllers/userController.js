@@ -6,7 +6,7 @@ exports.getUsers = async (req, res) => {
     const pool = await connectDB();
     const result = await pool.request()
       .query(`
-        SELECT UserId, Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete 
+        SELECT UserId, Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus 
         FROM Users 
         ORDER BY UserId DESC
       `);
@@ -19,7 +19,7 @@ exports.getUsers = async (req, res) => {
 
 // POST /api/users
 exports.createUser = async (req, res) => {
-  const { Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete } = req.body;
+  const { Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus } = req.body;
   const isAdmin = UserRole === 'ADMIN';
 
   try {
@@ -43,9 +43,10 @@ exports.createUser = async (req, res) => {
       .input('IsAdd', sql.Bit, isAdmin ? 1 : (IsAdd ? 1 : 0))
       .input('IsEdit', sql.Bit, isAdmin ? 1 : (IsEdit ? 1 : 0))
       .input('IsDelete', sql.Bit, isAdmin ? 1 : (IsDelete ? 1 : 0))
+      .input('AllowedMenus', sql.NVarChar(sql.MAX), AllowedMenus || '')
       .query(`
-        INSERT INTO Users (Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete)
-        VALUES (@Username, @Password, @MobileNo, @UserRole, @IsActive, @IsAdd, @IsEdit, @IsDelete)
+        INSERT INTO Users (Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus)
+        VALUES (@Username, @Password, @MobileNo, @UserRole, @IsActive, @IsAdd, @IsEdit, @IsDelete, @AllowedMenus)
       `);
 
     res.status(201).json({ message: 'User created successfully' });
@@ -58,7 +59,7 @@ exports.createUser = async (req, res) => {
 // PUT /api/users/:id
 exports.updateUser = async (req, res) => {
   const { id } = req.params;
-  const { Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete } = req.body;
+  const { Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus } = req.body;
   const isAdmin = UserRole === 'ADMIN';
 
   try {
@@ -84,6 +85,7 @@ exports.updateUser = async (req, res) => {
       .input('IsAdd', sql.Bit, isAdmin ? 1 : (IsAdd ? 1 : 0))
       .input('IsEdit', sql.Bit, isAdmin ? 1 : (IsEdit ? 1 : 0))
       .input('IsDelete', sql.Bit, isAdmin ? 1 : (IsDelete ? 1 : 0))
+      .input('AllowedMenus', sql.NVarChar(sql.MAX), AllowedMenus || '')
       .query(`
         UPDATE Users 
         SET Username = @Username, 
@@ -93,7 +95,8 @@ exports.updateUser = async (req, res) => {
             IsActive = @IsActive, 
             IsAdd = @IsAdd,
             IsEdit = @IsEdit,
-            IsDelete = @IsDelete
+            IsDelete = @IsDelete,
+            AllowedMenus = @AllowedMenus
         WHERE UserId = @UserId
       `);
 

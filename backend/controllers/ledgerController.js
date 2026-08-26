@@ -20,7 +20,8 @@ exports.getPayableReport = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
-      SELECT 
+      WITH LedgerBillSums AS (
+        SELECT 
           l.Id as RowId,
           l.LedgerName as VendorName,
           l.MobileNo,
@@ -29,15 +30,33 @@ exports.getPayableReport = async (req, res) => {
           l.IFSC,
           l.UPI,
           ISNULL(l.OpeningBalance, 0) as OpeningBalance,
-          ISNULL(SUM(h.TOTALAMOUNT), 0) AS TotalInwardAmount,
-          ISNULL(l.ClosingBalance, 0) as ClosingBalance
-      FROM LedgerMaster l
-      INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      LEFT JOIN InwardHeader h ON l.Id = h.LEDGERID
-      WHERE a.GroupName IN ('Sundry Debtors', 'Sundry Creditors', 'Vendor', 'Party') 
-        AND ISNULL(l.ClosingBalance, 0) < 0
-      GROUP BY l.Id, l.LedgerName, l.MobileNo, l.BankName, l.AccountNo, l.IFSC, l.UPI, l.OpeningBalance, l.ClosingBalance
-      ORDER BY l.LedgerName ASC
+          ISNULL(l.ClosingBalance, 0) as ClosingBalance,
+          ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
+          ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
+        FROM LedgerMaster l
+        INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
+        LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
+        WHERE a.GroupName IN ('Sundry Debtors', 'Sundry Creditors', 'Vendor', 'Party')
+        GROUP BY l.Id, l.LedgerName, l.MobileNo, l.BankName, l.AccountNo, l.IFSC, l.UPI, l.OpeningBalance, l.ClosingBalance
+      )
+      SELECT 
+        RowId,
+        VendorName,
+        MobileNo,
+        BankName,
+        AccountNo,
+        IFSC,
+        UPI,
+        OpeningBalance,
+        ClosingBalance,
+        WithBillBalance,
+        WithoutBillBalance,
+        CASE WHEN ClosingBalance < 0 THEN ABS(ClosingBalance) ELSE 0 END AS PayableCombined,
+        CASE WHEN WithBillBalance < 0 THEN ABS(WithBillBalance) ELSE 0 END AS PayableWithBill,
+        CASE WHEN WithoutBillBalance < 0 THEN ABS(WithoutBillBalance) ELSE 0 END AS PayableWithoutBill
+      FROM LedgerBillSums
+      WHERE ClosingBalance < 0 OR WithBillBalance < 0 OR WithoutBillBalance < 0
+      ORDER BY VendorName ASC;
     `);
     res.status(200).json(result.recordset);
   } catch (error) {
@@ -50,20 +69,35 @@ exports.getReceivableReport = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
-      SELECT 
+      WITH LedgerBillSums AS (
+        SELECT 
           l.Id as RowId,
           l.LedgerName as PartyName,
           l.MobileNo,
           ISNULL(l.OpeningBalance, 0) as OpeningBalance,
-          ISNULL(SUM(h.TOTALAMOUNT), 0) AS TotalOutwardAmount,
-          ISNULL(l.ClosingBalance, 0) as ClosingBalance
-      FROM LedgerMaster l
-      INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      LEFT JOIN OutwardHeader h ON l.Id = h.LEDGERID
-      WHERE a.GroupName IN ('Sundry Debtors', 'Sundry Creditors', 'Vendor', 'Party') 
-        AND ISNULL(l.ClosingBalance, 0) > 0
-      GROUP BY l.Id, l.LedgerName, l.MobileNo, l.OpeningBalance, l.ClosingBalance
-      ORDER BY l.LedgerName ASC
+          ISNULL(l.ClosingBalance, 0) as ClosingBalance,
+          ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
+          ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
+        FROM LedgerMaster l
+        INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
+        LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
+        WHERE a.GroupName IN ('Sundry Debtors', 'Sundry Creditors', 'Vendor', 'Party')
+        GROUP BY l.Id, l.LedgerName, l.MobileNo, l.OpeningBalance, l.ClosingBalance
+      )
+      SELECT 
+        RowId,
+        PartyName,
+        MobileNo,
+        OpeningBalance,
+        ClosingBalance,
+        WithBillBalance,
+        WithoutBillBalance,
+        CASE WHEN ClosingBalance > 0 THEN ClosingBalance ELSE 0 END AS ReceivableCombined,
+        CASE WHEN WithBillBalance > 0 THEN WithBillBalance ELSE 0 END AS ReceivableWithBill,
+        CASE WHEN WithoutBillBalance > 0 THEN WithoutBillBalance ELSE 0 END AS ReceivableWithoutBill
+      FROM LedgerBillSums
+      WHERE ClosingBalance > 0 OR WithBillBalance > 0 OR WithoutBillBalance > 0
+      ORDER BY PartyName ASC;
     `);
     res.status(200).json(result.recordset);
   } catch (error) {
@@ -432,24 +466,43 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
-      SELECT 
-          h.ID AS InwardId,
-          h.OUTWARDNO AS InwardNo,
-          h.OUTWARDDATE AS InwardDate,
-          h.TOTALAMOUNT AS InvoiceAmount,
-          l.Id AS LedgerId,
-          l.LedgerName AS VendorName,
+      WITH LedgerBalances AS (
+        SELECT 
+          l.Id,
+          l.LedgerName,
           l.BankName,
           l.AccountNo,
           l.IFSC,
           l.UPI,
           ISNULL(l.PaymentTerm, 0) AS CreditDays,
-          ISNULL(l.ClosingBalance, 0) AS VendorClosingBalance
-      FROM OutwardHeader h
-      INNER JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      WHERE a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
-      ORDER BY l.LedgerName ASC, h.OUTWARDDATE ASC
+          ISNULL(l.ClosingBalance, 0) AS ClosingBalance,
+          ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
+          ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
+        FROM LedgerMaster l
+        INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
+        LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
+        WHERE a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
+        GROUP BY l.Id, l.LedgerName, l.BankName, l.AccountNo, l.IFSC, l.UPI, l.PaymentTerm, l.OpeningBalance, l.ClosingBalance
+      )
+      SELECT 
+          h.ID AS InwardId,
+          h.INWARDNO AS InwardNo,
+          h.INWARDDATE AS InwardDate,
+          h.TOTALAMOUNT AS InvoiceAmount,
+          ISNULL(h.Bill, 1) AS Bill,
+          lb.Id AS LedgerId,
+          lb.LedgerName AS VendorName,
+          lb.BankName,
+          lb.AccountNo,
+          lb.IFSC,
+          lb.UPI,
+          lb.CreditDays,
+          lb.ClosingBalance AS VendorClosingBalance,
+          lb.WithBillBalance,
+          lb.WithoutBillBalance
+      FROM InwardHeader h
+      INNER JOIN LedgerBalances lb ON h.LEDGERID = lb.Id
+      ORDER BY lb.LedgerName ASC, h.INWARDDATE ASC
     `);
 
     const vendors = {};
@@ -458,6 +511,8 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
         vendors[row.LedgerId] = {
           vendorName: row.VendorName,
           closingBalance: parseFloat(row.VendorClosingBalance) || 0,
+          withBillBalance: parseFloat(row.WithBillBalance) || 0,
+          withoutBillBalance: parseFloat(row.WithoutBillBalance) || 0,
           bankName: row.BankName,
           accountNo: row.AccountNo,
           ifsc: row.IFSC,
@@ -470,7 +525,8 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
         inwardNo: row.InwardNo,
         inwardDate: row.InwardDate,
         invoiceAmount: parseFloat(row.InvoiceAmount) || 0,
-        creditDays: parseInt(row.CreditDays) || 0
+        creditDays: parseInt(row.CreditDays) || 0,
+        bill: row.Bill === 1 || row.Bill === true || row.Bill === '1'
       });
     });
 
@@ -478,24 +534,37 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
     
     for (const ledgerId in vendors) {
       const v = vendors[ledgerId];
-      // Payable logic: outstanding limit is positive balance
-      let outstandingLimit = v.closingBalance > 0 ? v.closingBalance : 0;
+      // Payable logic: outstanding limit is negative balance in ledger
+      let outstandingLimitCombined = v.closingBalance < 0 ? Math.abs(v.closingBalance) : 0;
+      let outstandingLimitWithBill = v.withBillBalance < 0 ? Math.abs(v.withBillBalance) : 0;
+      let outstandingLimitWithoutBill = v.withoutBillBalance < 0 ? Math.abs(v.withoutBillBalance) : 0;
       
-      // Sort invoices: newest first to allocate outstanding amount from newest backward
+      // Sort invoices: newest first to allocate outstanding amount
       const sortedInvoices = [...v.invoices].sort((a, b) => new Date(b.inwardDate) - new Date(a.inwardDate));
       
       sortedInvoices.forEach(inv => {
-        let outstandingAmount = 0;
-        if (outstandingLimit > 0) {
-          outstandingAmount = Math.min(inv.invoiceAmount, outstandingLimit);
-          outstandingLimit -= outstandingAmount;
+        let outstandingCombined = 0;
+        if (outstandingLimitCombined > 0) {
+          outstandingCombined = Math.min(inv.invoiceAmount, outstandingLimitCombined);
+          outstandingLimitCombined -= outstandingCombined;
+        }
+
+        let outstandingWithBill = 0;
+        if (inv.bill && outstandingLimitWithBill > 0) {
+          outstandingWithBill = Math.min(inv.invoiceAmount, outstandingLimitWithBill);
+          outstandingLimitWithBill -= outstandingWithBill;
+        }
+
+        let outstandingWithoutBill = 0;
+        if (!inv.bill && outstandingLimitWithoutBill > 0) {
+          outstandingWithoutBill = Math.min(inv.invoiceAmount, outstandingLimitWithoutBill);
+          outstandingLimitWithoutBill -= outstandingWithoutBill;
         }
         
         const invoiceDate = new Date(inv.inwardDate);
         const dueDate = new Date(invoiceDate);
         dueDate.setDate(dueDate.getDate() + inv.creditDays);
         
-        // Calculate due days relative to today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         dueDate.setHours(0, 0, 0, 0);
@@ -503,11 +572,14 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
         const diffTime = dueDate.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
+        const relevantOutstanding = inv.bill ? outstandingWithBill : outstandingWithoutBill;
+
         finalReport.push({
-          RowId: `${inv.inwardId}_${ledgerId}`, // Unique ID for DataGrid
+          RowId: `${inv.inwardId}_${ledgerId}`,
           inwardId: inv.inwardId,
           inwardNo: inv.inwardNo,
           inwardDate: inv.inwardDate,
+          bill: inv.bill,
           ledgerId: parseInt(ledgerId),
           vendorName: v.vendorName,
           BankName: v.bankName,
@@ -517,14 +589,15 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
           invoiceAmount: inv.invoiceAmount,
           creditDays: inv.creditDays,
           dueDate: dueDate.toISOString().split('T')[0],
-          dueDays: diffDays, // Positive: days remaining, Negative: overdue by X days, 0: due today
-          outstandingAmount: Number(outstandingAmount.toFixed(2)),
-          status: outstandingAmount === 0 ? 'Paid' : (outstandingAmount < inv.invoiceAmount ? 'Partially Paid' : 'Pending')
+          dueDays: diffDays,
+          outstandingAmount: Number(outstandingCombined.toFixed(2)),
+          outstandingWithBill: Number(outstandingWithBill.toFixed(2)),
+          outstandingWithoutBill: Number(outstandingWithoutBill.toFixed(2)),
+          status: outstandingCombined === 0 ? 'Paid' : (outstandingCombined < inv.invoiceAmount ? 'Partially Paid' : 'Pending')
         });
       });
     }
     
-    // Sort report by Vendor Name, then Invoice Date ascending
     finalReport.sort((a, b) => {
       if (a.vendorName.toLowerCase() < b.vendorName.toLowerCase()) return -1;
       if (a.vendorName.toLowerCase() > b.vendorName.toLowerCase()) return 1;
@@ -542,20 +615,35 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
+      WITH LedgerBalances AS (
+        SELECT 
+          l.Id,
+          l.LedgerName,
+          ISNULL(l.PaymentTerm, 0) AS CreditDays,
+          ISNULL(l.ClosingBalance, 0) AS ClosingBalance,
+          ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
+          ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
+        FROM LedgerMaster l
+        INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
+        LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
+        WHERE a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
+        GROUP BY l.Id, l.LedgerName, l.PaymentTerm, l.OpeningBalance, l.ClosingBalance
+      )
       SELECT 
           h.ID AS OutwardId,
-          h.INWARDNO AS OutwardNo,
-          h.INWARDDATE AS OutwardDate,
+          h.OUTWARDNO AS OutwardNo,
+          h.OUTWARDDATE AS OutwardDate,
           h.TOTALAMOUNT AS InvoiceAmount,
-          l.Id AS LedgerId,
-          l.LedgerName AS PartyName,
-          ISNULL(l.PaymentTerm, 0) AS CreditDays,
-          ISNULL(l.ClosingBalance, 0) AS PartyClosingBalance
-      FROM InwardHeader h
-      INNER JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      WHERE a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
-      ORDER BY l.LedgerName ASC, h.INWARDDATE ASC
+          ISNULL(h.Bill, 1) AS Bill,
+          lb.Id AS LedgerId,
+          lb.LedgerName AS PartyName,
+          lb.CreditDays,
+          lb.ClosingBalance AS PartyClosingBalance,
+          lb.WithBillBalance,
+          lb.WithoutBillBalance
+      FROM OutwardHeader h
+      INNER JOIN LedgerBalances lb ON h.LEDGERID = lb.Id
+      ORDER BY lb.LedgerName ASC, h.OUTWARDDATE ASC
     `);
 
     const parties = {};
@@ -564,6 +652,8 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
         parties[row.LedgerId] = {
           partyName: row.PartyName,
           closingBalance: parseFloat(row.PartyClosingBalance) || 0,
+          withBillBalance: parseFloat(row.WithBillBalance) || 0,
+          withoutBillBalance: parseFloat(row.WithoutBillBalance) || 0,
           invoices: []
         };
       }
@@ -572,7 +662,8 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
         outwardNo: row.OutwardNo,
         outwardDate: row.OutwardDate,
         invoiceAmount: parseFloat(row.InvoiceAmount) || 0,
-        creditDays: parseInt(row.CreditDays) || 0
+        creditDays: parseInt(row.CreditDays) || 0,
+        bill: row.Bill === 1 || row.Bill === true || row.Bill === '1'
       });
     });
 
@@ -580,24 +671,37 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
     
     for (const ledgerId in parties) {
       const p = parties[ledgerId];
-      // Receivable logic: outstanding limit is negative balance
-      let outstandingLimit = p.closingBalance < 0 ? Math.abs(p.closingBalance) : 0;
+      // Receivable logic: outstanding limit is positive balance
+      let outstandingLimitCombined = p.closingBalance > 0 ? p.closingBalance : 0;
+      let outstandingLimitWithBill = p.withBillBalance > 0 ? p.withBillBalance : 0;
+      let outstandingLimitWithoutBill = p.withoutBillBalance > 0 ? p.withoutBillBalance : 0;
       
-      // Sort invoices: newest first to allocate outstanding amount from newest backward (FIFO for collection tracking)
+      // Sort invoices: newest first to allocate outstanding amount
       const sortedInvoices = [...p.invoices].sort((a, b) => new Date(b.outwardDate) - new Date(a.outwardDate));
       
       sortedInvoices.forEach(inv => {
-        let outstandingAmount = 0;
-        if (outstandingLimit > 0) {
-          outstandingAmount = Math.min(inv.invoiceAmount, outstandingLimit);
-          outstandingLimit -= outstandingAmount;
+        let outstandingCombined = 0;
+        if (outstandingLimitCombined > 0) {
+          outstandingCombined = Math.min(inv.invoiceAmount, outstandingLimitCombined);
+          outstandingLimitCombined -= outstandingCombined;
+        }
+
+        let outstandingWithBill = 0;
+        if (inv.bill && outstandingLimitWithBill > 0) {
+          outstandingWithBill = Math.min(inv.invoiceAmount, outstandingLimitWithBill);
+          outstandingLimitWithBill -= outstandingWithBill;
+        }
+
+        let outstandingWithoutBill = 0;
+        if (!inv.bill && outstandingLimitWithoutBill > 0) {
+          outstandingWithoutBill = Math.min(inv.invoiceAmount, outstandingLimitWithoutBill);
+          outstandingLimitWithoutBill -= outstandingWithoutBill;
         }
         
         const invoiceDate = new Date(inv.outwardDate);
         const dueDate = new Date(invoiceDate);
         dueDate.setDate(dueDate.getDate() + inv.creditDays);
         
-        // Calculate due days relative to today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         dueDate.setHours(0, 0, 0, 0);
@@ -606,23 +710,25 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
         finalReport.push({
-          RowId: `${inv.outwardId}_${ledgerId}`, // Unique ID for DataGrid
+          RowId: `${inv.outwardId}_${ledgerId}`,
           outwardId: inv.outwardId,
           outwardNo: inv.outwardNo,
           outwardDate: inv.outwardDate,
+          bill: inv.bill,
           ledgerId: parseInt(ledgerId),
           partyName: p.partyName,
           invoiceAmount: inv.invoiceAmount,
           creditDays: inv.creditDays,
           dueDate: dueDate.toISOString().split('T')[0],
-          dueDays: diffDays, // Positive: days remaining, Negative: overdue by X days, 0: due today
-          outstandingAmount: Number(outstandingAmount.toFixed(2)),
-          status: outstandingAmount === 0 ? 'Received' : (outstandingAmount < inv.invoiceAmount ? 'Partially Received' : 'Pending')
+          dueDays: diffDays,
+          outstandingAmount: Number(outstandingCombined.toFixed(2)),
+          outstandingWithBill: Number(outstandingWithBill.toFixed(2)),
+          outstandingWithoutBill: Number(outstandingWithoutBill.toFixed(2)),
+          status: outstandingCombined === 0 ? 'Received' : (outstandingCombined < inv.invoiceAmount ? 'Partially Received' : 'Pending')
         });
       });
     }
     
-    // Sort report by Party Name, then Invoice Date ascending
     finalReport.sort((a, b) => {
       if (a.partyName.toLowerCase() < b.partyName.toLowerCase()) return -1;
       if (a.partyName.toLowerCase() > b.partyName.toLowerCase()) return 1;

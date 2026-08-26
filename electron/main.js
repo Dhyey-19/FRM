@@ -1,6 +1,9 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+// Suppress harmless Chromium DevTools warnings in the console (like Autofill.enable failed)
+app.commandLine.appendSwitch('log-level', '3');
+
 // Start the backend server
 const { startServer } = require('../backend/server.js');
 
@@ -35,12 +38,15 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  // Start backend before window is created
-  try {
-    await startServer();
-    console.log('Backend started successfully');
-  } catch (err) {
-    console.error('Failed to start backend:', err);
+  // Start backend before window is created (only in production)
+  // In development, Nodemon handles the backend for hot-reloading.
+  if (process.env.NODE_ENV !== 'development') {
+    try {
+      await startServer();
+      console.log('Backend started successfully');
+    } catch (err) {
+      console.error('Failed to start backend:', err);
+    }
   }
 
   createWindow();

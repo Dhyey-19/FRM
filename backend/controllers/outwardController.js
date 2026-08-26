@@ -159,6 +159,7 @@ exports.addOutward = async (req, res) => {
 
       const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
       const voucherNo = nextNoRes.recordset[0].NextVoucherNo;
+      const isBill = Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1;
 
       // Debit Party
       await new sql.Request(transaction)
@@ -169,11 +170,12 @@ exports.addOutward = async (req, res) => {
         .input('Amount', sql.Numeric(10,2), TOTALAMOUNT || 0)
         .input('Through', sql.VarChar(30), 'Outward')
         .input('Remark', sql.VarChar(255), OUTWARDNO)
+        .input('Bill', sql.Bit, isBill)
         .input('CreatedBy', sql.VarChar(255), getSignature(CREATEDBY))
         .input('UpdatedBy', sql.VarChar(255), getSignature(CREATEDBY))
         .query(`
-          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
           UPDATE LedgerMaster 
           SET ClosingBalance = ISNULL(ClosingBalance, 0) + @Amount
@@ -189,11 +191,12 @@ exports.addOutward = async (req, res) => {
         .input('Amount', sql.Numeric(10,2), TOTALAMOUNT || 0)
         .input('Through', sql.VarChar(30), 'Outward')
         .input('Remark', sql.VarChar(255), OUTWARDNO)
+        .input('Bill', sql.Bit, isBill)
         .input('CreatedBy', sql.VarChar(255), getSignature(CREATEDBY))
         .input('UpdatedBy', sql.VarChar(255), getSignature(CREATEDBY))
         .query(`
-          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
           UPDATE LedgerMaster 
           SET ClosingBalance = ISNULL(ClosingBalance, 0) - @Amount
@@ -339,6 +342,7 @@ exports.updateOutward = async (req, res) => {
 
       const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
       const voucherNo = nextNoRes.recordset[0].NextVoucherNo;
+      const isBill = Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1;
 
       // Debit Party
       await new sql.Request(transaction)
@@ -349,11 +353,12 @@ exports.updateOutward = async (req, res) => {
         .input('Amount', sql.Numeric(10,2), TOTALAMOUNT || 0)
         .input('Through', sql.VarChar(30), 'Outward')
         .input('Remark', sql.VarChar(255), OUTWARDNO)
+        .input('Bill', sql.Bit, isBill)
         .input('CreatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
         .input('UpdatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
         .query(`
-          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
           UPDATE LedgerMaster 
           SET ClosingBalance = ISNULL(ClosingBalance, 0) + @Amount
@@ -369,11 +374,12 @@ exports.updateOutward = async (req, res) => {
         .input('Amount', sql.Numeric(10,2), TOTALAMOUNT || 0)
         .input('Through', sql.VarChar(30), 'Outward')
         .input('Remark', sql.VarChar(255), OUTWARDNO)
+        .input('Bill', sql.Bit, isBill)
         .input('CreatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
         .input('UpdatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
         .query(`
-          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+          INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+          VALUES (@VoucherNo, 'Sales', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
           UPDATE LedgerMaster 
           SET ClosingBalance = ISNULL(ClosingBalance, 0) - @Amount

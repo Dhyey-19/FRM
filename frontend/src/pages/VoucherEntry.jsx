@@ -4,7 +4,7 @@ import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
-  MenuItem, Select, FormControl, InputLabel, Autocomplete, Grid, Divider
+  MenuItem, Select, FormControl, InputLabel, Autocomplete, Grid, Divider, Chip
 } from '@mui/material';
 import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Receipt as ReceiptIcon, Print as PrintIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon } from '@mui/icons-material';
 import { jsPDF } from 'jspdf';
@@ -48,6 +48,7 @@ const VoucherEntry = ({ user }) => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [searchTerm, setSearchTerm] = useState('');
+  const [billFilter, setBillFilter] = useState('All');
   
   const todayDate = new Date().toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(todayDate);
@@ -60,12 +61,11 @@ const VoucherEntry = ({ user }) => {
   
   const [globalDate, setGlobalDate] = useState(new Date().toISOString().split('T')[0]);
   const [globalVoucherType, setGlobalVoucherType] = useState('Receipt');
+  const [globalBill, setGlobalBill] = useState(true);
   const [gridRows, setGridRows] = useState([{ ...emptyRow }]);
   
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
-
-
 
   const [companyProfile, setCompanyProfile] = useState(null);
 
@@ -121,8 +121,15 @@ const VoucherEntry = ({ user }) => {
     let matchesDate = true;
     if (fromDate && voucherDateStr < fromDate) matchesDate = false;
     if (toDate && voucherDateStr > toDate) matchesDate = false;
+
+    let matchesBill = true;
+    if (billFilter === 'With Bill') {
+      matchesBill = (v.Bill !== false && v.Bill !== 0);
+    } else if (billFilter === 'Without Bill') {
+      matchesBill = (v.Bill === false || v.Bill === 0);
+    }
     
-    return matchesSearch && matchesDate;
+    return matchesSearch && matchesDate && matchesBill;
   });
 
   const handleOpenDialog = () => {
@@ -130,6 +137,7 @@ const VoucherEntry = ({ user }) => {
     setEditingVoucherNo(null);
     setGlobalDate(new Date().toISOString().split('T')[0]);
     setGlobalVoucherType('Receipt');
+    setGlobalBill(true);
     setGridRows(getDefaultRows('Receipt'));
     setOpenDialog(true);
   };
@@ -141,6 +149,7 @@ const VoucherEntry = ({ user }) => {
       setEditingVoucherNo(voucherNo);
       setGlobalDate(voucherItems[0].VoucherDate ? voucherItems[0].VoucherDate.split('T')[0] : new Date().toISOString().split('T')[0]);
       setGlobalVoucherType(voucherItems[0].VoucherType || 'Receipt');
+      setGlobalBill(voucherItems[0].Bill !== false && voucherItems[0].Bill !== 0);
       
       const rows = voucherItems.map(item => ({
         LedgerId: item.LedgerId,
@@ -148,6 +157,7 @@ const VoucherEntry = ({ user }) => {
         Amount: item.Amount,
         Through: item.Through || '',
         Remark: item.Remark || '',
+        Bill: item.Bill,
         CreatedBy: item.CreatedBy || item.CREATEDBY || item.createdby || item.createdBy
       }));
       
@@ -473,12 +483,11 @@ const VoucherEntry = ({ user }) => {
     const username = localUser.Username || localUser.username || 'System';
 
     const originalCreatedByRow = editingVoucherNo ? gridRows.find(r => r.CreatedBy !== undefined && r.CreatedBy !== null) : null;
-    const originalCreatedBy = originalCreatedByRow ? originalCreatedByRow.CreatedBy : null;
-
-    const payload = validRows.map(r => ({
+    const originalCreatedBy = originalCreatedByRow ? originalCreatedByRow.CreatedBy : null;    const payload = validRows.map(r => ({
       ...r,
       VoucherDate: globalDate,
       VoucherType: globalVoucherType,
+      Bill: globalBill,
       Amount: parseFloat(r.Amount),
       CreatedBy: editingVoucherNo ? originalCreatedBy : username,
       UpdatedBy: username
@@ -494,7 +503,7 @@ const VoucherEntry = ({ user }) => {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vouchers: payload })
+        body: JSON.stringify({ vouchers: payload, Bill: globalBill })
       });
       
       if (response.ok) {
@@ -574,6 +583,18 @@ const VoucherEntry = ({ user }) => {
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
               sx={{ width: '220px' }}
             />
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Bill Type</InputLabel>
+              <Select
+                label="Bill Type"
+                value={billFilter}
+                onChange={(e) => setBillFilter(e.target.value)}
+              >
+                <MenuItem value="All">All Vouchers</MenuItem>
+                <MenuItem value="With Bill">With Bill</MenuItem>
+                <MenuItem value="Without Bill">Without Bill</MenuItem>
+              </Select>
+            </FormControl>
             <TextField
               label="From Date"
               type="date"
@@ -592,7 +613,7 @@ const VoucherEntry = ({ user }) => {
               InputLabelProps={{ shrink: true }}
               sx={{ width: '150px' }}
             />
-            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); }}>Clear Dates</Button>
+            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); setBillFilter('All'); }}>Clear</Button>
           </Box>
           <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
             Bulk Add Vouchers
@@ -605,6 +626,7 @@ const VoucherEntry = ({ user }) => {
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Voucher No</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Bill Type</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Mode</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger</TableCell>
@@ -622,6 +644,15 @@ const VoucherEntry = ({ user }) => {
                     </Typography>
                   </TableCell>
                   <TableCell>{row.VoucherType === 'General' ? 'Journal' : (row.VoucherType || 'Journal')}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      size="small" 
+                      label={row.Bill !== false && row.Bill !== 0 ? 'With Bill' : 'Without Bill'}
+                      color={row.Bill !== false && row.Bill !== 0 ? 'primary' : 'warning'}
+                      variant={row.Bill !== false && row.Bill !== 0 ? 'outlined' : 'filled'}
+                      sx={{ fontSize: '0.72rem', height: 22, fontWeight: 600 }}
+                    />
+                  </TableCell>
                   <TableCell>{row.VoucherDate ? row.VoucherDate.split('T')[0] : ''}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ 
@@ -671,7 +702,7 @@ const VoucherEntry = ({ user }) => {
               ))}
               {filteredVouchers.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>No vouchers found.</TableCell>
+                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>No vouchers found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -714,7 +745,17 @@ const VoucherEntry = ({ user }) => {
                   <MenuItem value="Journal">Journal</MenuItem>
                 </Select>
               </FormControl>
-              <Typography variant="body1" sx={{ ml: 2 }}>Date:</Typography>
+              <Typography variant="body1" sx={{ ml: 1 }}>Bill:</Typography>
+              <FormControl size="small" sx={{ backgroundColor: 'white', borderRadius: 1, minWidth: 140 }}>
+                <Select 
+                  value={globalBill ? 'true' : 'false'} 
+                  onChange={(e) => setGlobalBill(e.target.value === 'true')}
+                >
+                  <MenuItem value="true">With Bill</MenuItem>
+                  <MenuItem value="false">Without Bill</MenuItem>
+                </Select>
+              </FormControl>
+              <Typography variant="body1" sx={{ ml: 1 }}>Date:</Typography>
               <TextField 
                 type="date"
                 size="small"

@@ -26,7 +26,7 @@ exports.getVouchers = async (req, res) => {
 };
 
 exports.addVoucher = async (req, res) => {
-  const { VoucherDate, Mode, LedgerId, Amount, Through, Remark } = req.body;
+  const { VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill } = req.body;
 
   if (!VoucherDate || !Mode || !LedgerId || !Amount) {
     return res.status(400).json({ message: 'Date, Mode, Ledger, and Amount are required' });
@@ -39,6 +39,8 @@ exports.addVoucher = async (req, res) => {
     const nextNoRes = await pool.request().query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
     const voucherNo = nextNoRes.recordset[0].NextVoucherNo;
 
+    const isBill = Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1;
+
     await pool.request()
       .input('VoucherNo', sql.Numeric(8,0), voucherNo)
       .input('VoucherType', sql.VarChar(10), req.body.VoucherType || 'Journal')
@@ -48,11 +50,12 @@ exports.addVoucher = async (req, res) => {
       .input('Amount', sql.Numeric(10,2), Amount)
       .input('Through', sql.VarChar(30), Through || null)
       .input('Remark', sql.VarChar(255), Remark || null)
+      .input('Bill', sql.Bit, isBill)
       .input('CreatedBy', sql.VarChar(255), getSignature(req.body.CreatedBy))
       .input('UpdatedBy', sql.VarChar(255), getSignature(req.body.CreatedBy))
       .query(`
-        INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-        VALUES (@VoucherNo, @VoucherType, @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy)
+        INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+        VALUES (@VoucherNo, @VoucherType, @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy)
       `);
       
     res.status(201).json({ message: 'Voucher added successfully' });
@@ -63,7 +66,7 @@ exports.addVoucher = async (req, res) => {
 };
 
 exports.addVouchersBulk = async (req, res) => {
-  const { vouchers } = req.body;
+  const { vouchers, Bill } = req.body;
   if (!vouchers || !Array.isArray(vouchers) || vouchers.length === 0) {
     return res.status(400).json({ message: 'A non-empty array of vouchers is required' });
   }
@@ -84,6 +87,10 @@ exports.addVouchersBulk = async (req, res) => {
           throw new Error('Date, Mode, Ledger, and Amount are required for each row');
         }
         
+        const isBill = v.Bill !== undefined 
+          ? (v.Bill !== false && v.Bill !== 0 && v.Bill !== '0' ? 1 : 0)
+          : (Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1);
+
         const request = new sql.Request(transaction);
         await request
           .input('VoucherNo', sql.Numeric(8,0), voucherNo)
@@ -94,11 +101,12 @@ exports.addVouchersBulk = async (req, res) => {
           .input('Amount', sql.Numeric(10,2), v.Amount)
           .input('Through', sql.VarChar(30), v.Through || null)
           .input('Remark', sql.VarChar(255), v.Remark || null)
+          .input('Bill', sql.Bit, isBill)
           .input('CreatedBy', sql.VarChar(255), getSignature(v.CreatedBy))
           .input('UpdatedBy', sql.VarChar(255), getSignature(v.CreatedBy))
           .query(`
-            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-            VALUES (@VoucherNo, @VoucherType, @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+            VALUES (@VoucherNo, @VoucherType, @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
             UPDATE LedgerMaster 
             SET ClosingBalance = ISNULL(ClosingBalance, 0) + CASE WHEN @Mode = 'Debit' THEN @Amount ELSE -@Amount END
@@ -120,7 +128,7 @@ exports.addVouchersBulk = async (req, res) => {
 
 exports.updateVouchersBulk = async (req, res) => {
   const { voucherNo } = req.params;
-  const { vouchers } = req.body;
+  const { vouchers, Bill } = req.body;
 
   if (!vouchers || !Array.isArray(vouchers) || vouchers.length === 0) {
     return res.status(400).json({ message: 'A non-empty array of vouchers is required' });
@@ -163,6 +171,10 @@ exports.updateVouchersBulk = async (req, res) => {
           throw new Error('Date, Mode, Ledger, and Amount are required for each row');
         }
         
+        const isBill = v.Bill !== undefined 
+          ? (v.Bill !== false && v.Bill !== 0 && v.Bill !== '0' ? 1 : 0)
+          : (Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1);
+
         const request = new sql.Request(transaction);
         await request
           .input('VoucherNo', sql.Numeric(8,0), voucherNo)
@@ -173,11 +185,12 @@ exports.updateVouchersBulk = async (req, res) => {
           .input('Amount', sql.Numeric(10,2), v.Amount)
           .input('Through', sql.VarChar(30), v.Through || null)
           .input('Remark', sql.VarChar(255), v.Remark || null)
+          .input('Bill', sql.Bit, isBill)
           .input('CreatedBy', sql.VarChar(255), getSignature(v.CreatedBy))
           .input('UpdatedBy', sql.VarChar(255), getSignature(v.CreatedBy))
           .query(`
-            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-            VALUES (@VoucherNo, @VoucherType, @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+            VALUES (@VoucherNo, @VoucherType, @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
             UPDATE LedgerMaster 
             SET ClosingBalance = ISNULL(ClosingBalance, 0) + CASE WHEN @Mode = 'Debit' THEN @Amount ELSE -@Amount END
@@ -199,7 +212,7 @@ exports.updateVouchersBulk = async (req, res) => {
 
 exports.updateVoucher = async (req, res) => {
   const { id } = req.params;
-  const { VoucherDate, Mode, LedgerId, Amount, Through, Remark } = req.body;
+  const { VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill } = req.body;
 
   if (!VoucherDate || !Mode || !LedgerId || !Amount) {
     return res.status(400).json({ message: 'Date, Mode, Ledger, and Amount are required' });
@@ -207,6 +220,8 @@ exports.updateVoucher = async (req, res) => {
 
   try {
     const pool = await connectDB();
+    const isBill = Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1;
+
     await pool.request()
       .input('VoucherId', sql.Numeric(8,0), id)
       .input('VoucherDate', sql.Date, VoucherDate)
@@ -215,11 +230,12 @@ exports.updateVoucher = async (req, res) => {
       .input('Amount', sql.Numeric(10,2), Amount)
       .input('Through', sql.VarChar(30), Through || null)
       .input('Remark', sql.VarChar(255), Remark || null)
+      .input('Bill', sql.Bit, isBill)
       .input('UpdatedBy', sql.VarChar(255), getSignature(req.body.UpdatedBy))
       .query(`
         UPDATE VoucherEntry 
         SET VoucherDate = @VoucherDate, Mode = @Mode, LedgerId = @LedgerId, 
-            Amount = @Amount, Through = @Through, Remark = @Remark,
+            Amount = @Amount, Through = @Through, Remark = @Remark, Bill = @Bill,
             UpdatedBy = @UpdatedBy
         WHERE VoucherId = @VoucherId
       `);

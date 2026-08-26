@@ -36,7 +36,7 @@ exports.login = async (req, res) => {
       .input('Username', sql.VarChar(30), username)
       .input('Password', sql.VarChar(10), password)
       .query(`
-        SELECT UserId, Username, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete 
+        SELECT UserId, Username, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus 
         FROM Users 
         WHERE Username = @Username AND Password = @Password
       `);

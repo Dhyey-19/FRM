@@ -2,9 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Box, Typography, Button, Paper, CircularProgress, 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, InputAdornment, Toolbar, Autocomplete
+  TextField, InputAdornment, Toolbar, Autocomplete,
+  ToggleButtonGroup, ToggleButton, Card, CardContent, Grid, Chip, Divider, Tooltip
 } from '@mui/material';
-import { PictureAsPdf, Visibility, TableView, Share, Search as SearchIcon } from '@mui/icons-material';
+import { 
+  PictureAsPdf, Visibility, TableView, Share, 
+  Receipt, ReceiptLong, MoneyOff, CallSplit, AccountBalanceWallet
+} from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -34,6 +38,7 @@ const AccountLedgerReport = () => {
   const [dateRange, setDateRange] = useState([getFirstDayOfMonth(), getLastDayOfMonth()]);
   const [startDate, endDate] = dateRange;
   const [selectedLedger, setSelectedLedger] = useState(null);
+  const [viewMode, setViewMode] = useState('combined'); // 'combined', 'with_bill', 'without_bill', 'split'
 
   useEffect(() => {
     fetchData();
@@ -71,72 +76,111 @@ const AccountLedgerReport = () => {
     return [...new Set(names)].join(', ');
   };
 
-  const filteredVouchers = useMemo(() => {
-    if (!selectedLedger) return [];
+  // Helper to calculate ledger statement for any subset of vouchers
+  const computeLedgerMetrics = (voucherSubset, baseOpeningBalance = 0) => {
+    if (!selectedLedger) return {
+      vouchersList: [],
+      periodOpeningBalance: 0,
+      totals: { debit: 0, credit: 0 },
+      periodClosingBalance: 0,
+      opDebit: 0,
+      opCredit: 0,
+      grossDebit: 0,
+      grossCredit: 0,
+      grandTotal: 0,
+      closingDebit: 0,
+      closingCredit: 0
+    };
 
-    return vouchers.filter(v => {
-      // Must match the selected ledger
-      if (v.LedgerId !== selectedLedger.Id) return false;
-      
-      // Date filtering
+    let opening = parseFloat(baseOpeningBalance || 0);
+    const startMs = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
+    const endMs = endDate ? new Date(endDate).setHours(23,59,59,999) : null;
+
+    const inPeriodList = [];
+
+    voucherSubset.forEach(v => {
+      if (v.LedgerId !== selectedLedger.Id) return;
       const rowDate = v.VoucherDate ? new Date(v.VoucherDate) : null;
-      if (rowDate) {
-        rowDate.setHours(0,0,0,0);
-        const start = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
-        const end = endDate ? new Date(endDate).setHours(23,59,59,999) : null;
-        
-        if (start && rowDate.getTime() < start) return false;
-        if (end && rowDate.getTime() > end) return false;
+      if (!rowDate) return;
+
+      const rowTime = new Date(rowDate).setHours(0,0,0,0);
+      const amt = parseFloat(v.Amount || 0);
+
+      if (startMs && rowTime < startMs) {
+        if (v.Mode === 'Debit') opening += amt;
+        if (v.Mode === 'Credit') opening -= amt;
+      } else if (!endMs || rowTime <= endMs) {
+        inPeriodList.push(v);
       }
+    });
 
-      return true;
-    }).sort((a, b) => new Date(a.VoucherDate) - new Date(b.VoucherDate));
-  }, [vouchers, selectedLedger, startDate, endDate]);
+    inPeriodList.sort((a, b) => new Date(a.VoucherDate) - new Date(b.VoucherDate));
 
-  const periodOpeningBalance = useMemo(() => {
-    if (!selectedLedger) return 0;
-    
-    // Base opening balance
-    let balance = parseFloat(selectedLedger.OpeningBalance || 0);
-
-    // Sum all transactions BEFORE startDate
-    if (startDate) {
-      const start = new Date(startDate).setHours(0,0,0,0);
-      vouchers.forEach(v => {
-        if (v.LedgerId === selectedLedger.Id) {
-          const rowDate = v.VoucherDate ? new Date(v.VoucherDate) : null;
-          if (rowDate) {
-            rowDate.setHours(0,0,0,0);
-            if (rowDate.getTime() < start) {
-               if (v.Mode === 'Debit') balance += parseFloat(v.Amount || 0);
-               if (v.Mode === 'Credit') balance -= parseFloat(v.Amount || 0);
-            }
-          }
-        }
-      });
-    }
-    return balance;
-  }, [vouchers, selectedLedger, startDate]);
-
-  const totals = useMemo(() => {
     let tDebit = 0;
     let tCredit = 0;
-    filteredVouchers.forEach(v => {
-      if (v.Mode === 'Debit') tDebit += parseFloat(v.Amount || 0);
-      if (v.Mode === 'Credit') tCredit += parseFloat(v.Amount || 0);
+    inPeriodList.forEach(v => {
+      const amt = parseFloat(v.Amount || 0);
+      if (v.Mode === 'Debit') tDebit += amt;
+      if (v.Mode === 'Credit') tCredit += amt;
     });
-    return { debit: tDebit, credit: tCredit };
-  }, [filteredVouchers]);
 
-  const periodClosingBalance = periodOpeningBalance + totals.debit - totals.credit;
+    const closing = opening + tDebit - tCredit;
+    const opDebit = opening > 0 ? opening : 0;
+    const opCredit = opening < 0 ? Math.abs(opening) : 0;
+    const grossDebit = opDebit + tDebit;
+    const grossCredit = opCredit + tCredit;
+    const grandTotal = Math.max(grossDebit, grossCredit);
+    const closingDebit = grossCredit > grossDebit ? (grossCredit - grossDebit) : 0;
+    const closingCredit = grossDebit > grossCredit ? (grossDebit - grossCredit) : 0;
 
-  const opDebit = periodOpeningBalance > 0 ? periodOpeningBalance : 0;
-  const opCredit = periodOpeningBalance < 0 ? Math.abs(periodOpeningBalance) : 0;
-  const grossDebit = opDebit + totals.debit;
-  const grossCredit = opCredit + totals.credit;
-  const grandTotal = Math.max(grossDebit, grossCredit);
-  const closingDebit = grossCredit > grossDebit ? (grossCredit - grossDebit) : 0;
-  const closingCredit = grossDebit > grossCredit ? (grossDebit - grossCredit) : 0;
+    return {
+      vouchersList: inPeriodList,
+      periodOpeningBalance: opening,
+      totals: { debit: tDebit, credit: tCredit },
+      periodClosingBalance: closing,
+      opDebit,
+      opCredit,
+      grossDebit,
+      grossCredit,
+      grandTotal,
+      closingDebit,
+      closingCredit
+    };
+  };
+
+  // Vouchers subsets
+  const partyAllVouchers = useMemo(() => {
+    if (!selectedLedger) return [];
+    return vouchers.filter(v => v.LedgerId === selectedLedger.Id);
+  }, [vouchers, selectedLedger]);
+
+  const partyWithBillVouchers = useMemo(() => {
+    return partyAllVouchers.filter(v => v.Bill !== false && v.Bill !== 0);
+  }, [partyAllVouchers]);
+
+  const partyWithoutBillVouchers = useMemo(() => {
+    return partyAllVouchers.filter(v => v.Bill === false || v.Bill === 0);
+  }, [partyAllVouchers]);
+
+  // Metrics for each view
+  const combinedMetrics = useMemo(() => {
+    return computeLedgerMetrics(partyAllVouchers, selectedLedger?.OpeningBalance || 0);
+  }, [partyAllVouchers, selectedLedger, startDate, endDate]);
+
+  const withBillMetrics = useMemo(() => {
+    return computeLedgerMetrics(partyWithBillVouchers, selectedLedger?.OpeningBalance || 0);
+  }, [partyWithBillVouchers, selectedLedger, startDate, endDate]);
+
+  const withoutBillMetrics = useMemo(() => {
+    return computeLedgerMetrics(partyWithoutBillVouchers, 0);
+  }, [partyWithoutBillVouchers, selectedLedger, startDate, endDate]);
+
+  // Active single-table metrics based on viewMode
+  const activeMetrics = useMemo(() => {
+    if (viewMode === 'with_bill') return withBillMetrics;
+    if (viewMode === 'without_bill') return withoutBillMetrics;
+    return combinedMetrics;
+  }, [viewMode, combinedMetrics, withBillMetrics, withoutBillMetrics]);
 
   const handleExportPDF = (action = 'download') => {
     if (!selectedLedger) {
@@ -150,84 +194,114 @@ const AccountLedgerReport = () => {
       format: 'a4'
     });
     
-    doc.setFontSize(20);
+    doc.setFontSize(18);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 22);
+    doc.text(localUser.companyName || 'FactoryFlow', 14, 18);
     
-    doc.setFontSize(14);
+    const modeLabel = viewMode === 'with_bill' ? ' (With Bill / Official)' : 
+                      viewMode === 'without_bill' ? ' (Without Bill / Cash)' : 
+                      viewMode === 'split' ? ' (Split Dual Ledger)' : ' (Combined)';
+    
+    doc.setFontSize(13);
+    doc.setTextColor(60);
+    doc.text(`Account Ledger Report: ${selectedLedger.LedgerName}${modeLabel}`, 14, 25);
+    
+    doc.setFontSize(9);
     doc.setTextColor(100);
-    doc.text(`Account Ledger Report: ${selectedLedger.LedgerName}`, 14, 30);
-    
-    doc.setFontSize(10);
-    doc.text(`Period: ${startDate ? startDate.toLocaleDateString() : 'Start'} to ${endDate ? endDate.toLocaleDateString() : 'End'}`, 14, 36);
+    doc.text(`Period: ${startDate ? startDate.toLocaleDateString() : 'Start'} to ${endDate ? endDate.toLocaleDateString() : 'End'} | Generated: ${new Date().toLocaleDateString()}`, 14, 30);
     
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    doc.line(14, 40, 196, 40);
+    doc.line(14, 33, 196, 33);
 
-    const tableColumn = ["Date", "Voucher No", "Particulars", "Remarks", "To (Debit)", "From (Credit)"];
-    const tableRows = [];
+    const renderTableForDoc = (metrics, title, startY, billBadge = false) => {
+      const tableColumn = ["Date", "Voucher No", ...(billBadge ? ["Bill"] : []), "Particulars", "Remarks", "To (Debit)", "From (Credit)"];
+      const tableRows = [];
 
-    // Add Opening Balance Row
-    tableRows.push([
-      { content: 'OPENING BALANCE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } },
-      { content: periodOpeningBalance >= 0 ? periodOpeningBalance.toFixed(2) : '', styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } },
-      { content: periodOpeningBalance < 0 ? Math.abs(periodOpeningBalance).toFixed(2) : '', styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } }
-    ]);
-
-    filteredVouchers.forEach(row => {
-      const vDate = row.VoucherDate ? row.VoucherDate.split('T')[0] : '-';
-      const debitVal = row.Mode === 'Debit' ? parseFloat(row.Amount).toFixed(2) : '-';
-      const creditVal = row.Mode === 'Credit' ? parseFloat(row.Amount).toFixed(2) : '-';
-      
+      // Add Opening Balance Row
+      const colSpanBefore = billBadge ? 4 : 3;
       tableRows.push([
-        vDate,
-        `V${row.VoucherNo}`,
-        getOppositeLedgers(row.VoucherNo, row.Mode),
-        row.Remark || '-',
-        debitVal,
-        creditVal
+        { content: 'OPENING BALANCE', colSpan: colSpanBefore, styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } },
+        { content: metrics.periodOpeningBalance >= 0 ? metrics.periodOpeningBalance.toFixed(2) : '', styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } },
+        { content: metrics.periodOpeningBalance < 0 ? Math.abs(metrics.periodOpeningBalance).toFixed(2) : '', styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } }
       ]);
-    });
 
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      foot: [
-        [
-          { content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [226, 232, 240], textColor: [15, 59, 102] } },
-          { content: grossDebit.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [226, 232, 240], textColor: [15, 59, 102] } },
-          { content: grossCredit.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [226, 232, 240], textColor: [15, 59, 102] } }
-        ],
-        [
-          { content: 'CLOSING BALANCE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 253, 234], textColor: [133, 100, 4] } },
-          { content: closingDebit > 0 ? closingDebit.toFixed(2) : '', styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 253, 234], textColor: [133, 100, 4] } },
-          { content: closingCredit > 0 ? closingCredit.toFixed(2) : '', styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 253, 234], textColor: [133, 100, 4] } }
-        ],
-        [
-          { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 59, 102], textColor: [255, 255, 255] } },
-          { content: grandTotal.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 59, 102], textColor: [255, 255, 255] } },
-          { content: grandTotal.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 59, 102], textColor: [255, 255, 255] } }
-        ]
-      ],
-      startY: 45,
-      theme: 'grid',
-      styles: { fontSize: 9, cellPadding: 1.5 },
-      headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
-      footStyles: { 
-        fillColor: [230, 230, 230], 
-        textColor: [0, 0, 0],
-        lineWidth: 0.1,
-        lineColor: [200, 200, 200]
-      },
-      columnStyles: {
-        4: { halign: 'right' },
-        5: { halign: 'right' }
-      },
-      margin: { top: 45 }
-    });
+      metrics.vouchersList.forEach(row => {
+        const vDate = row.VoucherDate ? row.VoucherDate.split('T')[0] : '-';
+        const debitVal = row.Mode === 'Debit' ? parseFloat(row.Amount).toFixed(2) : '-';
+        const creditVal = row.Mode === 'Credit' ? parseFloat(row.Amount).toFixed(2) : '-';
+        const bLabel = row.Bill !== false && row.Bill !== 0 ? 'With Bill' : 'Without Bill';
+        
+        tableRows.push([
+          vDate,
+          `V${row.VoucherNo}`,
+          ...(billBadge ? [bLabel] : []),
+          getOppositeLedgers(row.VoucherNo, row.Mode),
+          row.Remark || '-',
+          debitVal,
+          creditVal
+        ]);
+      });
 
-    const fileName = `ledger_${selectedLedger.LedgerName}_${startDate ? startDate.toISOString().split('T')[0] : 'start'}_to_${endDate ? endDate.toISOString().split('T')[0] : 'end'}.pdf`;
+      if (title) {
+        doc.setFontSize(11);
+        doc.setTextColor(15, 59, 102);
+        doc.text(title, 14, startY - 2);
+      }
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        foot: [
+          [
+            { content: 'TOTAL', colSpan: colSpanBefore, styles: { halign: 'right', fontStyle: 'bold', fillColor: [226, 232, 240], textColor: [15, 59, 102] } },
+            { content: metrics.grossDebit.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [226, 232, 240], textColor: [15, 59, 102] } },
+            { content: metrics.grossCredit.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [226, 232, 240], textColor: [15, 59, 102] } }
+          ],
+          [
+            { content: 'CLOSING BALANCE', colSpan: colSpanBefore, styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 253, 234], textColor: [133, 100, 4] } },
+            { content: metrics.closingDebit > 0 ? metrics.closingDebit.toFixed(2) : '', styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 253, 234], textColor: [133, 100, 4] } },
+            { content: metrics.closingCredit > 0 ? metrics.closingCredit.toFixed(2) : '', styles: { halign: 'right', fontStyle: 'bold', fillColor: [253, 253, 234], textColor: [133, 100, 4] } }
+          ],
+          [
+            { content: 'GRAND TOTAL', colSpan: colSpanBefore, styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 59, 102], textColor: [255, 255, 255] } },
+            { content: metrics.grandTotal.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 59, 102], textColor: [255, 255, 255] } },
+            { content: metrics.grandTotal.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 59, 102], textColor: [255, 255, 255] } }
+          ]
+        ],
+        startY: startY,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 1.5 },
+        headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        footStyles: { 
+          fillColor: [230, 230, 230], 
+          textColor: [0, 0, 0],
+          lineWidth: 0.1,
+          lineColor: [200, 200, 200]
+        },
+        columnStyles: {
+          [tableColumn.length - 2]: { halign: 'right' },
+          [tableColumn.length - 1]: { halign: 'right' }
+        },
+        margin: { top: 35 }
+      });
+    };
+
+    if (viewMode === 'split') {
+      renderTableForDoc(withBillMetrics, '1. WITH BILL LEDGER (Official / GST)', 38, false);
+      const nextY = (doc.lastAutoTable?.finalY || 100) + 12;
+      
+      if (nextY > 230) {
+        doc.addPage();
+        renderTableForDoc(withoutBillMetrics, '2. WITHOUT BILL LEDGER (Cash / Estimate)', 20, false);
+      } else {
+        renderTableForDoc(withoutBillMetrics, '2. WITHOUT BILL LEDGER (Cash / Estimate)', nextY, false);
+      }
+    } else {
+      renderTableForDoc(activeMetrics, '', 38, viewMode === 'combined');
+    }
+
+    const fileName = `ledger_${selectedLedger.LedgerName}_${viewMode}_${startDate ? startDate.toISOString().split('T')[0] : 'start'}_to_${endDate ? endDate.toISOString().split('T')[0] : 'end'}.pdf`;
 
     if (action === 'share') {
       const pdfBase64 = doc.output('datauristring').split(',')[1];
@@ -266,69 +340,224 @@ const AccountLedgerReport = () => {
       return;
     }
 
-    const flatData = [];
-    
-    // Opening Balance
-    flatData.push({
-      'Date': 'OPENING BALANCE',
-      'Voucher No': '',
-      'Particulars': '',
-      'Remarks': '',
-      'Debit (To)': periodOpeningBalance >= 0 ? periodOpeningBalance.toFixed(2) : '',
-      'Credit (From)': periodOpeningBalance < 0 ? Math.abs(periodOpeningBalance).toFixed(2) : ''
-    });
-
-    filteredVouchers.forEach(v => {
+    const generateExcelData = (metrics, title) => {
+      const flatData = [];
+      if (title) {
+        flatData.push({ 'Date': title, 'Voucher No': '', 'Bill Type': '', 'Particulars': '', 'Remarks': '', 'Debit (To)': '', 'Credit (From)': '' });
+      }
+      
+      // Opening Balance
       flatData.push({
-        'Date': v.VoucherDate ? v.VoucherDate.split('T')[0] : '-',
-        'Voucher No': `V${v.VoucherNo}`,
-        'Particulars': getOppositeLedgers(v.VoucherNo, v.Mode),
-        'Remarks': v.Remark || '-',
-        'Debit (To)': v.Mode === 'Debit' ? parseFloat(v.Amount).toFixed(2) : '',
-        'Credit (From)': v.Mode === 'Credit' ? parseFloat(v.Amount).toFixed(2) : ''
+        'Date': 'OPENING BALANCE',
+        'Voucher No': '',
+        'Bill Type': '',
+        'Particulars': '',
+        'Remarks': '',
+        'Debit (To)': metrics.periodOpeningBalance >= 0 ? metrics.periodOpeningBalance.toFixed(2) : '',
+        'Credit (From)': metrics.periodOpeningBalance < 0 ? Math.abs(metrics.periodOpeningBalance).toFixed(2) : ''
       });
-    });
 
-    flatData.push({
-      'Date': 'TOTAL',
-      'Voucher No': '',
-      'Particulars': '',
-      'Remarks': '',
-      'Debit (To)': grossDebit.toFixed(2),
-      'Credit (From)': grossCredit.toFixed(2)
-    });
+      metrics.vouchersList.forEach(v => {
+        flatData.push({
+          'Date': v.VoucherDate ? v.VoucherDate.split('T')[0] : '-',
+          'Voucher No': `V${v.VoucherNo}`,
+          'Bill Type': v.Bill !== false && v.Bill !== 0 ? 'With Bill' : 'Without Bill',
+          'Particulars': getOppositeLedgers(v.VoucherNo, v.Mode),
+          'Remarks': v.Remark || '-',
+          'Debit (To)': v.Mode === 'Debit' ? parseFloat(v.Amount).toFixed(2) : '',
+          'Credit (From)': v.Mode === 'Credit' ? parseFloat(v.Amount).toFixed(2) : ''
+        });
+      });
 
-    flatData.push({
-      'Date': 'CLOSING BALANCE',
-      'Voucher No': '',
-      'Particulars': '',
-      'Remarks': '',
-      'Debit (To)': closingDebit > 0 ? closingDebit.toFixed(2) : '',
-      'Credit (From)': closingCredit > 0 ? closingCredit.toFixed(2) : ''
-    });
+      flatData.push({
+        'Date': 'TOTAL',
+        'Voucher No': '',
+        'Bill Type': '',
+        'Particulars': '',
+        'Remarks': '',
+        'Debit (To)': metrics.grossDebit.toFixed(2),
+        'Credit (From)': metrics.grossCredit.toFixed(2)
+      });
 
-    flatData.push({
-      'Date': 'GRAND TOTAL',
-      'Voucher No': '',
-      'Particulars': '',
-      'Remarks': '',
-      'Debit (To)': grandTotal.toFixed(2),
-      'Credit (From)': grandTotal.toFixed(2)
-    });
+      flatData.push({
+        'Date': 'CLOSING BALANCE',
+        'Voucher No': '',
+        'Bill Type': '',
+        'Particulars': '',
+        'Remarks': '',
+        'Debit (To)': metrics.closingDebit > 0 ? metrics.closingDebit.toFixed(2) : '',
+        'Credit (From)': metrics.closingCredit > 0 ? metrics.closingCredit.toFixed(2) : ''
+      });
 
-    const worksheet = XLSX.utils.json_to_sheet(flatData);
+      flatData.push({
+        'Date': 'GRAND TOTAL',
+        'Voucher No': '',
+        'Bill Type': '',
+        'Particulars': '',
+        'Remarks': '',
+        'Debit (To)': metrics.grandTotal.toFixed(2),
+        'Credit (From)': metrics.grandTotal.toFixed(2)
+      });
+
+      return flatData;
+    };
+
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Ledger Report');
-    XLSX.writeFile(workbook, `ledger_${selectedLedger.LedgerName}_${startDate ? startDate.toISOString().split('T')[0] : 'start'}_to_${endDate ? endDate.toISOString().split('T')[0] : 'end'}.xlsx`);
+
+    if (viewMode === 'split') {
+      const withBillData = generateExcelData(withBillMetrics, 'WITH BILL LEDGER');
+      const ws1 = XLSX.utils.json_to_sheet(withBillData);
+      XLSX.utils.book_append_sheet(workbook, ws1, 'With Bill');
+
+      const withoutBillData = generateExcelData(withoutBillMetrics, 'WITHOUT BILL LEDGER');
+      const ws2 = XLSX.utils.json_to_sheet(withoutBillData);
+      XLSX.utils.book_append_sheet(workbook, ws2, 'Without Bill');
+
+      const combinedData = generateExcelData(combinedMetrics, 'COMBINED LEDGER');
+      const ws3 = XLSX.utils.json_to_sheet(combinedData);
+      XLSX.utils.book_append_sheet(workbook, ws3, 'Combined');
+    } else {
+      const activeData = generateExcelData(activeMetrics, `${viewMode.toUpperCase()} LEDGER`);
+      const worksheet = XLSX.utils.json_to_sheet(activeData);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Ledger Report');
+    }
+
+    XLSX.writeFile(workbook, `ledger_${selectedLedger.LedgerName}_${viewMode}_${startDate ? startDate.toISOString().split('T')[0] : 'start'}_to_${endDate ? endDate.toISOString().split('T')[0] : 'end'}.xlsx`);
+  };
+
+  // Component to render individual ledger table
+  const renderLedgerTable = (metrics, title = null, headerColor = '#0F3B66', showBillBadge = false) => {
+    return (
+      <Box sx={{ width: '100%', mb: 3 }}>
+        {title && (
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: headerColor, display: 'flex', alignItems: 'center', gap: 1 }}>
+              {title}
+            </Typography>
+            <Chip 
+              size="small" 
+              label={`Closing: ₹ ${Math.abs(metrics.periodClosingBalance).toFixed(2)} ${metrics.periodClosingBalance >= 0 ? 'Dr' : 'Cr'}`}
+              sx={{ fontWeight: 700, bgcolor: metrics.periodClosingBalance >= 0 ? '#e0f2fe' : '#fef3c7', color: metrics.periodClosingBalance >= 0 ? '#0369a1' : '#b45309' }}
+            />
+          </Box>
+        )}
+        <TableContainer sx={{ border: '1px solid #e0e0e0', borderRadius: 1 }}>
+          <Table size="small" sx={{ 
+            minWidth: 600, 
+            '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' },
+            '& .MuiTableCell-root': { borderRight: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0' },
+            '& .MuiTableCell-root:last-child': { borderRight: 'none' }
+          }}>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>Date</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>Voucher No</TableCell>
+                {showBillBadge && (
+                  <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '12%' }}>Bill Type</TableCell>
+                )}
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '22%' }}>Particulars</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '20%' }}>Remarks</TableCell>
+                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '15%' }}>To (Debit)</TableCell>
+                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '15%' }}>From (Credit)</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {/* Opening Balance Row */}
+              <TableRow sx={{ backgroundColor: '#f8fafc' }}>
+                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: headerColor }}>
+                  OPENING BALANCE
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor }}>
+                  {metrics.periodOpeningBalance >= 0 ? metrics.periodOpeningBalance.toFixed(2) : ''}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor }}>
+                  {metrics.periodOpeningBalance < 0 ? Math.abs(metrics.periodOpeningBalance).toFixed(2) : ''}
+                </TableCell>
+              </TableRow>
+
+              {metrics.vouchersList.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={showBillBadge ? 7 : 6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    No voucher entries found for the selected period.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                metrics.vouchersList.map((row, idx) => (
+                  <TableRow hover key={`${row.VoucherId || row.VoucherNo}-${idx}`}>
+                    <TableCell>{row.VoucherDate ? row.VoucherDate.split('T')[0] : '-'}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>V{row.VoucherNo}</TableCell>
+                    {showBillBadge && (
+                      <TableCell>
+                        <Chip 
+                          size="small" 
+                          label={row.Bill !== false && row.Bill !== 0 ? 'With Bill' : 'Without Bill'}
+                          color={row.Bill !== false && row.Bill !== 0 ? 'primary' : 'warning'}
+                          variant={row.Bill !== false && row.Bill !== 0 ? 'outlined' : 'filled'}
+                          sx={{ fontSize: '0.7rem', height: 20, fontWeight: 600 }}
+                        />
+                      </TableCell>
+                    )}
+                    <TableCell>{getOppositeLedgers(row.VoucherNo, row.Mode)}</TableCell>
+                    <TableCell>{row.Remark || '-'}</TableCell>
+                    <TableCell align="right">{row.Mode === 'Debit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
+                    <TableCell align="right">{row.Mode === 'Credit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
+                  </TableRow>
+                ))
+              )}
+              
+              {/* Totals Row */}
+              <TableRow sx={{ backgroundColor: '#e2e8f0' }}>
+                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: headerColor, fontSize: '0.9rem' }}>
+                  TOTAL
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor, fontSize: '0.9rem' }}>
+                  {metrics.grossDebit.toFixed(2)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor, fontSize: '0.9rem' }}>
+                  {metrics.grossCredit.toFixed(2)}
+                </TableCell>
+              </TableRow>
+
+              {/* Closing Balance Row */}
+              <TableRow sx={{ backgroundColor: '#fdfdea' }}>
+                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
+                  CLOSING BALANCE
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
+                  {metrics.closingDebit > 0 ? metrics.closingDebit.toFixed(2) : ''}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
+                  {metrics.closingCredit > 0 ? metrics.closingCredit.toFixed(2) : ''}
+                </TableCell>
+              </TableRow>
+
+              {/* Grand Total Row */}
+              <TableRow sx={{ backgroundColor: headerColor }}>
+                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>
+                  GRAND TOTAL
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>
+                  {metrics.grandTotal.toFixed(2)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>
+                  {metrics.grandTotal.toFixed(2)}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+    );
   };
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-          Account Ledger
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <AccountBalanceWallet sx={{ fontSize: 32 }} /> Account Ledger
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<TableView />} onClick={handleExportExcel} sx={{ color: '#107c41', borderColor: '#107c41' }} disabled={!selectedLedger}>
             Export Excel
           </Button>
@@ -344,17 +573,54 @@ const AccountLedgerReport = () => {
         </Box>
       </Box>
 
-      <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 2 }, pt: 2, pb: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #e0e0e0' }}>
+      {/* Toolbar & Filters */}
+      <Paper sx={{ p: 2, mb: 2.5, borderRadius: 2, boxShadow: '0 2px 6px rgba(0,0,0,0.05)' }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Party / Ledger Select Box */}
           <Autocomplete
             options={ledgers}
             getOptionLabel={(option) => option.LedgerName || ''}
             value={selectedLedger}
             onChange={(e, newValue) => setSelectedLedger(newValue)}
-            renderInput={(params) => <TextField {...params} label="Select Ledger" size="small" />}
-            sx={{ width: '300px' }}
+            sx={{ width: { xs: '100%', sm: 320, md: 360 } }}
+            slotProps={{
+              popper: {
+                sx: {
+                  minWidth: 380,
+                  maxWidth: '90vw',
+                  width: 'fit-content',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  borderRadius: 2
+                }
+              }
+            }}
+            renderOption={(props, option) => (
+              <Box component="li" {...props} key={option.Id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', py: 0.75, px: 1.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                  {option.LedgerName}
+                </Typography>
+                {option.AccountGroupName && (
+                  <Chip 
+                    label={option.AccountGroupName} 
+                    size="small" 
+                    sx={{ fontSize: '0.7rem', height: 20, ml: 1.5, bgcolor: '#f1f5f9', color: '#334155', fontWeight: 500, flexShrink: 0 }} 
+                  />
+                )}
+              </Box>
+            )}
+            renderInput={(params) => (
+              <TextField 
+                {...params} 
+                label="Select Party / Ledger" 
+                size="small"
+                placeholder="Search party / ledger..."
+                InputLabelProps={{ shrink: true }}
+              />
+            )}
           />
-          <Box sx={{ width: 250 }}>
+
+          {/* Date Range Box */}
+          <Box sx={{ width: { xs: '100%', sm: 240 } }}>
             <DatePicker
               portalId="root"
               selectsRange={true}
@@ -362,131 +628,165 @@ const AccountLedgerReport = () => {
               endDate={endDate}
               onChange={(update) => setDateRange(update)}
               isClearable={true}
-              customInput={<TextField size="small" label="Date Range" InputLabelProps={{ shrink: true }} fullWidth />}
+              customInput={
+                <TextField 
+                  label="Date Range" 
+                  size="small"
+                  InputLabelProps={{ shrink: true }} 
+                  fullWidth 
+                />
+              }
               dateFormat="dd/MM/yyyy"
             />
           </Box>
-        </Toolbar>
 
-        <TableContainer sx={{ flexGrow: 1, overflowY: 'auto' }}>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-              <CircularProgress />
-            </Box>
-          ) : !selectedLedger ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, color: 'text.secondary' }}>
-              <Typography variant="h6">Please select a ledger to view the report</Typography>
-            </Box>
-          ) : (
-            <Table stickyHeader size="small" sx={{ 
-              minWidth: 750, 
-              border: '1px solid #e0e0e0',
-              '& .MuiTableCell-head': {
-                py: 0.5,
-                lineHeight: '1.2'
-              },
-              '& .MuiTableCell-root': { 
-                borderRight: '1px solid #e0e0e0',
-                borderBottom: '1px solid #e0e0e0'
-              },
-              '& .MuiTableCell-root:last-child': {
-                borderRight: 'none'
-              }
-            }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ backgroundColor: '#0F3B66', color: '#ffffff', fontWeight: 'bold', width: '15%' }}>Date</TableCell>
-                  <TableCell sx={{ backgroundColor: '#0F3B66', color: '#ffffff', fontWeight: 'bold', width: '15%' }}>Voucher No</TableCell>
-                  <TableCell sx={{ backgroundColor: '#0F3B66', color: '#ffffff', fontWeight: 'bold', width: '20%' }}>Particulars</TableCell>
-                  <TableCell sx={{ backgroundColor: '#0F3B66', color: '#ffffff', fontWeight: 'bold', width: '20%' }}>Remarks</TableCell>
-                  <TableCell align="right" sx={{ backgroundColor: '#0F3B66', color: '#ffffff', fontWeight: 'bold', width: '15%' }}>To (Debit)</TableCell>
-                  <TableCell align="right" sx={{ backgroundColor: '#0F3B66', color: '#ffffff', fontWeight: 'bold', width: '15%' }}>From (Credit)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {/* Opening Balance Row */}
-                <TableRow sx={{ backgroundColor: '#f8fafc' }}>
-                  <TableCell colSpan={4} align="right" sx={{ fontWeight: 'bold', color: '#0f3b66' }}>
-                    OPENING BALANCE
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0f3b66' }}>
-                    {periodOpeningBalance >= 0 ? periodOpeningBalance.toFixed(2) : ''}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0f3b66' }}>
-                    {periodOpeningBalance < 0 ? Math.abs(periodOpeningBalance).toFixed(2) : ''}
-                  </TableCell>
-                </TableRow>
+          {/* Ledger View Mode Toggles */}
+          <Box sx={{ ml: { lg: 'auto' } }}>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(e, nextMode) => { if (nextMode) setViewMode(nextMode); }}
+              size="small"
+            >
+              <ToggleButton value="combined" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+                <Tooltip title="Show all entries in a single combined ledger">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <ReceiptLong fontSize="small" /> Combined
+                  </Box>
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="with_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+                <Tooltip title="Show only With Bill (GST/Official) transactions against With-Bill payments">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Receipt fontSize="small" color="primary" /> With Bill
+                  </Box>
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="without_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+                <Tooltip title="Show only Without Bill (Cash/Estimate) transactions against Without-Bill payments">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <MoneyOff fontSize="small" color="warning" /> Without Bill
+                  </Box>
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="split" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+                <Tooltip title="Side-by-side Dual Split Ledger comparing With-Bill vs Without-Bill">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <CallSplit fontSize="small" color="secondary" /> Split View
+                  </Box>
+                </Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </Box>
 
-                {filteredVouchers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                      No voucher entries found for the selected period.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <>
-                    {filteredVouchers.map((row) => (
-                      <TableRow hover key={row.VoucherId}>
-                        <TableCell>{row.VoucherDate ? row.VoucherDate.split('T')[0] : '-'}</TableCell>
-                        <TableCell>V{row.VoucherNo}</TableCell>
-                        <TableCell>{getOppositeLedgers(row.VoucherNo, row.Mode)}</TableCell>
-                        <TableCell>{row.Remark || '-'}</TableCell>
-                        <TableCell align="right">{row.Mode === 'Debit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
-                        <TableCell align="right">{row.Mode === 'Credit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </>
-                )}
-                
-                {/* Totals Row */}
-                <TableRow sx={{ backgroundColor: '#e2e8f0' }}>
-                  <TableCell colSpan={4} align="right" sx={{ fontWeight: 'bold', color: '#0f3b66', fontSize: '0.95rem' }}>
-                    TOTAL
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0f3b66', fontSize: '0.95rem' }}>
-                    {grossDebit.toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0f3b66', fontSize: '0.95rem' }}>
-                    {grossCredit.toFixed(2)}
-                  </TableCell>
-                </TableRow>
+        {/* Balance KPI Cards */}
+        {selectedLedger && (
+          <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed #e2e8f0' }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <Card variant="outlined" sx={{ bgcolor: '#f0f9ff', borderColor: '#bae6fd', borderRadius: 2 }}>
+                  <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                    <Typography variant="caption" sx={{ color: '#0369a1', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      🧾 With-Bill Balance (Official)
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0c4a6e', mt: 0.5 }}>
+                      ₹ {Math.abs(withBillMetrics.periodClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <Typography component="span" variant="body2" sx={{ ml: 1, fontWeight: 700, color: withBillMetrics.periodClosingBalance >= 0 ? 'primary.main' : 'error.main' }}>
+                        ({withBillMetrics.periodClosingBalance >= 0 ? 'Dr / Receivable' : 'Cr / Payable'})
+                      </Typography>
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} sm={4}>
+                <Card variant="outlined" sx={{ bgcolor: '#fffbeb', borderColor: '#fde68a', borderRadius: 2 }}>
+                  <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                    <Typography variant="caption" sx={{ color: '#b45309', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      📋 Without-Bill Balance (Cash)
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#78350f', mt: 0.5 }}>
+                      ₹ {Math.abs(withoutBillMetrics.periodClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <Typography component="span" variant="body2" sx={{ ml: 1, fontWeight: 700, color: withoutBillMetrics.periodClosingBalance >= 0 ? 'primary.main' : 'error.main' }}>
+                        ({withoutBillMetrics.periodClosingBalance >= 0 ? 'Dr / Receivable' : 'Cr / Payable'})
+                      </Typography>
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
 
-                {/* Closing Balance Row */}
-                <TableRow sx={{ backgroundColor: '#fdfdea' }}>
-                  <TableCell colSpan={4} align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
-                    CLOSING BALANCE
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
-                    {closingDebit > 0 ? closingDebit.toFixed(2) : ''}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
-                    {closingCredit > 0 ? closingCredit.toFixed(2) : ''}
-                  </TableCell>
-                </TableRow>
+              <Grid item xs={12} sm={4}>
+                <Card variant="outlined" sx={{ bgcolor: '#f8fafc', borderColor: '#cbd5e1', borderRadius: 2 }}>
+                  <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                    <Typography variant="caption" sx={{ color: '#334155', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      🌐 Combined Total Net Balance
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.5 }}>
+                      ₹ {Math.abs(combinedMetrics.periodClosingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <Typography component="span" variant="body2" sx={{ ml: 1, fontWeight: 700, color: combinedMetrics.periodClosingBalance >= 0 ? 'primary.main' : 'error.main' }}>
+                        ({combinedMetrics.periodClosingBalance >= 0 ? 'Dr / Net Receivable' : 'Cr / Net Payable'})
+                      </Typography>
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          </Box>
+        )}
+      </Paper>
 
-                {/* Grand Total Row */}
-                <TableRow sx={{ backgroundColor: '#0F3B66' }}>
-                  <TableCell colSpan={4} align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '1rem' }}>
-                    GRAND TOTAL
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '1rem' }}>
-                    {grandTotal.toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '1rem' }}>
-                    {grandTotal.toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          )}
-        </TableContainer>
+      {/* Main Ledger Content */}
+      <Box sx={{ flexGrow: 1, width: '100%', overflowY: 'auto' }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+            <CircularProgress />
+          </Box>
+        ) : !selectedLedger ? (
+          <Paper sx={{ p: 4, textAlign: 'center', color: 'text.secondary', borderRadius: 2 }}>
+            <Typography variant="h6">Please select a ledger/party to view the report</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              You can toggle between Combined, With-Bill, Without-Bill, or Split View.
+            </Typography>
+          </Paper>
+        ) : viewMode === 'split' ? (
+          /* Split View: 2 Columns Side-by-Side */
+          <Grid container spacing={2}>
+            <Grid item xs={12} lg={6}>
+              {renderLedgerTable(
+                withBillMetrics, 
+                '🧾 WITH BILL (OFFICIAL / GST)', 
+                '#0F3B66',
+                false
+              )}
+            </Grid>
+            <Grid item xs={12} lg={6}>
+              {renderLedgerTable(
+                withoutBillMetrics, 
+                '📋 WITHOUT BILL (CASH / ESTIMATE)', 
+                '#d97706',
+                false
+              )}
+            </Grid>
+          </Grid>
+        ) : (
+          /* Single View: Combined / With Bill / Without Bill */
+          renderLedgerTable(
+            activeMetrics,
+            viewMode === 'with_bill' ? '🧾 WITH BILL LEDGER (Official / GST)' :
+            viewMode === 'without_bill' ? '📋 WITHOUT BILL LEDGER (Cash / Estimate)' :
+            '🌐 COMBINED ACCOUNT LEDGER',
+            viewMode === 'without_bill' ? '#d97706' : '#0F3B66',
+            viewMode === 'combined'
+          )
+        )}
       </Box>
     
       <PdfPreviewModal 
         open={previewOpen} 
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
-        title="Account Ledger Preview" 
+        title={`Account Ledger Preview - ${selectedLedger?.LedgerName || ''}`} 
       />
     </Box>
   );

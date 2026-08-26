@@ -1,7 +1,34 @@
-import { useState, useEffect } from 'react';
-import { Box, Typography, Button, Paper, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Divider } from '@mui/material';
+import { useState, useEffect, useMemo } from 'react';
+import { 
+  Box, 
+  Typography, 
+  Button, 
+  Paper, 
+  CircularProgress, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
+  Grid, 
+  Divider,
+  ToggleButtonGroup,
+  ToggleButton,
+  Card,
+  CardContent,
+  Tooltip
+} from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { PictureAsPdf, Visibility, TableView, Share } from '@mui/icons-material';
+import { 
+  PictureAsPdf, 
+  Visibility, 
+  TableView, 
+  Share, 
+  ReceiptLong, 
+  Receipt, 
+  MoneyOff, 
+  ViewWeek,
+  Payment as PaymentIcon
+} from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -16,6 +43,7 @@ const PayableReport = () => {
   const [loading, setLoading] = useState(true);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedLedger, setSelectedLedger] = useState(null);
+  const [viewMode, setViewMode] = useState('combined'); // 'combined', 'with_bill', 'without_bill', 'all_columns'
 
   const fetchPayables = async () => {
     try {
@@ -39,15 +67,40 @@ const PayableReport = () => {
     setPaymentModalOpen(true);
   };
 
-  const columns = [
-    { field: 'RowId', headerName: 'Ledger ID', width: 100 },
-    { field: 'VendorName', headerName: 'Vendor Name', flex: 1 },
-    { field: 'MobileNo', headerName: 'Mobile No', width: 130 },
-    { field: 'ClosingBalance', headerName: 'Closing Balance', width: 150, type: 'number' },
-    { 
+  // Summary KPI Calculations
+  const summaryKPIs = useMemo(() => {
+    let totalCombined = 0;
+    let totalWithBill = 0;
+    let totalWithoutBill = 0;
+
+    payables.forEach(row => {
+      totalCombined += parseFloat(row.PayableCombined) || 0;
+      totalWithBill += parseFloat(row.PayableWithBill) || 0;
+      totalWithoutBill += parseFloat(row.PayableWithoutBill) || 0;
+    });
+
+    return { totalCombined, totalWithBill, totalWithoutBill };
+  }, [payables]);
+
+  // Filter rows based on viewMode
+  const filteredRows = useMemo(() => {
+    if (viewMode === 'with_bill') {
+      return payables.filter(r => (parseFloat(r.PayableWithBill) || 0) > 0);
+    } else if (viewMode === 'without_bill') {
+      return payables.filter(r => (parseFloat(r.PayableWithoutBill) || 0) > 0);
+    } else if (viewMode === 'combined') {
+      return payables.filter(r => (parseFloat(r.PayableCombined) || 0) > 0);
+    }
+    // all_columns
+    return payables;
+  }, [payables, viewMode]);
+
+  // Dynamic Columns
+  const columns = useMemo(() => {
+    const actionColumn = { 
       field: 'action', 
       headerName: 'Action', 
-      width: 100, 
+      width: 90, 
       sortable: false,
       renderCell: (params) => {
         const hasPaymentDetails = params.row.UPI || (params.row.BankName && params.row.AccountNo);
@@ -58,6 +111,7 @@ const PayableReport = () => {
               color="success" 
               size="small" 
               onClick={() => handlePayClick(params.row)}
+              sx={{ textTransform: 'none', px: 1.5, py: 0.25, fontSize: '0.75rem' }}
             >
               Pay
             </Button>
@@ -65,48 +119,193 @@ const PayableReport = () => {
         }
         return null;
       }
+    };
+
+    if (viewMode === 'with_bill') {
+      return [
+        { field: 'RowId', headerName: 'Ledger ID', width: 90 },
+        { field: 'VendorName', headerName: 'Vendor Name', flex: 1 },
+        { field: 'MobileNo', headerName: 'Mobile No', width: 130, valueGetter: (val, row) => row.MobileNo || '-' },
+        { 
+          field: 'PayableWithBill', 
+          headerName: 'With Bill Payable (₹)', 
+          width: 190, 
+          type: 'number',
+          renderCell: (params) => (
+            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Typography>
+          )
+        },
+        actionColumn
+      ];
+    } else if (viewMode === 'without_bill') {
+      return [
+        { field: 'RowId', headerName: 'Ledger ID', width: 90 },
+        { field: 'VendorName', headerName: 'Vendor Name', flex: 1 },
+        { field: 'MobileNo', headerName: 'Mobile No', width: 130, valueGetter: (val, row) => row.MobileNo || '-' },
+        { 
+          field: 'PayableWithoutBill', 
+          headerName: 'Without Bill Payable (₹)', 
+          width: 200, 
+          type: 'number',
+          renderCell: (params) => (
+            <Typography variant="body2" sx={{ fontWeight: 700, color: '#b45309' }}>
+              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Typography>
+          )
+        },
+        actionColumn
+      ];
+    } else if (viewMode === 'all_columns') {
+      return [
+        { field: 'RowId', headerName: 'Ledger ID', width: 90 },
+        { field: 'VendorName', headerName: 'Vendor Name', flex: 1 },
+        { field: 'MobileNo', headerName: 'Mobile No', width: 130, valueGetter: (val, row) => row.MobileNo || '-' },
+        { 
+          field: 'PayableWithBill', 
+          headerName: 'With Bill (₹)', 
+          width: 140, 
+          type: 'number',
+          renderCell: (params) => (
+            <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Typography>
+          )
+        },
+        { 
+          field: 'PayableWithoutBill', 
+          headerName: 'Without Bill (₹)', 
+          width: 140, 
+          type: 'number',
+          renderCell: (params) => (
+            <Typography variant="body2" sx={{ fontWeight: 600, color: '#b45309' }}>
+              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Typography>
+          )
+        },
+        { 
+          field: 'PayableCombined', 
+          headerName: 'Combined Total (₹)', 
+          width: 170, 
+          type: 'number',
+          renderCell: (params) => (
+            <Typography variant="body2" sx={{ fontWeight: 700, color: '#b91c1c' }}>
+              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Typography>
+          )
+        },
+        actionColumn
+      ];
     }
-  ];
+
+    // Default 'combined'
+    return [
+      { field: 'RowId', headerName: 'Ledger ID', width: 90 },
+      { field: 'VendorName', headerName: 'Vendor Name', flex: 1 },
+      { field: 'MobileNo', headerName: 'Mobile No', width: 130, valueGetter: (val, row) => row.MobileNo || '-' },
+      { 
+        field: 'PayableCombined', 
+        headerName: 'Combined Payable (₹)', 
+        width: 190, 
+        type: 'number',
+        renderCell: (params) => (
+          <Typography variant="body2" sx={{ fontWeight: 700, color: '#b91c1c' }}>
+            ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Typography>
+        )
+      },
+      actionColumn
+    ];
+  }, [viewMode]);
 
   const handleExportPDF = (action = 'download') => {
     const doc = new jsPDF();
     
-    doc.setFontSize(20);
+    doc.setFontSize(18);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 22);
+    doc.text(localUser.companyName || 'FactoryFlow', 14, 18);
     
-    doc.setFontSize(14);
-    doc.setTextColor(100);
-    doc.text('Payable', 14, 30);
+    doc.setFontSize(13);
+    doc.setTextColor(60);
+    const viewTitle = viewMode === 'with_bill' ? 'Payable Report (With Bill)' :
+                      viewMode === 'without_bill' ? 'Payable Report (Without Bill)' :
+                      viewMode === 'all_columns' ? 'Payable Report (All Columns Breakdown)' :
+                      'Payable Report (Combined)';
+    doc.text(viewTitle, 14, 26);
     
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 36);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, 14, 32);
     
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    doc.line(14, 40, 196, 40); 
+    doc.line(14, 35, 196, 35); 
 
-    const tableData = payables.map(row => [
-      row.RowId,
-      row.VendorName,
-      row.MobileNo || '-',
-      row.ClosingBalance
-    ]);
+    let head = [];
+    let tableData = [];
+
+    if (viewMode === 'with_bill') {
+      head = [['ID', 'Vendor Name', 'Mobile No', 'With Bill Payable (Rs.)']];
+      tableData = filteredRows.map(r => [
+        r.RowId,
+        r.VendorName,
+        r.MobileNo || '-',
+        parseFloat(r.PayableWithBill || 0).toFixed(2)
+      ]);
+      tableData.push(['', 'TOTAL', '', summaryKPIs.totalWithBill.toFixed(2)]);
+    } else if (viewMode === 'without_bill') {
+      head = [['ID', 'Vendor Name', 'Mobile No', 'Without Bill Payable (Rs.)']];
+      tableData = filteredRows.map(r => [
+        r.RowId,
+        r.VendorName,
+        r.MobileNo || '-',
+        parseFloat(r.PayableWithoutBill || 0).toFixed(2)
+      ]);
+      tableData.push(['', 'TOTAL', '', summaryKPIs.totalWithoutBill.toFixed(2)]);
+    } else if (viewMode === 'all_columns') {
+      head = [['ID', 'Vendor Name', 'Mobile No', 'With Bill (Rs.)', 'Without Bill (Rs.)', 'Combined Total (Rs.)']];
+      tableData = filteredRows.map(r => [
+        r.RowId,
+        r.VendorName,
+        r.MobileNo || '-',
+        parseFloat(r.PayableWithBill || 0).toFixed(2),
+        parseFloat(r.PayableWithoutBill || 0).toFixed(2),
+        parseFloat(r.PayableCombined || 0).toFixed(2)
+      ]);
+      tableData.push([
+        '', 
+        'TOTAL', 
+        '', 
+        summaryKPIs.totalWithBill.toFixed(2), 
+        summaryKPIs.totalWithoutBill.toFixed(2), 
+        summaryKPIs.totalCombined.toFixed(2)
+      ]);
+    } else {
+      head = [['ID', 'Vendor Name', 'Mobile No', 'Combined Payable (Rs.)']];
+      tableData = filteredRows.map(r => [
+        r.RowId,
+        r.VendorName,
+        r.MobileNo || '-',
+        parseFloat(r.PayableCombined || 0).toFixed(2)
+      ]);
+      tableData.push(['', 'TOTAL', '', summaryKPIs.totalCombined.toFixed(2)]);
+    }
     
     autoTable(doc, {
-      head: [['ID', 'Vendor Name', 'Mobile No', 'Closing Balance']],
+      head: head,
       body: tableData,
-      startY: 45,
+      startY: 40,
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 3, halign: 'left' },
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [245, 247, 249] }
+      alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
     if (action === 'share') {
       const pdfBase64 = doc.output('datauristring').split(',')[1];
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const reportName = 'PayableReport';
+      const reportName = `PayableReport_${viewMode}`;
       
       fetch(`${baseUrl}/auth/share-pdf`, {
         method: 'POST',
@@ -130,31 +329,59 @@ const PayableReport = () => {
       setPreviewUrl(blobUrl);
       setPreviewOpen(true);
     } else {
-      doc.save('payable_report.pdf');
+      doc.save(`payable_report_${viewMode}.pdf`);
     }
   };
 
   const handleExportExcel = () => {
-    const exportData = payables.map(row => ({
-      'Ledger ID': row.RowId,
-      'Vendor Name': row.VendorName,
-      'Mobile No': row.MobileNo,
-      'Closing Balance': row.ClosingBalance
-    }));
+    let exportData = [];
+
+    if (viewMode === 'with_bill') {
+      exportData = filteredRows.map(row => ({
+        'Ledger ID': row.RowId,
+        'Vendor Name': row.VendorName,
+        'Mobile No': row.MobileNo || '-',
+        'With Bill Payable (Rs.)': parseFloat(row.PayableWithBill || 0).toFixed(2)
+      }));
+    } else if (viewMode === 'without_bill') {
+      exportData = filteredRows.map(row => ({
+        'Ledger ID': row.RowId,
+        'Vendor Name': row.VendorName,
+        'Mobile No': row.MobileNo || '-',
+        'Without Bill Payable (Rs.)': parseFloat(row.PayableWithoutBill || 0).toFixed(2)
+      }));
+    } else if (viewMode === 'all_columns') {
+      exportData = filteredRows.map(row => ({
+        'Ledger ID': row.RowId,
+        'Vendor Name': row.VendorName,
+        'Mobile No': row.MobileNo || '-',
+        'With Bill Payable (Rs.)': parseFloat(row.PayableWithBill || 0).toFixed(2),
+        'Without Bill Payable (Rs.)': parseFloat(row.PayableWithoutBill || 0).toFixed(2),
+        'Combined Payable (Rs.)': parseFloat(row.PayableCombined || 0).toFixed(2)
+      }));
+    } else {
+      exportData = filteredRows.map(row => ({
+        'Ledger ID': row.RowId,
+        'Vendor Name': row.VendorName,
+        'Mobile No': row.MobileNo || '-',
+        'Combined Payable (Rs.)': parseFloat(row.PayableCombined || 0).toFixed(2)
+      }));
+    }
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Payable');
-    XLSX.writeFile(workbook, 'payable_report.xlsx');
+    XLSX.writeFile(workbook, `payable_report_${viewMode}.xlsx`);
   };
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-          Payable
+          Payable Report
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           <Button 
             variant="outlined" 
             startIcon={<TableView />}
@@ -190,17 +417,101 @@ const PayableReport = () => {
         </Box>
       </Box>
 
-      <Box sx={{ flexGrow: 1, height: 500, width: '100%' }}>
+      {/* KPI Cards */}
+      <Grid container spacing={2} sx={{ mb: 2.5 }}>
+        <Grid item xs={12} sm={4}>
+          <Card sx={{ bgcolor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 2 }}>
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                🧾 WITH BILL PAYABLE
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: '#1e3a8a', mt: 0.5 }}>
+                ₹ {summaryKPIs.totalWithBill.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={4}>
+          <Card sx={{ bgcolor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 2 }}>
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                📋 WITHOUT BILL PAYABLE
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: '#78350f', mt: 0.5 }}>
+                ₹ {summaryKPIs.totalWithoutBill.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={4}>
+          <Card sx={{ bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 2 }}>
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                🌐 COMBINED NET PAYABLE
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: '#991b1b', mt: 0.5 }}>
+                ₹ {summaryKPIs.totalCombined.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Toolbar & View Filter */}
+      <Paper sx={{ p: 1.5, mb: 2, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+          Showing {filteredRows.length} {filteredRows.length === 1 ? 'Vendor' : 'Vendors'}
+        </Typography>
+
+        <ToggleButtonGroup
+          value={viewMode}
+          exclusive
+          onChange={(e, nextMode) => { if (nextMode) setViewMode(nextMode); }}
+          size="small"
+        >
+          <ToggleButton value="combined" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+            <Tooltip title="Combined payable per vendor">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <ReceiptLong fontSize="small" /> Combined
+              </Box>
+            </Tooltip>
+          </ToggleButton>
+          <ToggleButton value="with_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+            <Tooltip title="Only With Bill (Official) payable">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Receipt fontSize="small" color="primary" /> With Bill
+              </Box>
+            </Tooltip>
+          </ToggleButton>
+          <ToggleButton value="without_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+            <Tooltip title="Only Without Bill (Cash) payable">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <MoneyOff fontSize="small" color="warning" /> Without Bill
+              </Box>
+            </Tooltip>
+          </ToggleButton>
+          <ToggleButton value="all_columns" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5 }}>
+            <Tooltip title="View With-Bill, Without-Bill, and Combined in separate columns side by side">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <ViewWeek fontSize="small" color="secondary" /> All Columns
+              </Box>
+            </Tooltip>
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Paper>
+
+      {/* DataGrid */}
+      <Box sx={{ flexGrow: 1, height: 480, width: '100%' }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
             <CircularProgress />
           </Box>
         ) : (
           <DataGrid
-            rows={payables}
+            rows={filteredRows}
             columns={columns}
-            rowHeight={40}
-            columnHeaderHeight={35}
+            rowHeight={42}
+            columnHeaderHeight={38}
             showColumnVerticalBorder={true}
             showCellVerticalBorder={true}
             getRowClassName={(params) =>
@@ -213,9 +524,9 @@ const PayableReport = () => {
               },
             }}
             initialState={{
-              pagination: { paginationModel: { pageSize: 10 } },
+              pagination: { paginationModel: { pageSize: 25 } },
             }}
-            pageSizeOptions={[10, 25, 50]}
+            pageSizeOptions={[10, 25, 50, 100]}
             disableRowSelectionOnClick
             sx={{ 
               border: '1px solid #e0e0e0',
@@ -300,11 +611,30 @@ const PayableReport = () => {
               )}
             </Grid>
             
-            <Box sx={{ mt: 4, p: 2, bgcolor: '#fff3e0', borderRadius: 1, border: '1px solid #ffe0b2' }}>
-              <Typography variant="body2" color="error.dark" align="center" fontWeight="bold">
-                Outstanding Balance: ₹ {Math.abs(selectedLedger?.ClosingBalance || 0).toLocaleString('en-IN')}
+            <Paper sx={{ mt: 3, p: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
+                Outstanding Summary
               </Typography>
-            </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="body2" color="textSecondary">🧾 With Bill (Official):</Typography>
+                <Typography variant="body2" fontWeight="bold" color="#0F3B66">
+                  ₹ {parseFloat(selectedLedger?.PayableWithBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="body2" color="textSecondary">📋 Without Bill (Cash):</Typography>
+                <Typography variant="body2" fontWeight="bold" color="#b45309">
+                  ₹ {parseFloat(selectedLedger?.PayableWithoutBill || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Typography>
+              </Box>
+              <Divider sx={{ my: 1 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" fontWeight="bold" color="error.main">🌐 Combined Total Payable:</Typography>
+                <Typography variant="body2" fontWeight="800" color="error.main">
+                  ₹ {parseFloat(selectedLedger?.PayableCombined || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Typography>
+              </Box>
+            </Paper>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -318,7 +648,7 @@ const PayableReport = () => {
         open={previewOpen} 
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
-        title="Payable Preview" 
+        title="Payable Report Preview" 
       />
     </Box>
   );

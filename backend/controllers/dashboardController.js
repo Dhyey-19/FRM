@@ -94,25 +94,41 @@ exports.getDashboardKPIs = async (req, res) => {
     `);
     const totalAssetValue = assetResult.recordset[0].totalAssetValue || 0;
 
-    // 6. Total Receivable
-    const receivableResult = await pool.request().query(`
-      SELECT ISNULL(SUM(l.ClosingBalance), 0) AS totalReceivable
-      FROM LedgerMaster l
-      LEFT JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      WHERE l.ClosingBalance > 0 
-        AND a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
+    // 6 & 7. Receivables and Payables (With Bill, Without Bill, Combined)
+    const billBalancesResult = await pool.request().query(`
+      WITH LedgerBillSums AS (
+        SELECT 
+          l.Id,
+          ISNULL(l.OpeningBalance, 0) AS OpeningBalance,
+          ISNULL(l.ClosingBalance, 0) AS CombinedBalance,
+          ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
+          ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
+        FROM LedgerMaster l
+        INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
+        LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
+        WHERE a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
+        GROUP BY l.Id, l.OpeningBalance, l.ClosingBalance
+      )
+      SELECT 
+        -- Combined
+        ISNULL(SUM(CASE WHEN CombinedBalance > 0 THEN CombinedBalance ELSE 0 END), 0) AS totalReceivable,
+        ISNULL(SUM(CASE WHEN CombinedBalance < 0 THEN ABS(CombinedBalance) ELSE 0 END), 0) AS totalPayable,
+        -- With Bill
+        ISNULL(SUM(CASE WHEN WithBillBalance > 0 THEN WithBillBalance ELSE 0 END), 0) AS totalReceivableWithBill,
+        ISNULL(SUM(CASE WHEN WithBillBalance < 0 THEN ABS(WithBillBalance) ELSE 0 END), 0) AS totalPayableWithBill,
+        -- Without Bill
+        ISNULL(SUM(CASE WHEN WithoutBillBalance > 0 THEN WithoutBillBalance ELSE 0 END), 0) AS totalReceivableWithoutBill,
+        ISNULL(SUM(CASE WHEN WithoutBillBalance < 0 THEN ABS(WithoutBillBalance) ELSE 0 END), 0) AS totalPayableWithoutBill
+      FROM LedgerBillSums;
     `);
-    const totalReceivable = receivableResult.recordset[0].totalReceivable || 0;
 
-    // 7. Total Payable
-    const payableResult = await pool.request().query(`
-      SELECT ISNULL(SUM(ABS(l.ClosingBalance)), 0) AS totalPayable
-      FROM LedgerMaster l
-      LEFT JOIN AccountGroup a ON l.AccountGroupID = a.Id
-      WHERE l.ClosingBalance < 0 
-        AND a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
-    `);
-    const totalPayable = payableResult.recordset[0].totalPayable || 0;
+    const billStats = billBalancesResult.recordset[0] || {};
+    const totalReceivable = billStats.totalReceivable || 0;
+    const totalPayable = billStats.totalPayable || 0;
+    const totalReceivableWithBill = billStats.totalReceivableWithBill || 0;
+    const totalPayableWithBill = billStats.totalPayableWithBill || 0;
+    const totalReceivableWithoutBill = billStats.totalReceivableWithoutBill || 0;
+    const totalPayableWithoutBill = billStats.totalPayableWithoutBill || 0;
 
     // 8. Total Turnover (Outward)
     const turnoverResult = await pool.request().query(`
@@ -162,6 +178,10 @@ exports.getDashboardKPIs = async (req, res) => {
       totalAssetValue,
       totalReceivable,
       totalPayable,
+      totalReceivableWithBill,
+      totalPayableWithBill,
+      totalReceivableWithoutBill,
+      totalPayableWithoutBill,
       totalTurnover,
       monthlyOutward,
       topParties,
