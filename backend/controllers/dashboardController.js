@@ -100,26 +100,33 @@ exports.getDashboardKPIs = async (req, res) => {
         SELECT 
           l.Id,
           ISNULL(l.OpeningBalance, 0) AS OpeningBalance,
-          ISNULL(l.ClosingBalance, 0) AS CombinedBalance,
           ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
           ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
         FROM LedgerMaster l
         INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
         LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
         WHERE a.GroupName IN ('Sundry Debtors', 'Party', 'Sundry Creditors', 'Vendor')
-        GROUP BY l.Id, l.OpeningBalance, l.ClosingBalance
+        GROUP BY l.Id, l.OpeningBalance
+      ),
+      ComputedLedgers AS (
+        SELECT 
+          Id,
+          WithBillBalance,
+          WithoutBillBalance,
+          (WithBillBalance + WithoutBillBalance) AS NetBalance
+        FROM LedgerBillSums
       )
       SELECT 
-        -- Combined
-        ISNULL(SUM(CASE WHEN CombinedBalance > 0 THEN CombinedBalance ELSE 0 END), 0) AS totalReceivable,
-        ISNULL(SUM(CASE WHEN CombinedBalance < 0 THEN ABS(CombinedBalance) ELSE 0 END), 0) AS totalPayable,
-        -- With Bill
-        ISNULL(SUM(CASE WHEN WithBillBalance > 0 THEN WithBillBalance ELSE 0 END), 0) AS totalReceivableWithBill,
-        ISNULL(SUM(CASE WHEN WithBillBalance < 0 THEN ABS(WithBillBalance) ELSE 0 END), 0) AS totalPayableWithBill,
-        -- Without Bill
-        ISNULL(SUM(CASE WHEN WithoutBillBalance > 0 THEN WithoutBillBalance ELSE 0 END), 0) AS totalReceivableWithoutBill,
-        ISNULL(SUM(CASE WHEN WithoutBillBalance < 0 THEN ABS(WithoutBillBalance) ELSE 0 END), 0) AS totalPayableWithoutBill
-      FROM LedgerBillSums;
+        -- Receivables (NetBalance > 0)
+        ISNULL(SUM(CASE WHEN NetBalance > 0 THEN NetBalance ELSE 0 END), 0) AS totalReceivable,
+        ISNULL(SUM(CASE WHEN NetBalance > 0 THEN WithBillBalance ELSE 0 END), 0) AS totalReceivableWithBill,
+        ISNULL(SUM(CASE WHEN NetBalance > 0 THEN WithoutBillBalance ELSE 0 END), 0) AS totalReceivableWithoutBill,
+        
+        -- Payables (NetBalance < 0)
+        ISNULL(SUM(CASE WHEN NetBalance < 0 THEN -NetBalance ELSE 0 END), 0) AS totalPayable,
+        ISNULL(SUM(CASE WHEN NetBalance < 0 THEN -WithBillBalance ELSE 0 END), 0) AS totalPayableWithBill,
+        ISNULL(SUM(CASE WHEN NetBalance < 0 THEN -WithoutBillBalance ELSE 0 END), 0) AS totalPayableWithoutBill
+      FROM ComputedLedgers;
     `);
 
     const billStats = billBalancesResult.recordset[0] || {};

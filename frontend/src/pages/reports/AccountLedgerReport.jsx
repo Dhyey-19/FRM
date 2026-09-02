@@ -1,25 +1,47 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Box, Typography, Button, Paper, CircularProgress, 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, InputAdornment, Toolbar, Autocomplete,
-  ToggleButtonGroup, ToggleButton, Card, CardContent, Grid, Chip, Divider, Tooltip
+  ToggleButtonGroup, ToggleButton, Card, CardContent, Grid, Chip, Divider, Tooltip,
+  IconButton
 } from '@mui/material';
 import { 
   PictureAsPdf, Visibility, TableView, Share, 
-  Receipt, ReceiptLong, MoneyOff, CallSplit, AccountBalanceWallet
+  Receipt, ReceiptLong, MoneyOff, CallSplit, AccountBalanceWallet,
+  ArrowBack
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
+import { generateInvoicePDF } from '../../utils/invoicePdfHelper';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
+const isAutoInvoice = (row) => {
+  const through = (row.Through || '').trim().toLowerCase();
+  const vType = (row.VoucherType || '').trim().toLowerCase();
+  return through === 'inward' || through === 'outward' || vType === 'purchase' || vType === 'sales';
+};
+
+const getInvoiceType = (row) => {
+  const through = (row.Through || '').trim().toLowerCase();
+  const vType = (row.VoucherType || '').trim().toLowerCase();
+  if (through === 'outward' || vType === 'sales') return 'outward';
+  if (through === 'inward' || vType === 'purchase') return 'inward';
+  return null;
+};
+
 const AccountLedgerReport = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   const getFirstDayOfMonth = () => {
     const date = new Date();
@@ -43,6 +65,19 @@ const AccountLedgerReport = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (ledgers.length > 0) {
+      const targetId = location.state?.ledgerId || new URLSearchParams(location.search).get('ledgerId');
+      if (targetId) {
+        const found = ledgers.find(l => String(l.Id) === String(targetId));
+        if (found) {
+          setSelectedLedger(found);
+          setDateRange([null, null]); // Show full statement so transactions aren't hidden by month filter
+        }
+      }
+    }
+  }, [ledgers, location]);
 
   const fetchData = async () => {
     try {
@@ -327,6 +362,7 @@ const AccountLedgerReport = () => {
     } else if (action === 'preview') {
       const pdfBlob = doc.output('blob');
       const blobUrl = URL.createObjectURL(pdfBlob);
+      setPreviewTitle(`Account Ledger Preview - ${selectedLedger.LedgerName}`);
       setPreviewUrl(blobUrl);
       setPreviewOpen(true);
     } else {
@@ -425,6 +461,58 @@ const AccountLedgerReport = () => {
     XLSX.writeFile(workbook, `ledger_${selectedLedger.LedgerName}_${viewMode}_${startDate ? startDate.toISOString().split('T')[0] : 'start'}_to_${endDate ? endDate.toISOString().split('T')[0] : 'end'}.xlsx`);
   };
 
+  const handleViewInvoice = async (row) => {
+    const type = getInvoiceType(row);
+    if (!type) return;
+
+    try {
+      setInvoiceLoading(true);
+      const invoiceNo = (row.Remark || '').trim();
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+      const [profileRes, itemsRes, invoicesRes] = await Promise.all([
+        fetch(`${baseUrl}/company-profile`),
+        fetch(`${baseUrl}/items`),
+        fetch(`${baseUrl}/${type === 'outward' ? 'outwards' : 'inwards'}`)
+      ]);
+
+      const compProfile = profileRes.ok ? await profileRes.json() : null;
+      const allItems = itemsRes.ok ? await itemsRes.json() : [];
+      const allInvoices = invoicesRes.ok ? await invoicesRes.json() : [];
+
+      // Match by OUTWARDNO / INWARDNO with row.Remark or row.VoucherNo
+      let matched = allInvoices.find(inv => {
+        const no = String(type === 'outward' ? inv.OUTWARDNO : inv.INWARDNO).trim();
+        return (invoiceNo && no === invoiceNo) || (row.VoucherNo && no === String(row.VoucherNo).trim());
+      });
+
+      // If not matched by number, try matching by party ID and amount
+      if (!matched && selectedLedger) {
+        matched = allInvoices.find(inv => 
+          inv.LEDGERID === selectedLedger.Id && 
+          Math.abs(parseFloat(inv.TOTALAMOUNT || 0) - parseFloat(row.Amount || 0)) < 0.01
+        );
+      }
+
+      if (!matched) {
+        alert(`No linked ${type === 'outward' ? 'Sales (Outward)' : 'Purchase (Inward)'} invoice record found for Voucher #${row.VoucherNo} (Invoice No: ${invoiceNo || 'N/A'}).`);
+        return;
+      }
+
+      const ledgerObj = ledgers.find(l => l.Id === matched.LEDGERID) || selectedLedger || { LedgerName: matched.LedgerName };
+
+      const { blobUrl } = await generateInvoicePDF(type, matched, ledgerObj, compProfile, allItems);
+      setPreviewTitle(`${type === 'outward' ? 'Sales Invoice' : 'Purchase Invoice'} #${matched.OUTWARDNO || matched.INWARDNO || invoiceNo}`);
+      setPreviewUrl(blobUrl);
+      setPreviewOpen(true);
+    } catch (err) {
+      console.error('Error opening invoice preview:', err);
+      alert('Failed to load invoice preview: ' + err.message);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
   // Component to render individual ledger table
   const renderLedgerTable = (metrics, title = null, headerColor = '#0F3B66', showBillBadge = false) => {
     return (
@@ -450,15 +538,16 @@ const AccountLedgerReport = () => {
           }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>Date</TableCell>
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>Voucher No</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '13%' }}>Date</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '13%' }}>Voucher No</TableCell>
                 {showBillBadge && (
-                  <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '12%' }}>Bill Type</TableCell>
+                  <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '11%' }}>Bill Type</TableCell>
                 )}
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '22%' }}>Particulars</TableCell>
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '20%' }}>Remarks</TableCell>
-                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '15%' }}>To (Debit)</TableCell>
-                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '15%' }}>From (Credit)</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '20%' }}>Particulars</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '17%' }}>Remarks</TableCell>
+                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>To (Debit)</TableCell>
+                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>From (Credit)</TableCell>
+                <TableCell align="center" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '8%' }}>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -473,11 +562,12 @@ const AccountLedgerReport = () => {
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor }}>
                   {metrics.periodOpeningBalance < 0 ? Math.abs(metrics.periodOpeningBalance).toFixed(2) : ''}
                 </TableCell>
+                <TableCell sx={{ borderRight: 'none' }} />
               </TableRow>
 
               {metrics.vouchersList.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={showBillBadge ? 7 : 6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                  <TableCell colSpan={showBillBadge ? 8 : 7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                     No voucher entries found for the selected period.
                   </TableCell>
                 </TableRow>
@@ -485,7 +575,28 @@ const AccountLedgerReport = () => {
                 metrics.vouchersList.map((row, idx) => (
                   <TableRow hover key={`${row.VoucherId || row.VoucherNo}-${idx}`}>
                     <TableCell>{row.VoucherDate ? row.VoucherDate.split('T')[0] : '-'}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>V{row.VoucherNo}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {isAutoInvoice(row) ? (
+                        <Box 
+                          component="span"
+                          onClick={() => handleViewInvoice(row)}
+                          sx={{ 
+                            cursor: 'pointer', 
+                            color: 'primary.main', 
+                            textDecoration: 'underline',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            '&:hover': { color: 'primary.dark' }
+                          }}
+                          title={`Click to preview ${getInvoiceType(row) === 'outward' ? 'Sales' : 'Purchase'} invoice`}
+                        >
+                          V{row.VoucherNo}
+                        </Box>
+                      ) : (
+                        `V${row.VoucherNo}`
+                      )}
+                    </TableCell>
                     {showBillBadge && (
                       <TableCell>
                         <Chip 
@@ -501,6 +612,30 @@ const AccountLedgerReport = () => {
                     <TableCell>{row.Remark || '-'}</TableCell>
                     <TableCell align="right">{row.Mode === 'Debit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
                     <TableCell align="right">{row.Mode === 'Credit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
+                    <TableCell align="center">
+                      {isAutoInvoice(row) ? (
+                        <Tooltip title={`Preview ${getInvoiceType(row) === 'outward' ? 'Sales (Outward)' : 'Purchase (Inward)'} Invoice`}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleViewInvoice(row)}
+                            sx={{
+                              p: 0.5,
+                              color: getInvoiceType(row) === 'outward' ? '#0F3B66' : '#b45309',
+                              bgcolor: getInvoiceType(row) === 'outward' ? '#e0f2fe' : '#fef3c7',
+                              border: '1px solid',
+                              borderColor: getInvoiceType(row) === 'outward' ? '#bae6fd' : '#fde68a',
+                              '&:hover': {
+                                bgcolor: getInvoiceType(row) === 'outward' ? '#bae6fd' : '#fde68a'
+                              }
+                            }}
+                          >
+                            <Visibility sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>-</Typography>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -516,6 +651,7 @@ const AccountLedgerReport = () => {
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor, fontSize: '0.9rem' }}>
                   {metrics.grossCredit.toFixed(2)}
                 </TableCell>
+                <TableCell sx={{ borderRight: 'none' }} />
               </TableRow>
 
               {/* Closing Balance Row */}
@@ -529,6 +665,7 @@ const AccountLedgerReport = () => {
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
                   {metrics.closingCredit > 0 ? metrics.closingCredit.toFixed(2) : ''}
                 </TableCell>
+                <TableCell sx={{ borderRight: 'none' }} />
               </TableRow>
 
               {/* Grand Total Row */}
@@ -542,6 +679,7 @@ const AccountLedgerReport = () => {
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>
                   {metrics.grandTotal.toFixed(2)}
                 </TableCell>
+                <TableCell sx={{ borderRight: 'none' }} />
               </TableRow>
             </TableBody>
           </Table>
@@ -786,7 +924,7 @@ const AccountLedgerReport = () => {
         open={previewOpen} 
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
-        title={`Account Ledger Preview - ${selectedLedger?.LedgerName || ''}`} 
+        title={previewTitle || `Account Ledger Preview - ${selectedLedger?.LedgerName || ''}`} 
       />
     </Box>
   );

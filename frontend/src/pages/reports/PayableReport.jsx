@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -15,7 +16,8 @@ import {
   ToggleButton,
   Card,
   CardContent,
-  Tooltip
+  Tooltip,
+  IconButton
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { 
@@ -27,7 +29,8 @@ import {
   Receipt, 
   MoneyOff, 
   ViewWeek,
-  Payment as PaymentIcon
+  Payment as PaymentIcon,
+  ArrowBack
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -35,6 +38,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const PayableReport = () => {
+  const navigate = useNavigate();
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -85,9 +89,9 @@ const PayableReport = () => {
   // Filter rows based on viewMode
   const filteredRows = useMemo(() => {
     if (viewMode === 'with_bill') {
-      return payables.filter(r => (parseFloat(r.PayableWithBill) || 0) > 0);
+      return payables.filter(r => Math.abs(parseFloat(r.PayableWithBill) || 0) > 0.001);
     } else if (viewMode === 'without_bill') {
-      return payables.filter(r => (parseFloat(r.PayableWithoutBill) || 0) > 0);
+      return payables.filter(r => Math.abs(parseFloat(r.PayableWithoutBill) || 0) > 0.001);
     } else if (viewMode === 'combined') {
       return payables.filter(r => (parseFloat(r.PayableCombined) || 0) > 0);
     }
@@ -99,25 +103,35 @@ const PayableReport = () => {
   const columns = useMemo(() => {
     const actionColumn = { 
       field: 'action', 
-      headerName: 'Action', 
-      width: 90, 
+      headerName: 'Actions', 
+      width: 160, 
       sortable: false,
       renderCell: (params) => {
         const hasPaymentDetails = params.row.UPI || (params.row.BankName && params.row.AccountNo);
-        if (hasPaymentDetails) {
-          return (
-            <Button 
-              variant="contained" 
-              color="success" 
-              size="small" 
-              onClick={() => handlePayClick(params.row)}
-              sx={{ textTransform: 'none', px: 1.5, py: 0.25, fontSize: '0.75rem' }}
+        return (
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            {hasPaymentDetails && (
+              <Button 
+                variant="contained" 
+                color="success" 
+                size="small" 
+                onClick={() => handlePayClick(params.row)}
+                sx={{ textTransform: 'none', px: 1, py: 0.2, fontSize: '0.75rem', borderRadius: 1.5 }}
+              >
+                Pay
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              size="small"
+              color="primary"
+              onClick={() => navigate('/dashboard/reports/account-ledger', { state: { ledgerId: params.row.RowId } })}
+              sx={{ textTransform: 'none', px: 1, py: 0.2, fontSize: '0.75rem', borderRadius: 1.5 }}
             >
-              Pay
+              Ledger
             </Button>
-          );
-        }
-        return null;
+          </Box>
+        );
       }
     };
 
@@ -129,13 +143,17 @@ const PayableReport = () => {
         { 
           field: 'PayableWithBill', 
           headerName: 'With Bill Payable (₹)', 
-          width: 190, 
+          width: 200, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 700, color: val < 0 ? '#166534' : '#0F3B66' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Dr)</span>}
+              </Typography>
+            );
+          }
         },
         actionColumn
       ];
@@ -147,13 +165,17 @@ const PayableReport = () => {
         { 
           field: 'PayableWithoutBill', 
           headerName: 'Without Bill Payable (₹)', 
-          width: 200, 
+          width: 210, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 700, color: '#b45309' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 700, color: val < 0 ? '#166534' : '#b45309' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Dr)</span>}
+              </Typography>
+            );
+          }
         },
         actionColumn
       ];
@@ -167,22 +189,30 @@ const PayableReport = () => {
           headerName: 'With Bill (₹)', 
           width: 140, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 600, color: val < 0 ? '#166534' : '#0F3B66' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Dr)</span>}
+              </Typography>
+            );
+          }
         },
         { 
           field: 'PayableWithoutBill', 
           headerName: 'Without Bill (₹)', 
           width: 140, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 600, color: '#b45309' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 600, color: val < 0 ? '#166534' : '#b45309' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Dr)</span>}
+              </Typography>
+            );
+          }
         },
         { 
           field: 'PayableCombined', 
@@ -217,7 +247,7 @@ const PayableReport = () => {
       },
       actionColumn
     ];
-  }, [viewMode]);
+  }, [viewMode, navigate]);
 
   const handleExportPDF = (action = 'download') => {
     const doc = new jsPDF();
@@ -452,6 +482,9 @@ const PayableReport = () => {
               <Typography variant="h5" sx={{ fontWeight: 800, color: '#991b1b', mt: 0.5 }}>
                 ₹ {summaryKPIs.totalCombined.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Typography>
+              <Typography variant="caption" sx={{ color: '#991b1b', fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
+                ✓ With Bill + Without Bill = Combined Total
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -510,8 +543,8 @@ const PayableReport = () => {
           <DataGrid
             rows={filteredRows}
             columns={columns}
-            rowHeight={42}
-            columnHeaderHeight={38}
+            rowHeight={32}
+            columnHeaderHeight={34}
             showColumnVerticalBorder={true}
             showCellVerticalBorder={true}
             getRowClassName={(params) =>

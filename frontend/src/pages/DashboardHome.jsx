@@ -37,6 +37,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import appLogo from '../assets/app_logo.jpeg';
+import { APP_VERSION } from '../config/version';
 
 const DashboardHome = () => {
   const navigate = useNavigate();
@@ -166,12 +167,13 @@ const DashboardHome = () => {
     fetchDueReports();
   }, []);
 
-  const formatCurrency = (value) => {
+  const formatCurrency = (value, decimals = 2) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(value);
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }).format(value || 0);
   };
 
   const kpiCards = [
@@ -270,9 +272,25 @@ const DashboardHome = () => {
               style={{ width: 64, height: 64, borderRadius: '50%', border: '2px solid white', backgroundColor: 'white' }} 
             />
             <Box>
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                Welcome, {localUser.Username || 'User'}!
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  Welcome, {localUser.Username || 'User'}!
+                </Typography>
+                <Chip 
+                  label={`v${APP_VERSION}`} 
+                  size="small" 
+                  sx={{ 
+                    bgcolor: 'rgba(255,255,255,0.18)', 
+                    color: '#ffffff', 
+                    fontWeight: 700, 
+                    fontSize: '0.72rem', 
+                    height: 22,
+                    borderRadius: 1,
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    letterSpacing: 0.5
+                  }} 
+                />
+              </Box>
               <Typography variant="body2" sx={{ opacity: 0.85 }}>
                 You are logged in as a <strong>{(localUser.role || localUser.UserRole || 'Operator').toUpperCase()}</strong>.
               </Typography>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import LoginPage from './components/LoginPage';
 import RegistrationPage from './components/RegistrationPage';
 import SignupPage from './components/SignupPage';
@@ -161,8 +161,8 @@ function App() {
           <Route path="reports/profit-loss" element={<ProfitLossReport />} />
           <Route path="reports/balance-sheet" element={<BalanceSheetReport />} />
           <Route path="reports/trial-balance" element={<TrialBalanceReport />} />
-          <Route path="reports/invoice-payable" element={<InvoiceWisePayableReport />} />
-          <Route path="reports/invoice-receivable" element={<InvoiceWiseReceivableReport />} />
+          <Route path="reports/invoice-payable" element={<Navigate to="/dashboard/reports/payable" replace />} />
+          <Route path="reports/invoice-receivable" element={<Navigate to="/dashboard/reports/receivable" replace />} />
           <Route path="reports/jobwork-out" element={<JobworkOutReport />} />
           <Route path="reports/jobwork-in" element={<JobworkInReport />} />
           <Route path="reports/jobwork-stock" element={<JobworkStockReport />} />

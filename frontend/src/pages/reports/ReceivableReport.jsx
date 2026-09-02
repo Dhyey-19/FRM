@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -10,7 +11,8 @@ import {
   Grid, 
   Card, 
   CardContent,
-  Tooltip
+  Tooltip,
+  IconButton
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { 
@@ -21,7 +23,8 @@ import {
   ReceiptLong, 
   Receipt, 
   MoneyOff, 
-  ViewWeek 
+  ViewWeek,
+  ArrowBack 
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -29,6 +32,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const ReceivableReport = () => {
+  const navigate = useNavigate();
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -72,9 +76,9 @@ const ReceivableReport = () => {
   // Filter rows based on viewMode
   const filteredRows = useMemo(() => {
     if (viewMode === 'with_bill') {
-      return receivables.filter(r => (parseFloat(r.ReceivableWithBill) || 0) > 0);
+      return receivables.filter(r => Math.abs(parseFloat(r.ReceivableWithBill) || 0) > 0.001);
     } else if (viewMode === 'without_bill') {
-      return receivables.filter(r => (parseFloat(r.ReceivableWithoutBill) || 0) > 0);
+      return receivables.filter(r => Math.abs(parseFloat(r.ReceivableWithoutBill) || 0) > 0.001);
     } else if (viewMode === 'combined') {
       return receivables.filter(r => (parseFloat(r.ReceivableCombined) || 0) > 0);
     }
@@ -84,6 +88,24 @@ const ReceivableReport = () => {
 
   // Dynamic DataGrid Columns
   const columns = useMemo(() => {
+    const actionColumn = {
+      field: 'action',
+      headerName: 'Ledger',
+      width: 110,
+      sortable: false,
+      renderCell: (params) => (
+        <Button
+          variant="outlined"
+          size="small"
+          color="primary"
+          onClick={() => navigate('/dashboard/reports/account-ledger', { state: { ledgerId: params.row.RowId } })}
+          sx={{ textTransform: 'none', px: 1, py: 0.2, fontSize: '0.75rem', borderRadius: 1.5 }}
+        >
+          View Ledger
+        </Button>
+      )
+    };
+
     if (viewMode === 'with_bill') {
       return [
         { field: 'RowId', headerName: 'Ledger ID', width: 90 },
@@ -92,14 +114,19 @@ const ReceivableReport = () => {
         { 
           field: 'ReceivableWithBill', 
           headerName: 'With Bill Receivable (₹)', 
-          width: 200, 
+          width: 210, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
-        }
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 700, color: val < 0 ? '#dc2626' : '#0F3B66' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Cr)</span>}
+              </Typography>
+            );
+          }
+        },
+        actionColumn
       ];
     } else if (viewMode === 'without_bill') {
       return [
@@ -109,14 +136,19 @@ const ReceivableReport = () => {
         { 
           field: 'ReceivableWithoutBill', 
           headerName: 'Without Bill Receivable (₹)', 
-          width: 210, 
+          width: 220, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 700, color: '#b45309' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
-        }
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 700, color: val < 0 ? '#dc2626' : '#b45309' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Cr)</span>}
+              </Typography>
+            );
+          }
+        },
+        actionColumn
       ];
     } else if (viewMode === 'all_columns') {
       return [
@@ -128,22 +160,30 @@ const ReceivableReport = () => {
           headerName: 'With Bill (₹)', 
           width: 150, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 600, color: val < 0 ? '#dc2626' : '#0F3B66' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Cr)</span>}
+              </Typography>
+            );
+          }
         },
         { 
           field: 'ReceivableWithoutBill', 
           headerName: 'Without Bill (₹)', 
           width: 150, 
           type: 'number',
-          renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 600, color: '#b45309' }}>
-              ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-          )
+          renderCell: (params) => {
+            const val = parseFloat(params.value || 0);
+            return (
+              <Typography variant="body2" sx={{ fontWeight: 600, color: val < 0 ? '#dc2626' : '#b45309' }}>
+                ₹ {val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {val < 0 && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(Cr)</span>}
+              </Typography>
+            );
+          }
         },
         { 
           field: 'ReceivableCombined', 
@@ -155,7 +195,8 @@ const ReceivableReport = () => {
               ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Typography>
           )
-        }
+        },
+        actionColumn
       ];
     }
 
@@ -174,9 +215,10 @@ const ReceivableReport = () => {
             ₹ {parseFloat(params.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Typography>
         )
-      }
+      },
+      actionColumn
     ];
-  }, [viewMode]);
+  }, [viewMode, navigate]);
 
   const handleExportPDF = (action = 'download') => {
     const doc = new jsPDF();
@@ -411,6 +453,9 @@ const ReceivableReport = () => {
               <Typography variant="h5" sx={{ fontWeight: 800, color: '#14532d', mt: 0.5 }}>
                 ₹ {summaryKPIs.totalCombined.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Typography>
+              <Typography variant="caption" sx={{ color: '#166534', fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
+                ✓ With Bill + Without Bill = Combined Total
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -469,8 +514,8 @@ const ReceivableReport = () => {
           <DataGrid
             rows={filteredRows}
             columns={columns}
-            rowHeight={42}
-            columnHeaderHeight={38}
+            rowHeight={32}
+            columnHeaderHeight={34}
             showColumnVerticalBorder={true}
             showCellVerticalBorder={true}
             getRowClassName={(params) =>

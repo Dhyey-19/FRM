@@ -329,7 +329,7 @@ const BOMReport = () => {
             <Table stickyHeader size="small" sx={{ 
               minWidth: 750, 
               border: '1px solid #e0e0e0',
-              '& .MuiTableRow-root': { height: 40 },
+              '& .MuiTableRow-root': { height: 32 },
               '& .MuiTableCell-head': {
                 py: 0.5,
                 lineHeight: '1.2'

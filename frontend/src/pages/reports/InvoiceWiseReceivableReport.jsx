@@ -473,8 +473,8 @@ const InvoiceWiseReceivableReport = () => {
           <DataGrid
             rows={filteredReportData}
             columns={columns}
-            rowHeight={42}
-            columnHeaderHeight={38}
+            rowHeight={32}
+            columnHeaderHeight={34}
             showColumnVerticalBorder={true}
             showCellVerticalBorder={true}
             getRowClassName={(params) =>

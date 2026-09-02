@@ -3,6 +3,7 @@ const router = express.Router();
 const outwardController = require('../controllers/outwardController');
 
 router.get('/report', outwardController.getOutwardReport);
+router.get('/next-no', outwardController.getNextOutwardNo);
 router.get('/', outwardController.getOutwards);
 router.post('/', outwardController.addOutward);
 router.put('/:id', outwardController.updateOutward);

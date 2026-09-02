@@ -9,6 +9,25 @@ const getSignature = (username) => {
     return sig.substring(0, 40);
 };
 
+exports.getNextOutwardNo = async (req, res) => {
+  try {
+    const pool = await connectDB();
+    const result = await pool.request().query(`
+      SELECT ISNULL(MAX(TRY_CAST(OUTWARDNO AS INT)), 0) + 1 AS NextNo 
+      FROM OutwardHeader
+    `);
+    
+    let nextNo = result.recordset[0]?.NextNo;
+    if (!nextNo || isNaN(nextNo)) {
+      nextNo = 1;
+    }
+    res.status(200).json({ nextNo: String(nextNo) });
+  } catch (error) {
+    console.error('Error fetching next outward no:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 exports.getOutwards = async (req, res) => {
   try {
     const pool = await connectDB();
@@ -17,7 +36,10 @@ exports.getOutwards = async (req, res) => {
       SELECT h.*, l.LedgerName 
       FROM OutwardHeader h
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      ORDER BY h.OUTWARDDATE DESC, h.OUTWARDNO DESC
+      ORDER BY 
+        CASE WHEN TRY_CAST(h.OUTWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
+        TRY_CAST(h.OUTWARDNO AS INT) DESC,
+        h.OUTWARDNO DESC
     `);
     
     // Fetch all OutwardDetails
@@ -70,7 +92,11 @@ exports.getOutwardReport = async (req, res) => {
       INNER JOIN OutwardHeader h ON d.OUTWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
       LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
-      ORDER BY h.OUTWARDDATE DESC, h.OUTWARDNO DESC, d.ID ASC
+      ORDER BY 
+        CASE WHEN TRY_CAST(h.OUTWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
+        TRY_CAST(h.OUTWARDNO AS INT) DESC,
+        h.OUTWARDNO DESC,
+        d.ID ASC
     `);
     
     res.status(200).json(result.recordset);

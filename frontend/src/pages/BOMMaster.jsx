@@ -337,8 +337,8 @@ const BOMMaster = () => {
 
         <Divider />
 
-        <TableContainer sx={{ p: 2 }}>
-          <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 40 } }} aria-labelledby="tableTitle">
+        <TableContainer>
+          <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 32 } }} aria-labelledby="tableTitle">
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, width: '60%' }}>Raw Material</TableCell>

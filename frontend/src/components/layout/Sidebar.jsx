@@ -363,7 +363,6 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
         </List>
       </Box>
 
-
       {/* Surrender License Confirmation Dialog */}
       <Dialog 
         open={openSurrenderDialog} 

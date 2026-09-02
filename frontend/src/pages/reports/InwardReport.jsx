@@ -48,7 +48,21 @@ const InwardReport = () => {
   }, []);
 
   const columns = [
-    { field: 'INWARDNO', headerName: 'Inward No', width: 110 },
+    { 
+      field: 'INWARDNO', 
+      headerName: 'Inward No', 
+      width: 110,
+      sortComparator: (v1, v2) => {
+        const num1 = parseInt(v1, 10);
+        const num2 = parseInt(v2, 10);
+        const isNum1 = !isNaN(num1) && /^\d+$/.test(String(v1 || '').trim());
+        const isNum2 = !isNaN(num2) && /^\d+$/.test(String(v2 || '').trim());
+        if (isNum1 && isNum2) return num1 - num2;
+        if (isNum1) return -1;
+        if (isNum2) return 1;
+        return String(v1 || '').localeCompare(String(v2 || ''), undefined, { numeric: true });
+      }
+    },
     { 
       field: 'INWARDDATE', 
       headerName: 'Date', 
@@ -80,6 +94,15 @@ const InwardReport = () => {
       const isAfterFrom = start ? rowDate.getTime() >= start : true;
       const isBeforeTo = end ? rowDate.getTime() <= end : true;
       return isAfterFrom && isBeforeTo;
+    }).sort((a, b) => {
+      const numA = parseInt(a.INWARDNO, 10);
+      const numB = parseInt(b.INWARDNO, 10);
+      const isNumA = !isNaN(numA) && /^\d+$/.test(String(a.INWARDNO || '').trim());
+      const isNumB = !isNaN(numB) && /^\d+$/.test(String(b.INWARDNO || '').trim());
+      if (isNumA && isNumB) return numB - numA;
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return String(b.INWARDNO || '').localeCompare(String(a.INWARDNO || ''), undefined, { numeric: true });
     });
   }, [inwards, startDate, endDate]);
 
@@ -295,8 +318,8 @@ const InwardReport = () => {
             onFilterModelChange={handleFilterModelChange}
             rows={filteredInwards}
             columns={columns}
-            rowHeight={40}
-            columnHeaderHeight={35}
+            rowHeight={32}
+            columnHeaderHeight={34}
             showColumnVerticalBorder={true}
             showCellVerticalBorder={true}
             getRowClassName={(params) =>
@@ -310,6 +333,9 @@ const InwardReport = () => {
             }}
             initialState={{
               pagination: { paginationModel: { pageSize: 25 } },
+              sorting: {
+                sortModel: [{ field: 'INWARDNO', sort: 'desc' }],
+              },
             }}
             pageSizeOptions={[10, 25, 50, 100]}
             disableRowSelectionOnClick

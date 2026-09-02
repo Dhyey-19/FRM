@@ -9,6 +9,25 @@ const getSignature = (username) => {
     return sig.substring(0, 40);
 };
 
+exports.getNextInwardNo = async (req, res) => {
+  try {
+    const pool = await connectDB();
+    const result = await pool.request().query(`
+      SELECT ISNULL(MAX(TRY_CAST(INWARDNO AS INT)), 0) + 1 AS NextNo 
+      FROM InwardHeader
+    `);
+    
+    let nextNo = result.recordset[0]?.NextNo;
+    if (!nextNo || isNaN(nextNo)) {
+      nextNo = 1;
+    }
+    res.status(200).json({ nextNo: String(nextNo) });
+  } catch (error) {
+    console.error('Error fetching next inward no:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 exports.getInwards = async (req, res) => {
   try {
     const pool = await connectDB();
@@ -17,7 +36,10 @@ exports.getInwards = async (req, res) => {
       SELECT h.*, l.LedgerName 
       FROM InwardHeader h
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      ORDER BY h.INWARDDATE DESC, h.INWARDNO DESC
+      ORDER BY 
+        CASE WHEN TRY_CAST(h.INWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
+        TRY_CAST(h.INWARDNO AS INT) DESC,
+        h.INWARDNO DESC
     `);
     
     // Fetch all InwardDetails
@@ -70,7 +92,11 @@ exports.getInwardReport = async (req, res) => {
       INNER JOIN InwardHeader h ON d.INWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
       LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
-      ORDER BY h.INWARDDATE DESC, h.INWARDNO DESC, d.ID ASC
+      ORDER BY 
+        CASE WHEN TRY_CAST(h.INWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
+        TRY_CAST(h.INWARDNO AS INT) DESC,
+        h.INWARDNO DESC,
+        d.ID ASC
     `);
     
     res.status(200).json(result.recordset);
@@ -90,6 +116,16 @@ exports.addInward = async (req, res) => {
   let pool;
   try {
     pool = await connectDB();
+
+    // Check if INWARDNO is duplicate
+    const checkDuplicate = await pool.request()
+      .input('INWARDNO', sql.VarChar(10), String(INWARDNO).trim())
+      .query('SELECT TOP 1 ID FROM InwardHeader WHERE LOWER(LTRIM(RTRIM(INWARDNO))) = LOWER(@INWARDNO)');
+    
+    if (checkDuplicate.recordset.length > 0) {
+      return res.status(400).json({ message: `Inward No "${INWARDNO}" already exists. It must be unique.` });
+    }
+
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
@@ -226,6 +262,17 @@ exports.updateInward = async (req, res) => {
   let pool;
   try {
     pool = await connectDB();
+
+    // Check if INWARDNO is duplicate for another entry
+    const checkDuplicate = await pool.request()
+      .input('INWARDNO', sql.VarChar(10), String(INWARDNO).trim())
+      .input('ID', sql.Numeric(8,0), id)
+      .query('SELECT TOP 1 ID FROM InwardHeader WHERE LOWER(LTRIM(RTRIM(INWARDNO))) = LOWER(@INWARDNO) AND ID <> @ID');
+    
+    if (checkDuplicate.recordset.length > 0) {
+      return res.status(400).json({ message: `Inward No "${INWARDNO}" already exists. It must be unique.` });
+    }
+
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 

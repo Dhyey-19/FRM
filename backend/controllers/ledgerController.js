@@ -30,7 +30,7 @@ exports.getPayableReport = async (req, res) => {
           l.IFSC,
           l.UPI,
           ISNULL(l.OpeningBalance, 0) as OpeningBalance,
-          ISNULL(l.ClosingBalance, 0) as ClosingBalance,
+          ISNULL(l.ClosingBalance, 0) as StoredClosingBalance,
           ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
           ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
         FROM LedgerMaster l
@@ -38,6 +38,22 @@ exports.getPayableReport = async (req, res) => {
         LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
         WHERE a.GroupName IN ('Sundry Debtors', 'Sundry Creditors', 'Vendor', 'Party')
         GROUP BY l.Id, l.LedgerName, l.MobileNo, l.BankName, l.AccountNo, l.IFSC, l.UPI, l.OpeningBalance, l.ClosingBalance
+      ),
+      ComputedLedgers AS (
+        SELECT 
+          RowId,
+          VendorName,
+          MobileNo,
+          BankName,
+          AccountNo,
+          IFSC,
+          UPI,
+          OpeningBalance,
+          StoredClosingBalance,
+          WithBillBalance,
+          WithoutBillBalance,
+          (WithBillBalance + WithoutBillBalance) AS NetBalance
+        FROM LedgerBillSums
       )
       SELECT 
         RowId,
@@ -48,14 +64,15 @@ exports.getPayableReport = async (req, res) => {
         IFSC,
         UPI,
         OpeningBalance,
-        ClosingBalance,
+        StoredClosingBalance AS ClosingBalance,
         WithBillBalance,
         WithoutBillBalance,
-        CASE WHEN ClosingBalance < 0 THEN ABS(ClosingBalance) ELSE 0 END AS PayableCombined,
-        CASE WHEN WithBillBalance < 0 THEN ABS(WithBillBalance) ELSE 0 END AS PayableWithBill,
-        CASE WHEN WithoutBillBalance < 0 THEN ABS(WithoutBillBalance) ELSE 0 END AS PayableWithoutBill
-      FROM LedgerBillSums
-      WHERE ClosingBalance < 0 OR WithBillBalance < 0 OR WithoutBillBalance < 0
+        NetBalance,
+        -NetBalance AS PayableCombined,
+        -WithBillBalance AS PayableWithBill,
+        -WithoutBillBalance AS PayableWithoutBill
+      FROM ComputedLedgers
+      WHERE NetBalance < 0
       ORDER BY VendorName ASC;
     `);
     res.status(200).json(result.recordset);
@@ -74,29 +91,54 @@ exports.getReceivableReport = async (req, res) => {
           l.Id as RowId,
           l.LedgerName as PartyName,
           l.MobileNo,
+          l.BankName,
+          l.AccountNo,
+          l.IFSC,
+          l.UPI,
           ISNULL(l.OpeningBalance, 0) as OpeningBalance,
-          ISNULL(l.ClosingBalance, 0) as ClosingBalance,
+          ISNULL(l.ClosingBalance, 0) as StoredClosingBalance,
           ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
           ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
         FROM LedgerMaster l
         INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
         LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
         WHERE a.GroupName IN ('Sundry Debtors', 'Sundry Creditors', 'Vendor', 'Party')
-        GROUP BY l.Id, l.LedgerName, l.MobileNo, l.OpeningBalance, l.ClosingBalance
+        GROUP BY l.Id, l.LedgerName, l.MobileNo, l.BankName, l.AccountNo, l.IFSC, l.UPI, l.OpeningBalance, l.ClosingBalance
+      ),
+      ComputedLedgers AS (
+        SELECT 
+          RowId,
+          PartyName,
+          MobileNo,
+          BankName,
+          AccountNo,
+          IFSC,
+          UPI,
+          OpeningBalance,
+          StoredClosingBalance,
+          WithBillBalance,
+          WithoutBillBalance,
+          (WithBillBalance + WithoutBillBalance) AS NetBalance
+        FROM LedgerBillSums
       )
       SELECT 
         RowId,
         PartyName,
         MobileNo,
+        BankName,
+        AccountNo,
+        IFSC,
+        UPI,
         OpeningBalance,
-        ClosingBalance,
+        StoredClosingBalance AS ClosingBalance,
         WithBillBalance,
         WithoutBillBalance,
-        CASE WHEN ClosingBalance > 0 THEN ClosingBalance ELSE 0 END AS ReceivableCombined,
-        CASE WHEN WithBillBalance > 0 THEN WithBillBalance ELSE 0 END AS ReceivableWithBill,
-        CASE WHEN WithoutBillBalance > 0 THEN WithoutBillBalance ELSE 0 END AS ReceivableWithoutBill
-      FROM LedgerBillSums
-      WHERE ClosingBalance > 0 OR WithBillBalance > 0 OR WithoutBillBalance > 0
+        NetBalance,
+        NetBalance AS ReceivableCombined,
+        WithBillBalance AS ReceivableWithBill,
+        WithoutBillBalance AS ReceivableWithoutBill
+      FROM ComputedLedgers
+      WHERE NetBalance > 0
       ORDER BY PartyName ASC;
     `);
     res.status(200).json(result.recordset);
@@ -205,7 +247,7 @@ exports.updateLedger = async (req, res) => {
       .input('MobileNo', sql.VarChar(10), MobileNo || null)
       .input('Email', sql.VarChar(50), Email || null)
       .input('OpeningBalance', sql.Numeric(12,2), OpeningBalance || 0)
-      .input('ClosingBalance', sql.Numeric(12,2), ClosingBalance || 0)
+      .input('ClosingBalance', sql.Numeric(12,2), ClosingBalance !== undefined && ClosingBalance !== null && ClosingBalance !== '' ? ClosingBalance : (OpeningBalance || 0))
       .input('BankName', sql.VarChar(100), BankName || null)
       .input('AccountNo', sql.VarChar(30), AccountNo || null)
       .input('IFSC', sql.VarChar(15), IFSC || null)

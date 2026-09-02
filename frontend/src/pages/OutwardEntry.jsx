@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import { 
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
-  Autocomplete, Grid, Divider, MenuItem, Select, FormControl, InputLabel, Checkbox, FormControlLabel
+  Autocomplete, Grid, Divider, MenuItem, Select, FormControl, InputLabel, Checkbox, FormControlLabel, Chip, TableSortLabel,
+  ToggleButtonGroup, ToggleButton
 } from '@mui/material';
-import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Input as InputIcon, Visibility as ViewIcon, Close as CloseIcon, AddCircle as AddCircleIcon,
-  Description as DescriptionIcon, Print as PrintIcon
+import { 
+  Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, 
+  Input as InputIcon, Visibility as ViewIcon, Close as CloseIcon, AddCircle as AddCircleIcon,
+  Description as DescriptionIcon, Print as PrintIcon, ReceiptLong, Receipt, MoneyOff 
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import PdfPreviewModal from '../components/common/PdfPreviewModal';
@@ -35,6 +38,8 @@ const OutwardEntry = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' | 'asc'
+  const [billFilter, setBillFilter] = useState('combined'); // 'combined', 'with_bill', 'without_bill'
   
   const todayDate = new Date().toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(todayDate);
@@ -181,40 +186,84 @@ const OutwardEntry = () => {
     if (fromDate && dateStr < fromDate) matchesDate = false;
     if (toDate && dateStr > toDate) matchesDate = false;
     
-    return matchesSearch && matchesDate;
+    let matchesBill = true;
+    if (billFilter === 'with_bill') matchesBill = (i.Bill !== false && i.Bill !== 0);
+    else if (billFilter === 'without_bill') matchesBill = (i.Bill === false || i.Bill === 0);
+
+    return matchesSearch && matchesDate && matchesBill;
   });
 
-  const generateNextOutwardNo = (isBill, currentOutwards) => {
-    const filtered = currentOutwards.filter(o => (o.Bill !== false) === isBill);
-    if (filtered.length === 0) return '1';
-    
-    const latest = filtered.sort((a, b) => b.ID - a.ID)[0];
-    const lastNo = latest.OUTWARDNO;
-    
-    if (!lastNo) return '1';
+  const sortedOutwards = useMemo(() => {
+    return [...filteredOutwards].sort((a, b) => {
+      const numA = parseInt(a.OUTWARDNO, 10);
+      const numB = parseInt(b.OUTWARDNO, 10);
+      const isNumA = !isNaN(numA) && /^\d+$/.test(String(a.OUTWARDNO || '').trim());
+      const isNumB = !isNaN(numB) && /^\d+$/.test(String(b.OUTWARDNO || '').trim());
 
-    const match = lastNo.match(/(\d+)(?!.*\d)/);
-    if (match) {
-      const numStr = match[1];
-      const num = parseInt(numStr, 10) + 1;
-      const paddedNum = String(num).padStart(numStr.length, '0');
-      return lastNo.substring(0, match.index) + paddedNum + lastNo.substring(match.index + numStr.length);
+      if (isNumA && isNumB) {
+        return sortOrder === 'desc' ? numB - numA : numA - numB;
+      }
+      if (isNumA) return sortOrder === 'desc' ? -1 : 1;
+      if (isNumB) return sortOrder === 'desc' ? 1 : -1;
+
+      const comp = String(a.OUTWARDNO || '').localeCompare(String(b.OUTWARDNO || ''), undefined, { numeric: true });
+      return sortOrder === 'desc' ? -comp : comp;
+    });
+  }, [filteredOutwards, sortOrder]);
+
+  const generateNextOutwardNo = (currentOutwards) => {
+    if (!currentOutwards || currentOutwards.length === 0) return '1';
+    let maxNum = 0;
+    for (const item of currentOutwards) {
+      const val = (item.OUTWARDNO || '').trim();
+      if (/^\d+$/.test(val)) {
+        const num = parseInt(val, 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
     }
-    return lastNo + '-1';
+    if (maxNum === 0) {
+      for (const item of currentOutwards) {
+        const val = (item.OUTWARDNO || '').trim();
+        const match = val.match(/(\d+)(?!.*\d)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    }
+    return String(maxNum + 1);
   };
 
   const handleBillChange = (e) => {
     const newBill = e.target.checked;
     setBill(newBill);
-    if (!editingId) {
-      setOutwardNo(generateNextOutwardNo(newBill, outwards));
-    }
   };
 
-  const handleOpenDialog = () => {
+  const handleOpenDialog = async () => {
     setDialogError('');
     setEditingId(null);
-    setOutwardNo(generateNextOutwardNo(true, outwards));
+
+    // Immediately pre-fill auto-incremented outward no
+    const nextNo = generateNextOutwardNo(outwards);
+    setOutwardNo(nextNo);
+
+    // Sync latest next number from server
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/outwards/next-no`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.nextNo) {
+          setOutwardNo(String(data.nextNo));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching next outward no:', err);
+    }
+
     setOutwardDate(new Date().toISOString().split('T')[0]);
     setLedgerId(null);
     setBill(true);
@@ -686,14 +735,25 @@ const OutwardEntry = () => {
 
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+      {/* Header Row */}
+      <Box sx={{ mb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
           <InputIcon /> Outward
         </Typography>
+        <Button 
+          variant="contained" 
+          color="secondary" 
+          startIcon={<AddIcon />} 
+          onClick={handleOpenDialog} 
+          disabled={!hasAddPermission()}
+          sx={{ fontWeight: 600, px: 2.5 }}
+        >
+          Add Outward
+        </Button>
       </Box>
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2 }}>
+        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2, flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
               size="small"
@@ -701,7 +761,7 @@ const OutwardEntry = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
-              sx={{ width: '220px' }}
+              sx={{ width: '200px' }}
             />
             <TextField
               label="From Date"
@@ -710,7 +770,7 @@ const OutwardEntry = () => {
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '150px' }}
+              sx={{ width: '145px' }}
             />
             <TextField
               label="To Date"
@@ -719,21 +779,44 @@ const OutwardEntry = () => {
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '150px' }}
+              sx={{ width: '145px' }}
             />
             <Button size="small" onClick={() => { setFromDate(''); setToDate(''); }}>Clear Dates</Button>
+
+            <ToggleButtonGroup
+              value={billFilter}
+              exclusive
+              onChange={(e, nextMode) => { if (nextMode) setBillFilter(nextMode); }}
+              size="small"
+              sx={{ bgcolor: '#f8fafc' }}
+            >
+              <ToggleButton value="combined" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+                <ReceiptLong fontSize="small" sx={{ mr: 0.5 }} /> Combined
+              </ToggleButton>
+              <ToggleButton value="with_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+                <Receipt fontSize="small" color="primary" sx={{ mr: 0.5 }} /> With Bill
+              </ToggleButton>
+              <ToggleButton value="without_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+                <MoneyOff fontSize="small" color="warning" sx={{ mr: 0.5 }} /> Without Bill
+              </ToggleButton>
+            </ToggleButtonGroup>
           </Box>
-          <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
-            Add Outward
-          </Button>
         </Toolbar>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 40 } }}>
+          <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 32 } }}>
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Sr. No.</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Outward No</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <TableSortLabel
+                    active={true}
+                    direction={sortOrder}
+                    onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                  >
+                    Outward No
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Total Amount</TableCell>
@@ -741,13 +824,21 @@ const OutwardEntry = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredOutwards.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, index) => (
+              {sortedOutwards.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, index) => (
                 <TableRow hover tabIndex={-1} key={`${row.ID}-${index}`}>
-                  <TableCell>{row.ID}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
                       {row.OUTWARDNO}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      size="small" 
+                      label={row.Bill !== false && row.Bill !== 0 ? 'With Bill' : 'Without Bill'}
+                      color={row.Bill !== false && row.Bill !== 0 ? 'primary' : 'warning'}
+                      variant={row.Bill !== false && row.Bill !== 0 ? 'outlined' : 'filled'}
+                      sx={{ fontSize: '0.75rem', height: 22, fontWeight: 600 }}
+                    />
                   </TableCell>
                   <TableCell>{row.OUTWARDDATE ? row.OUTWARDDATE.split('T')[0] : ''}</TableCell>
                   <TableCell>{row.LedgerName}</TableCell>
@@ -766,9 +857,9 @@ const OutwardEntry = () => {
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredOutwards.length === 0 && !loading && (
+              {sortedOutwards.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
                 </TableRow>
               )}
             </TableBody>

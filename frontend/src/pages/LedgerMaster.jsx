@@ -11,7 +11,7 @@ import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 
 const initialFormState = {
   LedgerName: '', AccountGroupID: '', Address: '', City: '', State: '', GSTIN: '',
-  MobileNo: '', Email: '', OpeningBalance: '', BankName: '', AccountNo: '',
+  MobileNo: '', Email: '', OpeningBalance: '', ClosingBalance: '', BankName: '', AccountNo: '',
   IFSC: '', UPI: '', OwnBrand: '', OtherBrand: '', Discount: '', CD: '', Bill: '',
   PaymentTerm: '', Transport: '', Remark: ''
 };
@@ -121,6 +121,7 @@ const LedgerMaster = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'ClosingBalance') return;
     
     setFormData(prev => {
       const newData = { ...prev, [name]: value };
@@ -134,7 +135,7 @@ const LedgerMaster = () => {
           newData.ClosingBalance = value;
         } else {
           const currentCb = parseFloat(prev.ClosingBalance || 0);
-          newData.ClosingBalance = currentCb + diff;
+          newData.ClosingBalance = Math.round((currentCb + diff) * 100) / 100;
         }
       }
       
@@ -234,7 +235,15 @@ const LedgerMaster = () => {
         </Toolbar>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 40 } }}>
+          <Table 
+            size="small" 
+            sx={{ 
+              minWidth: 750, 
+              '& .MuiTableRow-root': { height: 32 },
+              '& .MuiTableCell-root': { py: 0.35, px: 1.5, fontSize: '0.85rem' },
+              '& .MuiTableCell-head': { py: 0.75, fontWeight: 700 }
+            }}
+          >
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger Name</TableCell>
@@ -261,8 +270,9 @@ const LedgerMaster = () => {
                       onClick={() => handleOpenDialog('edit', row)}
                       disabled={!hasEditPermission()}
                       title="Edit Ledger"
+                      sx={{ p: 0.25 }}
                     >
-                      <EditIcon fontSize="small" />
+                      <EditIcon sx={{ fontSize: 18 }} />
                     </IconButton>
                   </TableCell>
                   <TableCell align="center">
@@ -272,8 +282,9 @@ const LedgerMaster = () => {
                       onClick={() => openDeleteConfirm(row.Id)}
                       disabled={!hasDeletePermission()}
                       title="Delete Ledger"
+                      sx={{ p: 0.25 }}
                     >
-                      <DeleteIcon fontSize="small" />
+                      <DeleteIcon sx={{ fontSize: 18 }} />
                     </IconButton>
                   </TableCell>
                 </TableRow>
@@ -366,7 +377,15 @@ const LedgerMaster = () => {
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.5, mt: 2 }}>Financial & Banking</Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField label="Opening Balance" name="OpeningBalance" type="number" value={formData.OpeningBalance || ''} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="Closing Balance" name="ClosingBalance" type="number" value={formData.ClosingBalance || ''} onChange={handleInputChange} fullWidth size="small" />
+              <TextField 
+                label="Closing Balance" 
+                name="ClosingBalance" 
+                type="number" 
+                value={formData.ClosingBalance !== undefined && formData.ClosingBalance !== null ? formData.ClosingBalance : ''} 
+                InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }} 
+                fullWidth 
+                size="small" 
+              />
               <TextField label="Bank Name" name="BankName" value={formData.BankName || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Account No" name="AccountNo" value={formData.AccountNo || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>

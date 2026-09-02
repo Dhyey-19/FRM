@@ -1,6 +1,6 @@
 {
   "name": "factory-flow-desktop",
-  "version": "20260629.0.0",
+  "version": "20260902.0.0",
   "description": "FactoryFlow Desktop Application",
   "author": "FactoryFlow",
   "main": "electron/main.js",
@@ -9,11 +9,14 @@
     "backend"
   ],
   "scripts": {
+    "update-version": "node scripts/update-version.js",
     "dev": "concurrently -k \"npm run dev -w frontend\" \"npm run dev -w backend\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "build:frontend": "npm run build --prefix frontend",
     "build": "npm run build:frontend",
+    "predist": "npm run update-version",
     "dist": "npm run build && electron-builder",
-    "build:exe": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dist"
+    "prebuild:exe": "npm run update-version",
+    "build:exe": "npm run update-version && cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dist"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -47,7 +50,7 @@
       "target": "nsis",
       "publisherName": "DTech",
       "icon": "build/icon.png",
-      "artifactName": "${productName}-20260629.${ext}",
+      "artifactName": "${productName}-20260902.${ext}",
       "certificateFile": "certs/DTech.pfx",
       "certificatePassword": "factoryflow"
     },

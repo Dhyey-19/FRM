@@ -167,7 +167,7 @@ const ItemTypeMaster = () => {
         </Toolbar>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 500, '& .MuiTableRow-root': { height: 40 } }}>
+          <Table size="small" sx={{ minWidth: 500, '& .MuiTableRow-root': { height: 32 } }}>
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Item Type Name</TableCell>

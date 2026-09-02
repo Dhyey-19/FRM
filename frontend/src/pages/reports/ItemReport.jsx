@@ -177,8 +177,8 @@ const ItemReport = () => {
           <DataGrid
             rows={items}
             columns={columns}
-            rowHeight={40}
-            columnHeaderHeight={35}
+            rowHeight={32}
+            columnHeaderHeight={34}
             showColumnVerticalBorder={true}
             showCellVerticalBorder={true}
             getRowClassName={(params) =>

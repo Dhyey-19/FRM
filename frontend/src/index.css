@@ -252,7 +252,52 @@ body {
   margin-bottom: 16px;
 }
 
-/* Table Grid Borders */
+/* Table Grid Borders and Compact Height */
 .MuiTable-root .MuiTableCell-root {
   border: 1px solid rgba(224, 224, 224, 1);
+  padding: 3px 8px !important;
+  font-size: 0.84rem;
+}
+
+.MuiTable-root .MuiTableCell-head {
+  padding: 5px 8px !important;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.MuiTable-root .MuiTableRow-root {
+  height: 32px !important;
+}
+
+.MuiTable-root .MuiIconButton-root {
+  padding: 2px !important;
+}
+
+.MuiTable-root .MuiIconButton-root .MuiSvgIcon-root {
+  font-size: 18px !important;
+}
+
+/* Compact MUI DataGrid */
+.MuiDataGrid-root {
+  font-size: 0.84rem !important;
+}
+
+.MuiDataGrid-root .MuiDataGrid-row {
+  min-height: 32px !important;
+  max-height: 32px !important;
+  height: 32px !important;
+}
+
+.MuiDataGrid-root .MuiDataGrid-cell {
+  padding: 0 8px !important;
+  line-height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+}
+
+.MuiDataGrid-root .MuiDataGrid-columnHeader {
+  min-height: 34px !important;
+  max-height: 34px !important;
+  height: 34px !important;
+  padding: 0 8px !important;
 }
