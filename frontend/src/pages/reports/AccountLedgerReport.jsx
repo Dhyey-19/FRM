@@ -23,14 +23,18 @@ import 'react-datepicker/dist/react-datepicker.css';
 const isAutoInvoice = (row) => {
   const through = (row.Through || '').trim().toLowerCase();
   const vType = (row.VoucherType || '').trim().toLowerCase();
-  return through === 'inward' || through === 'outward' || vType === 'purchase' || vType === 'sales';
+  if (through === 'outward' || through === 'inward') return true;
+  if (!through && (vType === 'sales' || vType === 'purchase')) return true;
+  return false;
 };
 
 const getInvoiceType = (row) => {
   const through = (row.Through || '').trim().toLowerCase();
   const vType = (row.VoucherType || '').trim().toLowerCase();
-  if (through === 'outward' || vType === 'sales') return 'outward';
-  if (through === 'inward' || vType === 'purchase') return 'inward';
+  if (through === 'outward') return 'outward';
+  if (through === 'inward') return 'inward';
+  if (!through && vType === 'sales') return 'outward';
+  if (!through && vType === 'purchase') return 'inward';
   return null;
 };
 
@@ -461,9 +465,169 @@ const AccountLedgerReport = () => {
     XLSX.writeFile(workbook, `ledger_${selectedLedger.LedgerName}_${viewMode}_${startDate ? startDate.toISOString().split('T')[0] : 'start'}_to_${endDate ? endDate.toISOString().split('T')[0] : 'end'}.xlsx`);
   };
 
+  const handleViewVoucher = async (row) => {
+    const voucherItems = vouchers.filter(v => v.VoucherNo === row.VoucherNo);
+    if (voucherItems.length === 0) return;
+
+    try {
+      setInvoiceLoading(true);
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const profileRes = await fetch(`${baseUrl}/company-profile`);
+      const companyProfile = profileRes.ok ? await profileRes.json() : null;
+
+      const voucherDate = voucherItems[0].VoucherDate ? voucherItems[0].VoucherDate.split('T')[0] : '';
+      const voucherType = voucherItems[0].VoucherType === 'General' ? 'Journal' : (voucherItems[0].VoucherType || 'Journal');
+      let tDebit = 0;
+      let tCredit = 0;
+
+      const rowsHTML = voucherItems.map(item => {
+        const ledgerName = ledgers.find(l => l.Id === item.LedgerId)?.LedgerName || item.LedgerName || '-';
+        const debitVal = item.Mode === 'Debit' ? parseFloat(item.Amount).toFixed(2) : '-';
+        const creditVal = item.Mode === 'Credit' ? parseFloat(item.Amount).toFixed(2) : '-';
+        if (item.Mode === 'Debit') tDebit += parseFloat(item.Amount);
+        if (item.Mode === 'Credit') tCredit += parseFloat(item.Amount);
+
+        return `
+          <tr>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; width: 1%; white-space: nowrap;">${item.Mode}</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: 600;">${ledgerName}</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; width: 1%; white-space: nowrap;">${item.Through || '-'}</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.Remark || '-'}</td>
+            <td style="text-align: right; padding: 8px; border: 1px solid #cbd5e1; width: 1%; white-space: nowrap;">${debitVal}</td>
+            <td style="text-align: right; padding: 8px; border: 1px solid #cbd5e1; width: 1%; white-space: nowrap;">${creditVal}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const compName = companyProfile?.CompanyName || localUser?.companyName || 'FACTORY FLOW ERP';
+      let addressParts = '';
+      let phonePart = '';
+      let gstPart = '';
+
+      if (companyProfile) {
+        addressParts = [companyProfile.Address1, companyProfile.Address2, companyProfile.City, companyProfile.StateName, companyProfile.Pincode].filter(Boolean).join(', ');
+        if (companyProfile.MobileNo) phonePart = companyProfile.MobileNo;
+        if (companyProfile.GSTIN) gstPart = companyProfile.GSTIN;
+      }
+
+      const renderVoucherCopy = (title) => `
+        <div class="voucher" style="font-family: 'Helvetica', 'Arial', sans-serif; padding: 20px; border: 2px solid #1e293b; border-radius: 8px; box-sizing: border-box; width: 100%; height: 133mm; display: flex; flex-direction: column;">
+          <div style="text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; position: relative;">
+            <div style="position: absolute; top: 0; left: 0; font-size: 12px; font-weight: bold; color: #64748b;">GSTIN: ${gstPart || 'N/A'}</div>
+            <div style="position: absolute; top: 0; right: 0; font-size: 12px; font-weight: bold; color: #64748b;">(${title})</div>
+            <h1 style="margin: 0; color: #0F3B66; font-size: 24px;">${compName}</h1>
+            <p style="margin: 2px 0; font-size: 12px; color: #333;">${addressParts}${phonePart ? ' | Phone: ' + phonePart : ''}</p>
+            <h2 style="margin: 10px 0 0 0; font-size: 18px; text-transform: uppercase; letter-spacing: 2px;">${voucherType} VOUCHER</h2>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px;">
+            <div><strong>Voucher No:</strong> V${row.VoucherNo}</div>
+            <div><strong>Date:</strong> ${voucherDate}</div>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 15px; flex-grow: 1;">
+            <thead>
+              <tr style="background-color: transparent; color: #1e293b;">
+                <th style="padding: 8px; text-align: left; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #1e293b; font-weight: bold; width: 1%; white-space: nowrap;">Mode</th>
+                <th style="padding: 8px; text-align: left; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #1e293b; font-weight: bold;">Ledger Name</th>
+                <th style="padding: 8px; text-align: left; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #1e293b; font-weight: bold; width: 1%; white-space: nowrap;">Through</th>
+                <th style="padding: 8px; text-align: left; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #1e293b; font-weight: bold;">Remarks</th>
+                <th style="padding: 8px; text-align: right; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #1e293b; font-weight: bold; width: 1%; white-space: nowrap;">Debit</th>
+                <th style="padding: 8px; text-align: right; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #1e293b; font-weight: bold; width: 1%; white-space: nowrap;">Credit</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML}
+            </tbody>
+            <tfoot>
+              <tr style="background-color: transparent; font-weight: bold;">
+                <td colspan="4" style="padding: 8px; text-align: right; border-top: 2px solid #1e293b;">TOTAL:</td>
+                <td style="padding: 8px; text-align: right; border-top: 2px solid #1e293b; color: #dc2626; width: 1%; white-space: nowrap;">${tDebit.toFixed(2)}</td>
+                <td style="padding: 8px; text-align: right; border-top: 2px solid #1e293b; color: #16a34a; width: 1%; white-space: nowrap;">${tCredit.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div style="display: flex; justify-content: space-between; margin-top: auto; padding-top: 20px; font-size: 12px; font-weight: bold;">
+            <div style="text-align: center; border-top: 1px solid #000; width: 150px; padding-top: 5px;">Prepared By</div>
+            <div style="text-align: center; border-top: 1px solid #000; width: 150px; padding-top: 5px;">Authorized Signatory</div>
+          </div>
+        </div>
+      `;
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Print Voucher V${row.VoucherNo}</title>
+            <style>
+              @page { size: A4 portrait; margin: 10mm; }
+              html, body {
+                height: 100%;
+                margin: 0;
+                padding: 0;
+                background-color: white;
+              }
+              body { 
+                font-family: 'Helvetica', 'Arial', sans-serif; 
+                color: #1e293b;
+              }
+              .print-container {
+                width: 100%;
+                height: 277mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                box-sizing: border-box;
+              }
+              .cutter-line {
+                text-align: center;
+                border-top: 1px dashed #000;
+                margin: 0;
+                position: relative;
+                height: 1px;
+              }
+              .cutter-line span {
+                position: absolute;
+                top: -10px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: white;
+                padding: 0 10px;
+                color: #64748b;
+                font-size: 14px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="print-container">
+              ${renderVoucherCopy("ORIGINAL")}
+              <div class="cutter-line"><span>✂-------------------------------------------------------✂</span></div>
+              ${renderVoucherCopy("DUPLICATE")}
+            </div>
+          </body>
+        </html>
+      `;
+
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      setPreviewTitle(`${voucherType} Voucher #V${row.VoucherNo}`);
+      setPreviewUrl(url);
+      setPreviewOpen(true);
+    } catch (err) {
+      console.error('Error opening voucher preview:', err);
+      alert('Failed to load voucher preview: ' + err.message);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
   const handleViewInvoice = async (row) => {
     const type = getInvoiceType(row);
-    if (!type) return;
+    if (!type) {
+      handleViewVoucher(row);
+      return;
+    }
 
     try {
       setInvoiceLoading(true);
@@ -480,22 +644,47 @@ const AccountLedgerReport = () => {
       const allItems = itemsRes.ok ? await itemsRes.json() : [];
       const allInvoices = invoicesRes.ok ? await invoicesRes.json() : [];
 
-      // Match by OUTWARDNO / INWARDNO with row.Remark or row.VoucherNo
-      let matched = allInvoices.find(inv => {
-        const no = String(type === 'outward' ? inv.OUTWARDNO : inv.INWARDNO).trim();
-        return (invoiceNo && no === invoiceNo) || (row.VoucherNo && no === String(row.VoucherNo).trim());
+      // Determine candidate party IDs for precise matching
+      const oppositeMode = row.Mode === 'Debit' ? 'Credit' : 'Debit';
+      const oppositeRows = vouchers.filter(v => v.VoucherNo === row.VoucherNo && v.Mode === oppositeMode);
+      const candidatePartyIds = [];
+      if (selectedLedger && selectedLedger.LedgerName !== 'Sales' && selectedLedger.LedgerName !== 'Purchase') {
+        candidatePartyIds.push(selectedLedger.Id);
+      }
+      oppositeRows.forEach(r => {
+        if (!candidatePartyIds.includes(r.LedgerId)) candidatePartyIds.push(r.LedgerId);
       });
 
-      // If not matched by number, try matching by party ID and amount
-      if (!matched && selectedLedger) {
-        matched = allInvoices.find(inv => 
-          inv.LEDGERID === selectedLedger.Id && 
-          Math.abs(parseFloat(inv.TOTALAMOUNT || 0) - parseFloat(row.Amount || 0)) < 0.01
-        );
+      const invNoClean = invoiceNo.toLowerCase();
+
+      // Step 1: Match by exact invoice number AND candidate party ID
+      let matched = null;
+      if (invNoClean) {
+        matched = allInvoices.find(inv => {
+          const no = String(type === 'outward' ? inv.OUTWARDNO : inv.INWARDNO).trim().toLowerCase();
+          return no === invNoClean && candidatePartyIds.includes(inv.LEDGERID);
+        });
+
+        // Step 2: Match by exact invoice number alone
+        if (!matched) {
+          matched = allInvoices.find(inv => {
+            const no = String(type === 'outward' ? inv.OUTWARDNO : inv.INWARDNO).trim().toLowerCase();
+            return no === invNoClean;
+          });
+        }
       }
 
+      // Step 3: Match by candidate party ID and exact amount
+      if (!matched && candidatePartyIds.length > 0) {
+        matched = allInvoices.find(inv => {
+          return candidatePartyIds.includes(inv.LEDGERID) && 
+                 Math.abs(parseFloat(inv.TOTALAMOUNT || 0) - parseFloat(row.Amount || 0)) < 0.01;
+        });
+      }
+
+      // Fallback: if no linked invoice record found, preview as Voucher document
       if (!matched) {
-        alert(`No linked ${type === 'outward' ? 'Sales (Outward)' : 'Purchase (Inward)'} invoice record found for Voucher #${row.VoucherNo} (Invoice No: ${invoiceNo || 'N/A'}).`);
+        handleViewVoucher(row);
         return;
       }
 
@@ -576,26 +765,25 @@ const AccountLedgerReport = () => {
                   <TableRow hover key={`${row.VoucherId || row.VoucherNo}-${idx}`}>
                     <TableCell>{row.VoucherDate ? row.VoucherDate.split('T')[0] : '-'}</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>
-                      {isAutoInvoice(row) ? (
-                        <Box 
-                          component="span"
-                          onClick={() => handleViewInvoice(row)}
-                          sx={{ 
-                            cursor: 'pointer', 
-                            color: 'primary.main', 
-                            textDecoration: 'underline',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                            '&:hover': { color: 'primary.dark' }
-                          }}
-                          title={`Click to preview ${getInvoiceType(row) === 'outward' ? 'Sales' : 'Purchase'} invoice`}
-                        >
-                          V{row.VoucherNo}
-                        </Box>
-                      ) : (
-                        `V${row.VoucherNo}`
-                      )}
+                      <Box 
+                        component="span"
+                        onClick={() => handleViewInvoice(row)}
+                        sx={{ 
+                          cursor: 'pointer', 
+                          color: 'primary.main', 
+                          textDecoration: 'underline',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          '&:hover': { color: 'primary.dark' }
+                        }}
+                        title={isAutoInvoice(row) 
+                          ? `Click to preview ${getInvoiceType(row) === 'outward' ? 'Sales' : 'Purchase'} invoice` 
+                          : `Click to preview Voucher V${row.VoucherNo}`
+                        }
+                      >
+                        V{row.VoucherNo}
+                      </Box>
                     </TableCell>
                     {showBillBadge && (
                       <TableCell>
@@ -613,28 +801,36 @@ const AccountLedgerReport = () => {
                     <TableCell align="right">{row.Mode === 'Debit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
                     <TableCell align="right">{row.Mode === 'Credit' ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
                     <TableCell align="center">
-                      {isAutoInvoice(row) ? (
-                        <Tooltip title={`Preview ${getInvoiceType(row) === 'outward' ? 'Sales (Outward)' : 'Purchase (Inward)'} Invoice`}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleViewInvoice(row)}
-                            sx={{
-                              p: 0.5,
-                              color: getInvoiceType(row) === 'outward' ? '#0F3B66' : '#b45309',
-                              bgcolor: getInvoiceType(row) === 'outward' ? '#e0f2fe' : '#fef3c7',
-                              border: '1px solid',
-                              borderColor: getInvoiceType(row) === 'outward' ? '#bae6fd' : '#fde68a',
-                              '&:hover': {
-                                bgcolor: getInvoiceType(row) === 'outward' ? '#bae6fd' : '#fde68a'
-                              }
-                            }}
-                          >
-                            <Visibility sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      ) : (
-                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>-</Typography>
-                      )}
+                      <Tooltip title={isAutoInvoice(row) 
+                        ? `Preview ${getInvoiceType(row) === 'outward' ? 'Sales (Outward)' : 'Purchase (Inward)'} Invoice` 
+                        : `Preview Voucher V${row.VoucherNo}`
+                      }>
+                        <IconButton
+                          size="small"
+                          disabled={invoiceLoading}
+                          onClick={() => handleViewInvoice(row)}
+                          sx={{
+                            p: 0.5,
+                            color: isAutoInvoice(row) 
+                              ? (getInvoiceType(row) === 'outward' ? '#0F3B66' : '#b45309')
+                              : '#475569',
+                            bgcolor: isAutoInvoice(row)
+                              ? (getInvoiceType(row) === 'outward' ? '#e0f2fe' : '#fef3c7')
+                              : '#f1f5f9',
+                            border: '1px solid',
+                            borderColor: isAutoInvoice(row)
+                              ? (getInvoiceType(row) === 'outward' ? '#bae6fd' : '#fde68a')
+                              : '#cbd5e1',
+                            '&:hover': {
+                              bgcolor: isAutoInvoice(row)
+                                ? (getInvoiceType(row) === 'outward' ? '#bae6fd' : '#fde68a')
+                                : '#e2e8f0'
+                            }
+                          }}
+                        >
+                          <Visibility sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))

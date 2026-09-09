@@ -167,13 +167,13 @@ const DashboardHome = () => {
     fetchDueReports();
   }, []);
 
-  const formatCurrency = (value, decimals = 2) => {
+  const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals
-    }).format(value || 0);
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(Math.round(value || 0));
   };
 
   const kpiCards = [
@@ -223,11 +223,12 @@ const DashboardHome = () => {
     },
     {
       title: 'Cash & Bank',
-      subtitle: 'Liquid Assets',
-      value: formatCurrency(Math.abs(kpis?.cashBankBalance || 0)),
+      subtitle: (kpis?.cashBankBalance || 0) < 0 ? 'Overdrawn / Negative' : 'Liquid Assets',
+      value: formatCurrency(kpis?.cashBankBalance || 0),
+      valueColor: (kpis?.cashBankBalance || 0) < 0 ? '#dc2626' : '#1e293b',
       icon: <ValueIcon sx={{ fontSize: 40 }} />,
-      color: '#8b5cf6', // Purple
-      bgColor: '#f3e8ff',
+      color: (kpis?.cashBankBalance || 0) < 0 ? '#ef4444' : '#8b5cf6',
+      bgColor: (kpis?.cashBankBalance || 0) < 0 ? '#fef2f2' : '#f3e8ff',
       onClick: fetchCashBankLedgers
     },
     {
@@ -387,7 +388,7 @@ const DashboardHome = () => {
                         <Skeleton variant="text" width={120} height={50} />
                       ) : (
                         <>
-                          <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                          <Typography variant="h4" sx={{ fontWeight: 700, color: card.valueColor || '#1e293b' }}>
                             {card.value}
                           </Typography>
                           {card.subtitle && (
@@ -676,7 +677,7 @@ const DashboardHome = () => {
                           {dept.deptName}
                         </Typography>
                         <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                          {dept.totalPcs || 0} Pcs | {dept.totalWeight || 0} KG
+                          {dept.totalPcs || 0} Pcs | {Math.round(Number(dept.totalWeight || 0))} KG
                         </Typography>
                         <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 700, mt: 0.5 }}>
                           Value: {formatCurrency(dept.totalValue || 0)}
@@ -729,15 +730,18 @@ const DashboardHome = () => {
                           variant="outlined" 
                         />
                       </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(l.ClosingBalance || 0)}
+                      <TableCell align="right" sx={{ fontWeight: 600, color: (l.ClosingBalance || 0) < 0 ? '#dc2626' : 'inherit' }}>
+                        {formatCurrency(l.ClosingBalance || 0)}
                       </TableCell>
                     </TableRow>
                   ))}
                   <TableRow>
                     <TableCell colSpan={2} align="right" sx={{ fontWeight: 700 }}>Total:</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, color: '#8b5cf6' }}>
-                      {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
+                    <TableCell align="right" sx={{ 
+                      fontWeight: 700, 
+                      color: cashBankLedgers.reduce((sum, l) => sum + (l.ClosingBalance || 0), 0) < 0 ? '#dc2626' : '#8b5cf6' 
+                    }}>
+                      {formatCurrency(
                         cashBankLedgers.reduce((sum, l) => sum + (l.ClosingBalance || 0), 0)
                       )}
                     </TableCell>
