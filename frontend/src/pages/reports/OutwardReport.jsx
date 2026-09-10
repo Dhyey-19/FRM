@@ -80,6 +80,13 @@ const OutwardReport = () => {
     { field: 'GROSSWT', headerName: 'Gross Wt', width: 90, type: 'number' },
     { field: 'NETWT', headerName: 'Net Wt', width: 90, type: 'number' },
     { field: 'RATE', headerName: 'Rate', width: 90, type: 'number' },
+    { 
+      field: 'DISCOUNT', 
+      headerName: 'Disc %', 
+      width: 80, 
+      type: 'number',
+      valueFormatter: (value) => (value ? `${parseFloat(value).toFixed(2)}%` : '-')
+    },
     { field: 'AMOUNT', headerName: 'Amount', width: 110, type: 'number' },
   ];
 
@@ -162,15 +169,16 @@ const OutwardReport = () => {
       row.GROSSWT,
       row.NETWT,
       row.RATE,
+      row.DISCOUNT ? `${parseFloat(row.DISCOUNT).toFixed(2)}%` : '-',
       row.AMOUNT
     ]);
     
     tableData.push([
-      '', '', '', '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), '', displayedTotals.totalAmount.toFixed(2)
+      '', '', '', '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), '', '', displayedTotals.totalAmount.toFixed(2)
     ]);
 
     autoTable(doc, {
-      head: [['Outward No', 'Date', 'Ledger', 'Item Code', 'Item Name', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Amount']],
+      head: [['Outward No', 'Date', 'Ledger', 'Item Code', 'Item Name', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Disc %', 'Amount']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -229,6 +237,7 @@ const OutwardReport = () => {
       'Gross Wt': row.GROSSWT,
       'Net Wt': row.NETWT,
       'Rate': row.RATE,
+      'Disc %': row.DISCOUNT ? `${parseFloat(row.DISCOUNT).toFixed(2)}%` : '',
       'Amount': row.AMOUNT
     }));
     
@@ -243,6 +252,7 @@ const OutwardReport = () => {
       'Gross Wt': displayedTotals.totalGrossWt,
       'Net Wt': displayedTotals.totalNetWt,
       'Rate': '',
+      'Disc %': '',
       'Amount': displayedTotals.totalAmount
     });
 

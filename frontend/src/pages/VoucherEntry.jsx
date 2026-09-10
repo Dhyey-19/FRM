@@ -535,10 +535,36 @@ const VoucherEntry = ({ user }) => {
     return ledgers.filter(ledger => {
       const isCashOrBank = ledger.AccountGroupName === 'Cash-in-Hand' || ledger.AccountGroupName === 'Bank Accounts';
       
+      const isExpenseOrDiscount = 
+        ledger.AccountGroupName === 'Indirect Expenses' || 
+        ledger.AccountGroupName === 'Direct Expenses' || 
+        (ledger.AccountGroupName && ledger.AccountGroupName.toLowerCase().includes('expense')) ||
+        (ledger.AccountGroupName && ledger.AccountGroupName.toLowerCase().includes('discount')) ||
+        (ledger.LedgerName && (
+          ledger.LedgerName.toLowerCase().includes('discount') || 
+          ledger.LedgerName.toLowerCase().includes('cdc') || 
+          ledger.LedgerName.toLowerCase().trim() === 'cd'
+        ));
+
+      const isIncomeOrDiscount = 
+        ledger.AccountGroupName === 'Indirect Incomes' || 
+        ledger.AccountGroupName === 'Direct Incomes' || 
+        (ledger.AccountGroupName && ledger.AccountGroupName.toLowerCase().includes('income')) ||
+        (ledger.AccountGroupName && ledger.AccountGroupName.toLowerCase().includes('discount')) ||
+        (ledger.LedgerName && (
+          ledger.LedgerName.toLowerCase().includes('discount') || 
+          ledger.LedgerName.toLowerCase().includes('cdc') || 
+          ledger.LedgerName.toLowerCase().trim() === 'cd'
+        ));
+
       if (globalVoucherType === 'Receipt') {
-        return mode === 'Debit' ? isCashOrBank : !isCashOrBank;
+        // In Receipt: Debit can be Cash/Bank OR Discount/Expense (e.g. CD/CDC, bank charge)
+        // Credit is the paying party (Sundry Debtors, Party, etc.)
+        return mode === 'Debit' ? (isCashOrBank || isExpenseOrDiscount) : !isCashOrBank;
       } else if (globalVoucherType === 'Payment') {
-        return mode === 'Debit' ? !isCashOrBank : isCashOrBank;
+        // In Payment: Debit is the payee/expense
+        // Credit can be Cash/Bank OR Discount Received/Income
+        return mode === 'Debit' ? !isCashOrBank : (isCashOrBank || isIncomeOrDiscount);
       } else if (globalVoucherType === 'Contra') {
         return isCashOrBank;
       } else if (globalVoucherType === 'Journal' || globalVoucherType === 'General') {
@@ -805,6 +831,20 @@ const VoucherEntry = ({ user }) => {
                           getOptionLabel={(option) => option.LedgerName || ''}
                           value={ledgers.find(l => l.Id === row.LedgerId) || null}
                           onChange={(e, newValue) => handleRowChange(index, 'LedgerId', newValue ? newValue.Id : null)}
+                          renderOption={(props, option) => (
+                            <Box component="li" {...props} key={option.Id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', py: 0.5, px: 1 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                                {option.LedgerName}
+                              </Typography>
+                              {option.AccountGroupName && (
+                                <Chip 
+                                  label={option.AccountGroupName} 
+                                  size="small" 
+                                  sx={{ fontSize: '0.68rem', height: 18, ml: 1, bgcolor: '#f1f5f9', color: '#475569', fontWeight: 500 }} 
+                                />
+                              )}
+                            </Box>
+                          )}
                           renderInput={(params) => <TextField {...params} placeholder="Select Ledger" size="small" />}
                           fullWidth
                         />

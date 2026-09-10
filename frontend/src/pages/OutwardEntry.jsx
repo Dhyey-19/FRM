@@ -24,6 +24,7 @@ const emptyRow = {
   QUANTITY: '',
   UNIT: '',
   RATE: '',
+  DISCOUNT: '',
   AMOUNT: ''
 };
 
@@ -55,6 +56,8 @@ const OutwardEntry = () => {
   const [outwardDate, setOutwardDate] = useState(todayDate);
   const [ledgerId, setLedgerId] = useState(null);
   const [expense, setExpense] = useState('');
+  const [cdPer, setCdPer] = useState('');
+  const [cdAmount, setCdAmount] = useState('');
   const [sgst, setSgst] = useState('');
   const [cgst, setCgst] = useState('');
   const [igst, setIgst] = useState('');
@@ -137,11 +140,28 @@ const OutwardEntry = () => {
     fetchCompanyProfile();
   }, []);
 
-  // Calculate totals whenever gridRows, expense, gstPer, or ledgerId changes
+  const calculateRowAmount = (row) => {
+    const unit = row.UNIT ? row.UNIT.toUpperCase() : '';
+    const rate = parseFloat(row.RATE) || 0;
+    const disc = parseFloat(row.DISCOUNT) || 0;
+    let gross = 0;
+    if (unit === 'KGS' || unit === 'KG') {
+      const netwt = parseFloat(row.NETWT) || 0;
+      gross = netwt * rate;
+    } else {
+      const qty = parseFloat(row.QUANTITY) || 0;
+      gross = qty * rate;
+    }
+    const net = gross * (1 - (disc / 100));
+    return net > 0 ? net.toFixed(2) : (gross > 0 ? '0.00' : '');
+  };
+
+  // Calculate totals whenever gridRows, expense, cdAmount, gstPer, or ledgerId changes
   useEffect(() => {
     const sumAmount = gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
     const exp = parseFloat(expense) || 0;
-    const taxable = sumAmount + exp;
+    const cdAmt = parseFloat(cdAmount) || 0;
+    const taxable = Math.max(0, sumAmount - cdAmt + exp);
     
     let calcSgst = 0;
     let calcCgst = 0;
@@ -172,7 +192,29 @@ const OutwardEntry = () => {
     
     setRoundOff(roundOffDiff);
     setTotalAmount(totalRounded.toFixed(2));
-  }, [gridRows, expense, gstPer, ledgerId, ledgers]);
+  }, [gridRows, expense, cdAmount, gstPer, ledgerId, ledgers]);
+
+  const handleCdPerChange = (val) => {
+    setCdPer(val);
+    const sumAmount = gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
+    const pct = parseFloat(val) || 0;
+    if (pct > 0 && sumAmount > 0) {
+      setCdAmount((sumAmount * (pct / 100)).toFixed(2));
+    } else {
+      setCdAmount('');
+    }
+  };
+
+  const handleCdAmountChange = (val) => {
+    setCdAmount(val);
+    const sumAmount = gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
+    const amt = parseFloat(val) || 0;
+    if (amt > 0 && sumAmount > 0) {
+      setCdPer(((amt / sumAmount) * 100).toFixed(2));
+    } else {
+      setCdPer('');
+    }
+  };
 
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
@@ -268,6 +310,8 @@ const OutwardEntry = () => {
     setLedgerId(null);
     setBill(true);
     setExpense('');
+    setCdPer('');
+    setCdAmount('');
     setSgst('');
     setCgst('');
     setIgst('');
@@ -287,6 +331,8 @@ const OutwardEntry = () => {
     setLedgerId(outward.LEDGERID);
     setBill(outward.Bill !== false);
     setExpense(outward.EXPENSE || '');
+    setCdPer(outward.CDPER !== undefined && outward.CDPER !== null && outward.CDPER !== 0 ? String(outward.CDPER) : '');
+    setCdAmount(outward.CDAMOUNT !== undefined && outward.CDAMOUNT !== null && outward.CDAMOUNT !== 0 ? String(outward.CDAMOUNT) : '');
     setSgst(outward.SGST || '');
     setCgst(outward.CGST || '');
     setIgst(outward.IGST || '');
@@ -303,6 +349,7 @@ const OutwardEntry = () => {
         QUANTITY: d.QUANTITY || '',
         UNIT: d.UNIT || '',
         RATE: d.RATE || '',
+        DISCOUNT: d.DISCOUNT !== undefined && d.DISCOUNT !== null && d.DISCOUNT !== 0 ? String(d.DISCOUNT) : '',
         AMOUNT: d.AMOUNT || ''
       })));
     } else {
@@ -323,17 +370,9 @@ const OutwardEntry = () => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
     
-    // Auto calculate Amount if Qty, NetWt, Rate or Unit changes
-    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT'].includes(field)) {
-      const unit = newRows[index].UNIT ? newRows[index].UNIT.toUpperCase() : '';
-      const rate = parseFloat(newRows[index].RATE) || 0;
-      if (unit === 'KGS' || unit === 'KG') {
-        const netwt = parseFloat(newRows[index].NETWT) || 0;
-        newRows[index].AMOUNT = (netwt * rate).toFixed(2);
-      } else {
-        const qty = parseFloat(newRows[index].QUANTITY) || 0;
-        newRows[index].AMOUNT = (qty * rate).toFixed(2);
-      }
+    // Auto calculate Amount if Qty, NetWt, Rate, Unit or Discount changes
+    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'DISCOUNT'].includes(field)) {
+      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
     
     setGridRows(newRows);
@@ -350,20 +389,50 @@ const OutwardEntry = () => {
       newRows[index].RATE = '';
     }
     
-    const unit = newRows[index].UNIT ? newRows[index].UNIT.toUpperCase() : '';
-    const rate = parseFloat(newRows[index].RATE) || 0;
-    if (unit === 'KGS' || unit === 'KG') {
-      const netwt = parseFloat(newRows[index].NETWT) || 0;
-      newRows[index].AMOUNT = (netwt * rate).toFixed(2);
-    } else {
-      const qty = parseFloat(newRows[index].QUANTITY) || 0;
-      newRows[index].AMOUNT = (qty * rate).toFixed(2);
+    // Default discount from selected customer if row discount is blank
+    if (!newRows[index].DISCOUNT) {
+      const selectedLedger = ledgers.find(l => l.Id === ledgerId);
+      const defaultDisc = selectedLedger ? (selectedLedger.Discount || selectedLedger.Bill || '') : '';
+      if (defaultDisc) newRows[index].DISCOUNT = String(defaultDisc);
     }
+    
+    newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     setGridRows(newRows);
   };
 
+  const handleLedgerChange = (e, newValue) => {
+    const newId = newValue ? newValue.Id : null;
+    setLedgerId(newId);
+    
+    if (newValue) {
+      // Pre-fill CD %
+      if (newValue.CD !== undefined && newValue.CD !== null && newValue.CD !== '') {
+        const cdVal = String(newValue.CD);
+        setCdPer(cdVal);
+        const sumAmount = gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
+        const pct = parseFloat(cdVal) || 0;
+        if (pct > 0 && sumAmount > 0) {
+          setCdAmount((sumAmount * (pct / 100)).toFixed(2));
+        }
+      }
+      // Pre-fill item discount on blank rows
+      const custDisc = newValue.Discount || newValue.Bill || '';
+      if (custDisc) {
+        setGridRows(prev => prev.map(r => {
+          if (!r.DISCOUNT || r.DISCOUNT === '0') {
+            const updated = { ...r, DISCOUNT: String(custDisc) };
+            return { ...updated, AMOUNT: calculateRowAmount(updated) };
+          }
+          return r;
+        }));
+      }
+    }
+  };
+
   const addGridRow = () => {
-    setGridRows([...gridRows, { ...emptyRow }]);
+    const selectedLedger = ledgers.find(l => l.Id === ledgerId);
+    const defaultDisc = selectedLedger ? (selectedLedger.Discount || selectedLedger.Bill || '') : '';
+    setGridRows([...gridRows, { ...emptyRow, DISCOUNT: defaultDisc ? String(defaultDisc) : '' }]);
   };
 
   const removeGridRow = (index) => {
@@ -492,11 +561,12 @@ const OutwardEntry = () => {
     const tableStartY = Math.max(currentY + 5, dividerY + 35);
 
     // Table Column & Rows
-    const tableColumn = ["Sr.", "Item Code & Name", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Amount"];
+    const tableColumn = ["Sr.", "Item Code & Name", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Discount", "Amount"];
     const detailsSource = isSaveAction ? outward.Details : (outward.Details || []);
     
     const tableRows = detailsSource.map((d, index) => {
       const itemName = d.ItemName || items.find(item => item.ItemCode === d.ITEMCODE)?.ItemName || '';
+      const discVal = parseFloat(d.DISCOUNT) || 0;
       return [
         index + 1,
         `${d.ITEMCODE} - ${itemName}`,
@@ -505,6 +575,7 @@ const OutwardEntry = () => {
         (d.QUANTITY || 0).toFixed(2),
         d.UNIT || '-',
         (d.RATE || 0).toFixed(2),
+        discVal > 0 ? `${discVal.toFixed(2)}%` : '-',
         (d.AMOUNT || 0).toFixed(2)
       ];
     });
@@ -523,7 +594,8 @@ const OutwardEntry = () => {
         4: { halign: 'right' },
         5: { halign: 'center' },
         6: { halign: 'right' },
-        7: { halign: 'right' }
+        7: { halign: 'center' },
+        8: { halign: 'right' }
       },
       margin: { top: tableStartY }
     });
@@ -533,7 +605,7 @@ const OutwardEntry = () => {
 
     // Check pagination room
     let checkY = finalY;
-    if (checkY + 45 > pageHeight - 30) {
+    if (checkY + 50 > pageHeight - 30) {
       doc.addPage();
       checkY = 20;
     }
@@ -541,7 +613,9 @@ const OutwardEntry = () => {
     // Summary calculation
     const subTotal = detailsSource.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
     const exp = parseFloat(outward.EXPENSE) || 0;
-    const gstPct = parseFloat(outward.GSTPER) || 0;
+    const cdP = parseFloat(outward.CDPER) || 0;
+    const cdAmt = parseFloat(outward.CDAMOUNT) || (cdP > 0 ? (subTotal * cdP / 100) : 0);
+    const taxableVal = Math.max(0, subTotal - cdAmt + exp);
     const sgstAmt = parseFloat(outward.SGST) || 0;
     const cgstAmt = parseFloat(outward.CGST) || 0;
     const igstAmt = parseFloat(outward.IGST) || 0;
@@ -559,7 +633,12 @@ const OutwardEntry = () => {
     };
 
     drawTotalLine('Sub Total:', subTotal.toFixed(2));
+    if (cdAmt > 0) {
+      const cdLabel = cdP > 0 ? `Cash Discount (-${cdP}%):` : 'Cash Discount:';
+      drawTotalLine(cdLabel, `-${cdAmt.toFixed(2)}`);
+    }
     if (exp > 0) drawTotalLine('Expense:', exp.toFixed(2));
+    if (cdAmt > 0 || exp > 0) drawTotalLine('Taxable Value:', taxableVal.toFixed(2));
     if (sgstAmt > 0) drawTotalLine('SGST:', sgstAmt.toFixed(2));
     if (cgstAmt > 0) drawTotalLine('CGST:', cgstAmt.toFixed(2));
     if (igstAmt > 0) drawTotalLine('IGST:', igstAmt.toFixed(2));
@@ -663,6 +742,8 @@ const OutwardEntry = () => {
       OUTWARDDATE: outwardDate,
       LEDGERID: ledgerId,
       EXPENSE: expense ? parseFloat(expense) : 0,
+      CDPER: cdPer ? parseFloat(cdPer) : 0,
+      CDAMOUNT: cdAmount ? parseFloat(cdAmount) : 0,
       SGST: sgst ? parseFloat(sgst) : 0,
       CGST: cgst ? parseFloat(cgst) : 0,
       IGST: igst ? parseFloat(igst) : 0,
@@ -678,6 +759,7 @@ const OutwardEntry = () => {
         NETWT: parseFloat(r.NETWT) || 0,
         QUANTITY: parseFloat(r.QUANTITY) || 0,
         RATE: parseFloat(r.RATE) || 0,
+        DISCOUNT: parseFloat(r.DISCOUNT) || 0,
         AMOUNT: parseFloat(r.AMOUNT) || 0
       }))
     };
@@ -905,7 +987,7 @@ const OutwardEntry = () => {
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
                   value={ledgers.find(l => l.Id === ledgerId) || null}
-                  onChange={(e, newValue) => setLedgerId(newValue ? newValue.Id : null)}
+                  onChange={handleLedgerChange}
                   renderInput={(params) => <TextField {...params} label="Ledger" size="small" required fullWidth />}
                   fullWidth
                   sx={{ minWidth: `${Math.max(20, maxLedgerLength) + 6}ch` }}
@@ -920,13 +1002,14 @@ const OutwardEntry = () => {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '30%' }}>Item</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Gross Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Net Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Qty</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '15%' }}>Unit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Rate</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Amount</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Gross Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Net Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Qty</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '12%' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Rate</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Discount (%)</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '12%' }}>Amount</TableCell>
                   <TableCell sx={{ width: '5%' }}></TableCell>
                 </TableRow>
               </TableHead>
@@ -977,6 +1060,7 @@ const OutwardEntry = () => {
                         />
                       </TableCell>
                       <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
+                      <TableCell><TextField type="number" size="small" placeholder="0.00" value={row.DISCOUNT || ''} onChange={(e) => handleRowChange(index, 'DISCOUNT', e.target.value)} fullWidth inputProps={{ style: { textAlign: 'right' } }} /></TableCell>
                       <TableCell><TextField type="number" size="small" value={row.AMOUNT} onChange={(e) => handleRowChange(index, 'AMOUNT', e.target.value)} fullWidth InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}/></TableCell>
                       <TableCell align="center">
                         <IconButton color="error" size="small" onClick={() => removeGridRow(index)} disabled={!hasDeletePermission() || gridRows.length === 1}>
@@ -1006,8 +1090,37 @@ const OutwardEntry = () => {
                     <Typography variant="body2" fontWeight={600}>{gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0).toFixed(2)}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2">Cash Disc (CD):</Typography>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <TextField 
+                        size="small" 
+                        type="number" 
+                        placeholder="%" 
+                        value={cdPer} 
+                        onChange={(e) => handleCdPerChange(e.target.value)} 
+                        sx={{ width: '65px' }} 
+                        inputProps={{ style: { textAlign: 'right' } }} 
+                      />
+                      <TextField 
+                        size="small" 
+                        type="number" 
+                        placeholder="Amount" 
+                        value={cdAmount} 
+                        onChange={(e) => handleCdAmountChange(e.target.value)} 
+                        sx={{ width: '95px' }} 
+                        inputProps={{ style: { textAlign: 'right' } }} 
+                      />
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                     <Typography variant="body2">Expense:</Typography>
                     <TextField size="small" type="number" value={expense} onChange={(e) => setExpense(e.target.value)} sx={{ width: '100px' }} inputProps={{ style: { textAlign: 'right' } }} />
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>Taxable Value:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                      {Math.max(0, gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0) - (parseFloat(cdAmount) || 0) + (parseFloat(expense) || 0)).toFixed(2)}
+                    </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                     <Typography variant="body2">GST %:</Typography>

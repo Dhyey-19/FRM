@@ -254,11 +254,11 @@ const AccountLedgerReport = () => {
     doc.line(14, 33, 196, 33);
 
     const renderTableForDoc = (metrics, title, startY, billBadge = false) => {
-      const tableColumn = ["Date", "Voucher No", ...(billBadge ? ["Bill"] : []), "Particulars", "Remarks", "To (Debit)", "From (Credit)"];
+      const tableColumn = ["Date", "Voucher No", "Type", ...(billBadge ? ["Bill"] : []), "Particulars", "Remarks", "To (Debit)", "From (Credit)"];
       const tableRows = [];
 
       // Add Opening Balance Row
-      const colSpanBefore = billBadge ? 4 : 3;
+      const colSpanBefore = billBadge ? 5 : 4;
       tableRows.push([
         { content: 'OPENING BALANCE', colSpan: colSpanBefore, styles: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } },
         { content: metrics.periodOpeningBalance >= 0 ? metrics.periodOpeningBalance.toFixed(2) : '', styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [15, 59, 102] } },
@@ -270,10 +270,12 @@ const AccountLedgerReport = () => {
         const debitVal = row.Mode === 'Debit' ? parseFloat(row.Amount).toFixed(2) : '-';
         const creditVal = row.Mode === 'Credit' ? parseFloat(row.Amount).toFixed(2) : '-';
         const bLabel = row.Bill !== false && row.Bill !== 0 ? 'With Bill' : 'Without Bill';
+        const vType = row.VoucherType === 'General' ? 'Journal' : (row.VoucherType || 'Journal');
         
         tableRows.push([
           vDate,
           `V${row.VoucherNo}`,
+          vType,
           ...(billBadge ? [bLabel] : []),
           getOppositeLedgers(row.VoucherNo, row.Mode),
           row.Remark || '-',
@@ -383,13 +385,14 @@ const AccountLedgerReport = () => {
     const generateExcelData = (metrics, title) => {
       const flatData = [];
       if (title) {
-        flatData.push({ 'Date': title, 'Voucher No': '', 'Bill Type': '', 'Particulars': '', 'Remarks': '', 'Debit (To)': '', 'Credit (From)': '' });
+        flatData.push({ 'Date': title, 'Voucher No': '', 'Voucher Type': '', 'Bill Type': '', 'Particulars': '', 'Remarks': '', 'Debit (To)': '', 'Credit (From)': '' });
       }
       
       // Opening Balance
       flatData.push({
         'Date': 'OPENING BALANCE',
         'Voucher No': '',
+        'Voucher Type': '',
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
@@ -401,6 +404,7 @@ const AccountLedgerReport = () => {
         flatData.push({
           'Date': v.VoucherDate ? v.VoucherDate.split('T')[0] : '-',
           'Voucher No': `V${v.VoucherNo}`,
+          'Voucher Type': v.VoucherType === 'General' ? 'Journal' : (v.VoucherType || 'Journal'),
           'Bill Type': v.Bill !== false && v.Bill !== 0 ? 'With Bill' : 'Without Bill',
           'Particulars': getOppositeLedgers(v.VoucherNo, v.Mode),
           'Remarks': v.Remark || '-',
@@ -412,6 +416,7 @@ const AccountLedgerReport = () => {
       flatData.push({
         'Date': 'TOTAL',
         'Voucher No': '',
+        'Voucher Type': '',
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
@@ -422,6 +427,7 @@ const AccountLedgerReport = () => {
       flatData.push({
         'Date': 'CLOSING BALANCE',
         'Voucher No': '',
+        'Voucher Type': '',
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
@@ -432,6 +438,7 @@ const AccountLedgerReport = () => {
       flatData.push({
         'Date': 'GRAND TOTAL',
         'Voucher No': '',
+        'Voucher Type': '',
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
@@ -727,22 +734,23 @@ const AccountLedgerReport = () => {
           }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '13%' }}>Date</TableCell>
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '13%' }}>Voucher No</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '11%' }}>Date</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '11%' }}>Voucher No</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '11%' }}>Voucher Type</TableCell>
                 {showBillBadge && (
-                  <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '11%' }}>Bill Type</TableCell>
+                  <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '10%' }}>Bill Type</TableCell>
                 )}
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '20%' }}>Particulars</TableCell>
-                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '17%' }}>Remarks</TableCell>
-                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>To (Debit)</TableCell>
-                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '14%' }}>From (Credit)</TableCell>
-                <TableCell align="center" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '8%' }}>Action</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '18%' }}>Particulars</TableCell>
+                <TableCell sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '15%' }}>Remarks</TableCell>
+                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '12%' }}>To (Debit)</TableCell>
+                <TableCell align="right" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '12%' }}>From (Credit)</TableCell>
+                <TableCell align="center" sx={{ backgroundColor: headerColor, color: '#ffffff', fontWeight: 'bold', width: '7%' }}>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {/* Opening Balance Row */}
               <TableRow sx={{ backgroundColor: '#f8fafc' }}>
-                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: headerColor }}>
+                <TableCell colSpan={showBillBadge ? 6 : 5} align="right" sx={{ fontWeight: 'bold', color: headerColor }}>
                   OPENING BALANCE
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor }}>
@@ -756,7 +764,7 @@ const AccountLedgerReport = () => {
 
               {metrics.vouchersList.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={showBillBadge ? 8 : 7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                  <TableCell colSpan={showBillBadge ? 9 : 8} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                     No voucher entries found for the selected period.
                   </TableCell>
                 </TableRow>
@@ -784,6 +792,36 @@ const AccountLedgerReport = () => {
                       >
                         V{row.VoucherNo}
                       </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        size="small" 
+                        label={row.VoucherType === 'General' ? 'Journal' : (row.VoucherType || 'Journal')}
+                        sx={{ 
+                          fontSize: '0.7rem', 
+                          height: 20, 
+                          fontWeight: 600,
+                          bgcolor: 
+                            row.VoucherType === 'Receipt' ? '#ecfdf5' :
+                            row.VoucherType === 'Payment' ? '#eff6ff' :
+                            row.VoucherType === 'Sales' ? '#f0fdf4' :
+                            row.VoucherType === 'Purchase' ? '#fefce8' :
+                            row.VoucherType === 'Contra' ? '#f5f3ff' : '#f1f5f9',
+                          color: 
+                            row.VoucherType === 'Receipt' ? '#047857' :
+                            row.VoucherType === 'Payment' ? '#1d4ed8' :
+                            row.VoucherType === 'Sales' ? '#15803d' :
+                            row.VoucherType === 'Purchase' ? '#a16207' :
+                            row.VoucherType === 'Contra' ? '#6d28d9' : '#475569',
+                          border: '1px solid',
+                          borderColor: 
+                            row.VoucherType === 'Receipt' ? '#a7f3d0' :
+                            row.VoucherType === 'Payment' ? '#bfdbfe' :
+                            row.VoucherType === 'Sales' ? '#bbf7d0' :
+                            row.VoucherType === 'Purchase' ? '#fef08a' :
+                            row.VoucherType === 'Contra' ? '#ddd6fe' : '#cbd5e1'
+                        }}
+                      />
                     </TableCell>
                     {showBillBadge && (
                       <TableCell>
@@ -838,7 +876,7 @@ const AccountLedgerReport = () => {
               
               {/* Totals Row */}
               <TableRow sx={{ backgroundColor: '#e2e8f0' }}>
-                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: headerColor, fontSize: '0.9rem' }}>
+                <TableCell colSpan={showBillBadge ? 6 : 5} align="right" sx={{ fontWeight: 'bold', color: headerColor, fontSize: '0.9rem' }}>
                   TOTAL
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: headerColor, fontSize: '0.9rem' }}>
@@ -852,7 +890,7 @@ const AccountLedgerReport = () => {
 
               {/* Closing Balance Row */}
               <TableRow sx={{ backgroundColor: '#fdfdea' }}>
-                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
+                <TableCell colSpan={showBillBadge ? 6 : 5} align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
                   CLOSING BALANCE
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: '#856404' }}>
@@ -866,7 +904,7 @@ const AccountLedgerReport = () => {
 
               {/* Grand Total Row */}
               <TableRow sx={{ backgroundColor: headerColor }}>
-                <TableCell colSpan={showBillBadge ? 5 : 4} align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>
+                <TableCell colSpan={showBillBadge ? 6 : 5} align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>
                   GRAND TOTAL
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>

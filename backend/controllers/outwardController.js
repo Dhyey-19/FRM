@@ -87,6 +87,7 @@ exports.getOutwardReport = async (req, res) => {
         d.GROSSWT, 
         d.NETWT, 
         d.RATE, 
+        d.DISCOUNT,
         d.AMOUNT 
       FROM OutwardDetail d
       INNER JOIN OutwardHeader h ON d.OUTWARDID = h.ID
@@ -107,7 +108,7 @@ exports.getOutwardReport = async (req, res) => {
 };
 
 exports.addOutward = async (req, res) => {
-  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
+  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
 
   if (!OUTWARDNO || !OUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'OutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -128,6 +129,8 @@ exports.addOutward = async (req, res) => {
         .input('OUTWARDDATE', sql.Date, OUTWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
         .input('EXPENSE', sql.Numeric(10,2), EXPENSE || 0)
+        .input('CDPER', sql.Numeric(5,2), CDPER || 0)
+        .input('CDAMOUNT', sql.Numeric(12,2), CDAMOUNT || 0)
         .input('SGST', sql.Numeric(10,2), SGST || 0)
         .input('CGST', sql.Numeric(10,2), CGST || 0)
         .input('IGST', sql.Numeric(10,2), IGST || 0)
@@ -138,9 +141,9 @@ exports.addOutward = async (req, res) => {
         .input('CREATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .input('UPDATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .query(`
-          INSERT INTO OutwardHeader (Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
+          INSERT INTO OutwardHeader (Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
           OUTPUT INSERTED.ID
-          VALUES (@Bill, @OUTWARDNO, @OUTWARDDATE, @LEDGERID, @EXPENSE, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
+          VALUES (@Bill, @OUTWARDNO, @OUTWARDDATE, @LEDGERID, @EXPENSE, @CDPER, @CDAMOUNT, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
         `);
 
       const newOutwardId = headerRes.recordset[0].ID;
@@ -160,10 +163,11 @@ exports.addOutward = async (req, res) => {
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
+          .input('DISCOUNT', sql.Numeric(5,2), d.DISCOUNT || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@OUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
+            VALUES (@OUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
@@ -243,7 +247,7 @@ exports.addOutward = async (req, res) => {
 
 exports.updateOutward = async (req, res) => {
   const { id } = req.params;
-  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
+  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
 
   if (!OUTWARDNO || !OUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'OutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -312,6 +316,8 @@ exports.updateOutward = async (req, res) => {
         .input('OUTWARDDATE', sql.Date, OUTWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
         .input('EXPENSE', sql.Numeric(10,2), EXPENSE || 0)
+        .input('CDPER', sql.Numeric(5,2), CDPER || 0)
+        .input('CDAMOUNT', sql.Numeric(12,2), CDAMOUNT || 0)
         .input('SGST', sql.Numeric(10,2), SGST || 0)
         .input('CGST', sql.Numeric(10,2), CGST || 0)
         .input('IGST', sql.Numeric(10,2), IGST || 0)
@@ -323,8 +329,8 @@ exports.updateOutward = async (req, res) => {
         .query(`
           UPDATE OutwardHeader 
           SET Bill = @Bill, OUTWARDNO = @OUTWARDNO, OUTWARDDATE = @OUTWARDDATE, LEDGERID = @LEDGERID, 
-              EXPENSE = @EXPENSE, SGST = @SGST, CGST = @CGST, IGST = @IGST, GSTPER = @GSTPER, ROUNDOFF = @ROUNDOFF, 
-              TOTALAMOUNT = @TOTALAMOUNT, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY
+              EXPENSE = @EXPENSE, CDPER = @CDPER, CDAMOUNT = @CDAMOUNT, SGST = @SGST, CGST = @CGST, IGST = @IGST, 
+              GSTPER = @GSTPER, ROUNDOFF = @ROUNDOFF, TOTALAMOUNT = @TOTALAMOUNT, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY
           WHERE ID = @ID
         `);
 
@@ -343,10 +349,11 @@ exports.updateOutward = async (req, res) => {
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
+          .input('DISCOUNT', sql.Numeric(5,2), d.DISCOUNT || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@OUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
+            VALUES (@OUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 

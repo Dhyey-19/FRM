@@ -129,11 +129,12 @@ export const generateInvoicePDF = async (type, invoice, ledgerObj = {}, companyP
     }
 
     const tableStartY = Math.max(currentY + 5, dividerY + 35);
-    const tableColumn = ["Sr.", "Item Code & Name", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Amount"];
+    const tableColumn = ["Sr.", "Item Code & Name", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Discount", "Amount"];
     const detailsSource = invoice.Details || [];
     
     const tableRows = detailsSource.map((d, index) => {
       const itemName = d.ItemName || items.find(item => item.ItemCode === d.ITEMCODE)?.ItemName || '';
+      const discVal = parseFloat(d.DISCOUNT) || 0;
       return [
         index + 1,
         `${d.ITEMCODE} - ${itemName}`,
@@ -142,6 +143,7 @@ export const generateInvoicePDF = async (type, invoice, ledgerObj = {}, companyP
         (parseFloat(d.QUANTITY) || 0).toFixed(2),
         d.UNIT || '-',
         (parseFloat(d.RATE) || 0).toFixed(2),
+        discVal > 0 ? `${discVal.toFixed(2)}%` : '-',
         (parseFloat(d.AMOUNT) || 0).toFixed(2)
       ];
     });
@@ -160,7 +162,8 @@ export const generateInvoicePDF = async (type, invoice, ledgerObj = {}, companyP
         4: { halign: 'right' },
         5: { halign: 'center' },
         6: { halign: 'right' },
-        7: { halign: 'right' }
+        7: { halign: 'center' },
+        8: { halign: 'right' }
       },
       margin: { top: tableStartY }
     });
@@ -169,13 +172,16 @@ export const generateInvoicePDF = async (type, invoice, ledgerObj = {}, companyP
     const pageHeight = doc.internal.pageSize.height;
 
     let checkY = finalY;
-    if (checkY + 45 > pageHeight - 30) {
+    if (checkY + 50 > pageHeight - 30) {
       doc.addPage();
       checkY = 20;
     }
 
     const subTotal = detailsSource.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
     const exp = parseFloat(invoice.EXPENSE) || 0;
+    const cdP = parseFloat(invoice.CDPER) || 0;
+    const cdAmt = parseFloat(invoice.CDAMOUNT) || (cdP > 0 ? (subTotal * cdP / 100) : 0);
+    const taxableVal = Math.max(0, subTotal - cdAmt + exp);
     const sgstAmt = parseFloat(invoice.SGST) || 0;
     const cgstAmt = parseFloat(invoice.CGST) || 0;
     const igstAmt = parseFloat(invoice.IGST) || 0;
@@ -192,7 +198,12 @@ export const generateInvoicePDF = async (type, invoice, ledgerObj = {}, companyP
     };
 
     drawTotalLine('Sub Total:', subTotal.toFixed(2));
+    if (cdAmt > 0) {
+      const cdLabel = cdP > 0 ? `Cash Discount (-${cdP}%):` : 'Cash Discount:';
+      drawTotalLine(cdLabel, `-${cdAmt.toFixed(2)}`);
+    }
     if (exp > 0) drawTotalLine('Expense:', exp.toFixed(2));
+    if (cdAmt > 0 || exp > 0) drawTotalLine('Taxable Value:', taxableVal.toFixed(2));
     if (sgstAmt > 0) drawTotalLine('SGST:', sgstAmt.toFixed(2));
     if (cgstAmt > 0) drawTotalLine('CGST:', cgstAmt.toFixed(2));
     if (igstAmt > 0) drawTotalLine('IGST:', igstAmt.toFixed(2));
