@@ -4,7 +4,7 @@ import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert,
-  Autocomplete, Grid, Divider
+  Autocomplete, Grid, Divider, Checkbox, FormControlLabel, Chip, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -13,7 +13,10 @@ import {
   Delete as DeleteIcon, 
   CallMade as JwIcon, 
   Close as CloseIcon, 
-  Print as PrintIcon 
+  Print as PrintIcon,
+  ReceiptLong,
+  Receipt,
+  MoneyOff
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import PdfPreviewModal from '../components/common/PdfPreviewModal';
@@ -24,6 +27,7 @@ const emptyRow = {
   ITEMCODE: '',
   GROSSWT: '',
   NETWT: '',
+  TENPCSWT: '',
   QUANTITY: '',
   UNIT: '',
   RATE: '',
@@ -45,6 +49,7 @@ const JobworkOutEntry = () => {
   const todayDate = new Date().toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(todayDate);
   const [toDate, setToDate] = useState(todayDate);
+  const [billFilter, setBillFilter] = useState('combined'); // 'combined', 'with_bill', 'without_bill'
   
   // Dialog States
   const [openDialog, setOpenDialog] = useState(false);
@@ -52,6 +57,7 @@ const JobworkOutEntry = () => {
   const [editingId, setEditingId] = useState(null);
   
   // Form States
+  const [bill, setBill] = useState(true);
   const [jwOutwardNo, setJwOutwardNo] = useState('');
   const [jwOutwardDate, setJwOutwardDate] = useState(todayDate);
   const [ledgerId, setLedgerId] = useState(null);
@@ -141,14 +147,63 @@ const JobworkOutEntry = () => {
     if (fromDate && dateStr < fromDate) matchesDate = false;
     if (toDate && dateStr > toDate) matchesDate = false;
     
-    return matchesSearch && matchesDate;
+    let matchesBill = true;
+    if (billFilter === 'with_bill') matchesBill = (jw.Bill !== false && jw.Bill !== 0);
+    else if (billFilter === 'without_bill') matchesBill = (jw.Bill === false || jw.Bill === 0);
+
+    return matchesSearch && matchesDate && matchesBill;
   });
 
-  const handleOpenDialog = () => {
+  const generateNextJwOutwardNo = (currentJwOutwards) => {
+    if (!currentJwOutwards || currentJwOutwards.length === 0) return '1';
+    let maxNum = 0;
+    for (const item of currentJwOutwards) {
+      const val = (item.JWOUTWARDNO || '').trim();
+      if (/^\d+$/.test(val)) {
+        const num = parseInt(val, 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+    if (maxNum === 0) {
+      for (const item of currentJwOutwards) {
+        const val = (item.JWOUTWARDNO || '').trim();
+        const match = val.match(/(\d+)(?!.*\d)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    }
+    return String(maxNum + 1);
+  };
+
+  const handleOpenDialog = async () => {
     setDialogError('');
     setEditingId(null);
-    setJwOutwardNo('');
+    
+    // Immediately pre-fill auto-incremented challan no
+    const nextNo = generateNextJwOutwardNo(jwOutwards);
+    setJwOutwardNo(nextNo);
+
+    // Sync latest next number from server
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/jobwork-outs/next-no`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.nextNo) {
+          setJwOutwardNo(String(data.nextNo));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching next jobwork out no:', err);
+    }
+
     setJwOutwardDate(new Date().toISOString().split('T')[0]);
+    setBill(true);
     setLedgerId(null);
     setRemark('');
     setGridRows([{ ...emptyRow }]);
@@ -158,6 +213,7 @@ const JobworkOutEntry = () => {
   const handleEditJwOutward = (jw) => {
     setDialogError('');
     setEditingId(jw.ID);
+    setBill(jw.Bill !== false && jw.Bill !== 0);
     setJwOutwardNo(jw.JWOUTWARDNO || '');
     setJwOutwardDate(jw.JWOUTWARDDATE ? jw.JWOUTWARDDATE.split('T')[0] : new Date().toISOString().split('T')[0]);
     setLedgerId(jw.LEDGERID);
@@ -168,6 +224,7 @@ const JobworkOutEntry = () => {
         ITEMCODE: d.ITEMCODE || '',
         GROSSWT: d.GROSSWT !== null ? d.GROSSWT.toString() : '',
         NETWT: d.NETWT !== null ? d.NETWT.toString() : '',
+        TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
         QUANTITY: d.QUANTITY !== null ? d.QUANTITY.toString() : '',
         UNIT: d.UNIT || '',
         RATE: d.RATE !== null ? d.RATE.toString() : '',
@@ -188,6 +245,17 @@ const JobworkOutEntry = () => {
   const handleRowChange = (index, field, value) => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
+
+    // Auto calculate Quantity if 10 Pcs Wt or Net Wt changes
+    if (field === 'TENPCSWT' || field === 'NETWT') {
+      const netWt = parseFloat(newRows[index].NETWT);
+      const tenPcsWt = parseFloat(newRows[index].TENPCSWT);
+      if (netWt > 0 && tenPcsWt > 0) {
+        const calculatedQty = Math.round((netWt / tenPcsWt) * 10);
+        newRows[index].QUANTITY = String(calculatedQty);
+      }
+    }
+
     setGridRows(newRows);
   };
 
@@ -433,6 +501,7 @@ const JobworkOutEntry = () => {
       JWOUTWARDNO: jwOutwardNo,
       JWOUTWARDDATE: jwOutwardDate,
       LEDGERID: ledgerId,
+      Bill: bill ? 1 : 0,
       REMARK: remark,
       CREATEDBY: username,
       UPDATEDBY: username,
@@ -440,6 +509,7 @@ const JobworkOutEntry = () => {
         ...r,
         GROSSWT: r.GROSSWT ? parseFloat(r.GROSSWT) : 0,
         NETWT: r.NETWT ? parseFloat(r.NETWT) : 0,
+        TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
         QUANTITY: r.QUANTITY ? parseFloat(r.QUANTITY) : 0,
         RATE: r.RATE ? parseFloat(r.RATE) : 0,
         PROCESS: r.PROCESS || null
@@ -535,6 +605,24 @@ const JobworkOutEntry = () => {
               sx={{ width: '150px' }}
             />
             <Button size="small" onClick={() => { setFromDate(''); setToDate(''); }}>Clear Dates</Button>
+
+            <ToggleButtonGroup
+              value={billFilter}
+              exclusive
+              onChange={(e, nextMode) => { if (nextMode) setBillFilter(nextMode); }}
+              size="small"
+              sx={{ bgcolor: '#f8fafc' }}
+            >
+              <ToggleButton value="combined" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+                <ReceiptLong fontSize="small" sx={{ mr: 0.5 }} /> Combined
+              </ToggleButton>
+              <ToggleButton value="with_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+                <Receipt fontSize="small" color="primary" sx={{ mr: 0.5 }} /> With Bill
+              </ToggleButton>
+              <ToggleButton value="without_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+                <MoneyOff fontSize="small" color="warning" sx={{ mr: 0.5 }} /> Without Bill
+              </ToggleButton>
+            </ToggleButtonGroup>
           </Box>
           <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
             Add Jobwork Out
@@ -545,8 +633,8 @@ const JobworkOutEntry = () => {
           <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 32 } }}>
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Sr. No.</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Challan No</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger / Party</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Remarks</TableCell>
@@ -556,11 +644,19 @@ const JobworkOutEntry = () => {
             <TableBody>
               {filteredJwOutwards.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, index) => (
                 <TableRow hover tabIndex={-1} key={`${row.ID}-${index}`}>
-                  <TableCell>{page * rowsPerPage + index + 1}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
                       {row.JWOUTWARDNO}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      size="small" 
+                      label={row.Bill !== false && row.Bill !== 0 ? 'With Bill' : 'Without Bill'}
+                      color={row.Bill !== false && row.Bill !== 0 ? 'primary' : 'warning'}
+                      variant={row.Bill !== false && row.Bill !== 0 ? 'outlined' : 'filled'}
+                      sx={{ fontSize: '0.75rem', height: 22, fontWeight: 600 }}
+                    />
                   </TableCell>
                   <TableCell>{row.JWOUTWARDDATE ? row.JWOUTWARDDATE.split('T')[0] : ''}</TableCell>
                   <TableCell>{row.LedgerName}</TableCell>
@@ -608,14 +704,20 @@ const JobworkOutEntry = () => {
           
           {/* Header Section */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
-            <Grid container spacing={2}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={1}>
+                <FormControlLabel
+                  control={<Checkbox checked={bill} onChange={(e) => setBill(e.target.checked)} />}
+                  label="Bill"
+                />
+              </Grid>
               <Grid item xs={12} sm={3} md={2}>
                 <TextField fullWidth label="Challan No" size="small" value={jwOutwardNo} onChange={(e) => setJwOutwardNo(e.target.value)} required />
               </Grid>
               <Grid item xs={12} sm={3} md={2}>
                 <TextField fullWidth label="Date" type="date" size="small" value={jwOutwardDate} onChange={(e) => setJwOutwardDate(e.target.value)} InputLabelProps={{ shrink: true }} required />
               </Grid>
-              <Grid item xs={12} sm={6} md={8}>
+              <Grid item xs={12} sm={5} md={7}>
                 <Autocomplete
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
@@ -635,15 +737,16 @@ const JobworkOutEntry = () => {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '22%' }}>Item</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Process</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Gross Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Net Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Qty</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Gross Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Net Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>10 Pcs Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Qty</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Unit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Rate</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Est Amount</TableCell>
-                  <TableCell sx={{ width: '5%' }}></TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Rate</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Est Amount</TableCell>
+                  <TableCell sx={{ width: '4%' }}></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -663,6 +766,7 @@ const JobworkOutEntry = () => {
                     <TableCell><TextField size="small" placeholder="Process" value={row.PROCESS || ''} onChange={(e) => handleRowChange(index, 'PROCESS', e.target.value)} fullWidth /></TableCell>
                     <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
                     <TableCell><TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth /></TableCell>
+                    <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
                     <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
                     <TableCell>
                       <Autocomplete

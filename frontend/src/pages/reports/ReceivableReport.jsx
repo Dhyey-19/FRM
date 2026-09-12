@@ -24,7 +24,8 @@ import {
   Receipt, 
   MoneyOff, 
   ViewWeek,
-  ArrowBack 
+  ArrowBack,
+  Schedule 
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -383,6 +384,14 @@ const ReceivableReport = () => {
           Receivable Report
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Button 
+            variant="contained" 
+            startIcon={<Schedule />}
+            onClick={() => navigate('/dashboard/reports/invoice-receivable')}
+            sx={{ bgcolor: '#0F3B66', color: '#fff', '&:hover': { bgcolor: '#092542' }, fontWeight: 600 }}
+          >
+            Due by Days (Aging)
+          </Button>
           <Button 
             variant="outlined" 
             startIcon={<TableView />}

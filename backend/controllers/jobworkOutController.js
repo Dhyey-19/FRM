@@ -9,6 +9,25 @@ const getSignature = (username) => {
     return sig.substring(0, 40);
 };
 
+exports.getNextJobworkOutNo = async (req, res) => {
+  try {
+    const pool = await connectDB();
+    const result = await pool.request().query(`
+      SELECT ISNULL(MAX(TRY_CAST(JWOUTWARDNO AS INT)), 0) + 1 AS NextNo 
+      FROM JobworkOutHeader
+    `);
+    
+    let nextNo = result.recordset[0]?.NextNo;
+    if (!nextNo || isNaN(nextNo)) {
+      nextNo = 1;
+    }
+    res.status(200).json({ nextNo: String(nextNo) });
+  } catch (error) {
+    console.error('Error fetching next jobwork out no:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 exports.getJobworkOuts = async (req, res) => {
   try {
     const pool = await connectDB();
@@ -18,7 +37,11 @@ exports.getJobworkOuts = async (req, res) => {
       SELECT h.*, l.LedgerName 
       FROM JobworkOutHeader h
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      ORDER BY h.JWOUTWARDDATE DESC, h.JWOUTWARDNO DESC
+      ORDER BY 
+        h.JWOUTWARDDATE DESC,
+        CASE WHEN TRY_CAST(h.JWOUTWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
+        TRY_CAST(h.JWOUTWARDNO AS INT) DESC,
+        h.JWOUTWARDNO DESC
     `);
     
     // Fetch all details with ItemName
@@ -52,7 +75,7 @@ exports.getJobworkOuts = async (req, res) => {
 };
 
 exports.addJobworkOut = async (req, res) => {
-  const { JWOUTWARDNO, JWOUTWARDDATE, LEDGERID, REMARK, CREATEDBY, Details } = req.body;
+  const { Bill, JWOUTWARDNO, JWOUTWARDDATE, LEDGERID, REMARK, CREATEDBY, Details } = req.body;
 
   if (!JWOUTWARDNO || !JWOUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'JWOutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -69,6 +92,7 @@ exports.addJobworkOut = async (req, res) => {
       // 1. Insert Header
       const headerReq = new sql.Request(transaction);
       const headerRes = await headerReq
+        .input('Bill', sql.Bit, Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1)
         .input('JWOUTWARDNO', sql.VarChar(10), JWOUTWARDNO)
         .input('JWOUTWARDDATE', sql.Date, JWOUTWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
@@ -76,9 +100,9 @@ exports.addJobworkOut = async (req, res) => {
         .input('CREATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .input('UPDATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .query(`
-          INSERT INTO JobworkOutHeader (JWOUTWARDNO, JWOUTWARDDATE, LEDGERID, REMARK, CREATEDBY, UPDATEDBY)
+          INSERT INTO JobworkOutHeader (Bill, JWOUTWARDNO, JWOUTWARDDATE, LEDGERID, REMARK, CREATEDBY, UPDATEDBY)
           OUTPUT INSERTED.ID
-          VALUES (@JWOUTWARDNO, @JWOUTWARDDATE, @LEDGERID, @REMARK, @CREATEDBY, @UPDATEDBY)
+          VALUES (@Bill, @JWOUTWARDNO, @JWOUTWARDDATE, @LEDGERID, @REMARK, @CREATEDBY, @UPDATEDBY)
         `);
 
       const newJwOutwardId = headerRes.recordset[0].ID;
@@ -95,13 +119,14 @@ exports.addJobworkOut = async (req, res) => {
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
+          .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('PROCESS', sql.VarChar(20), d.PROCESS || null)
           .query(`
-            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, PROCESS)
-            VALUES (@JWOUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
+            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, PROCESS)
+            VALUES (@JWOUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
@@ -127,7 +152,7 @@ exports.addJobworkOut = async (req, res) => {
 
 exports.updateJobworkOut = async (req, res) => {
   const { id } = req.params;
-  const { JWOUTWARDNO, JWOUTWARDDATE, LEDGERID, REMARK, UPDATEDBY, Details } = req.body;
+  const { Bill, JWOUTWARDNO, JWOUTWARDDATE, LEDGERID, REMARK, UPDATEDBY, Details } = req.body;
 
   if (!JWOUTWARDNO || !JWOUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'JWOutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -141,17 +166,17 @@ exports.updateJobworkOut = async (req, res) => {
     await transaction.begin();
 
     try {
-      // 1. Revert previous stock updates
+      // 1. Revert Old Details Stock
       const oldDetailsReq = new sql.Request(transaction);
       const oldDetailsRes = await oldDetailsReq
         .input('JWOUTWARDID', sql.Numeric(8,0), id)
-        .query('SELECT ITEMCODE, QUANTITY, NETWT, UNIT FROM JobworkOutDetail WHERE JWOUTWARDID = @JWOUTWARDID');
-      
+        .query('SELECT * FROM JobworkOutDetail WHERE JWOUTWARDID = @JWOUTWARDID');
+
       for (const oldD of oldDetailsRes.recordset) {
-        const revertStockReq = new sql.Request(transaction);
-        await revertStockReq
+        const revertReq = new sql.Request(transaction);
+        await revertReq
           .input('ITEMCODE', sql.VarChar(10), oldD.ITEMCODE)
-          .input('QUANTITY', sql.Numeric(10,2), oldD.QUANTITY)
+          .input('QUANTITY', sql.Numeric(10,2), oldD.QUANTITY || 0)
           .input('NETWT', sql.Numeric(10,3), oldD.NETWT || 0)
           .input('UNIT', sql.VarChar(10), oldD.UNIT || '')
           .query(`
@@ -175,6 +200,7 @@ exports.updateJobworkOut = async (req, res) => {
       const headerReq = new sql.Request(transaction);
       await headerReq
         .input('ID', sql.Numeric(8,0), id)
+        .input('Bill', sql.Bit, Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1)
         .input('JWOUTWARDNO', sql.VarChar(10), JWOUTWARDNO)
         .input('JWOUTWARDDATE', sql.Date, JWOUTWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
@@ -182,7 +208,7 @@ exports.updateJobworkOut = async (req, res) => {
         .input('UPDATEDBY', sql.VarChar(40), getSignature(UPDATEDBY))
         .query(`
           UPDATE JobworkOutHeader 
-          SET JWOUTWARDNO = @JWOUTWARDNO, JWOUTWARDDATE = @JWOUTWARDDATE, 
+          SET Bill = @Bill, JWOUTWARDNO = @JWOUTWARDNO, JWOUTWARDDATE = @JWOUTWARDDATE, 
               LEDGERID = @LEDGERID, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY
           WHERE ID = @ID
         `);
@@ -199,13 +225,14 @@ exports.updateJobworkOut = async (req, res) => {
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
+          .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('PROCESS', sql.VarChar(20), d.PROCESS || null)
           .query(`
-            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, PROCESS)
-            VALUES (@JWOUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
+            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, PROCESS)
+            VALUES (@JWOUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
@@ -293,6 +320,7 @@ exports.getJobworkOutReport = async (req, res) => {
         d.ID as RowId,
         h.JWOUTWARDNO, 
         h.JWOUTWARDDATE, 
+        h.Bill,
         l.LedgerName, 
         d.ITEMCODE, 
         i.ItemName, 

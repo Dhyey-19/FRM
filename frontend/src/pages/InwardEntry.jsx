@@ -21,6 +21,7 @@ const emptyRow = {
   ITEMCODE: '',
   GROSSWT: '',
   NETWT: '',
+  TENPCSWT: '',
   QUANTITY: '',
   UNIT: '',
   RATE: '',
@@ -298,6 +299,7 @@ const InwardEntry = () => {
         ITEMCODE: d.ITEMCODE || '',
         GROSSWT: d.GROSSWT || '',
         NETWT: d.NETWT || '',
+        TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
         QUANTITY: d.QUANTITY || '',
         UNIT: d.UNIT || '',
         RATE: d.RATE || '',
@@ -321,8 +323,18 @@ const InwardEntry = () => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
     
-    // Auto calculate Amount if Qty, NetWt, Rate or Unit changes
-    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT'].includes(field)) {
+    // Auto calculate Quantity if 10 Pcs Wt or Net Wt changes
+    if (field === 'TENPCSWT' || field === 'NETWT') {
+      const netWt = parseFloat(newRows[index].NETWT);
+      const tenPcsWt = parseFloat(newRows[index].TENPCSWT);
+      if (netWt > 0 && tenPcsWt > 0) {
+        const calculatedQty = Math.round((netWt / tenPcsWt) * 10);
+        newRows[index].QUANTITY = String(calculatedQty);
+      }
+    }
+
+    // Auto calculate Amount if Qty, NetWt, Rate, Unit or 10 Pcs Wt changes
+    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'TENPCSWT'].includes(field)) {
       const unit = newRows[index].UNIT ? newRows[index].UNIT.toUpperCase() : '';
       const rate = parseFloat(newRows[index].RATE) || 0;
       if (unit === 'KGS' || unit === 'KG') {
@@ -671,6 +683,7 @@ const InwardEntry = () => {
         ...r,
         GROSSWT: parseFloat(r.GROSSWT) || 0,
         NETWT: parseFloat(r.NETWT) || 0,
+        TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
         QUANTITY: parseFloat(r.QUANTITY) || 0,
         RATE: parseFloat(r.RATE) || 0,
         AMOUNT: parseFloat(r.AMOUNT) || 0
@@ -919,14 +932,15 @@ const InwardEntry = () => {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '30%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Gross Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Net Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>10 Pcs Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Qty</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '15%' }}>Unit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Rate</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '13%' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Rate</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Amount</TableCell>
-                  <TableCell sx={{ width: '5%' }}></TableCell>
+                  <TableCell sx={{ width: '3%' }}></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -945,6 +959,7 @@ const InwardEntry = () => {
                     </TableCell>
                     <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
                     <TableCell><TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth /></TableCell>
+                    <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
                     <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
                     <TableCell>
                       <Autocomplete

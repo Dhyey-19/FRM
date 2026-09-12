@@ -115,7 +115,9 @@ export const MENU_STRUCTURE = [
           { title: 'Account Ledger', path: '/dashboard/reports/account-ledger', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Trial Balance', path: '/dashboard/reports/trial-balance', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Receivable', path: '/dashboard/reports/receivable', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Receivable (Due by Days)', path: '/dashboard/reports/invoice-receivable', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Payable', path: '/dashboard/reports/payable', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Payable (Due by Days)', path: '/dashboard/reports/invoice-payable', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Profit & Loss', path: '/dashboard/reports/profit-loss', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Balance Sheet', path: '/dashboard/reports/balance-sheet', icon: <ReportsIcon fontSize="small" /> },
         ]

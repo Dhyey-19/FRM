@@ -167,13 +167,14 @@ exports.addInward = async (req, res) => {
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
+          .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
@@ -361,13 +362,14 @@ exports.updateInward = async (req, res) => {
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
+          .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
           .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 

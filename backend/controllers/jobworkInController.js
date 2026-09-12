@@ -9,6 +9,25 @@ const getSignature = (username) => {
     return sig.substring(0, 40);
 };
 
+exports.getNextJobworkInNo = async (req, res) => {
+  try {
+    const pool = await connectDB();
+    const result = await pool.request().query(`
+      SELECT ISNULL(MAX(TRY_CAST(JWINWARDNO AS INT)), 0) + 1 AS NextNo 
+      FROM JobworkInHeader
+    `);
+    
+    let nextNo = result.recordset[0]?.NextNo;
+    if (!nextNo || isNaN(nextNo)) {
+      nextNo = 1;
+    }
+    res.status(200).json({ nextNo: String(nextNo) });
+  } catch (error) {
+    console.error('Error fetching next jobwork in no:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 exports.getJobworkIns = async (req, res) => {
   try {
     const pool = await connectDB();
@@ -18,7 +37,11 @@ exports.getJobworkIns = async (req, res) => {
       SELECT h.*, l.LedgerName 
       FROM JobworkInHeader h
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      ORDER BY h.JWINWARDDATE DESC, h.JWINWARDNO DESC
+      ORDER BY 
+        h.JWINWARDDATE DESC,
+        CASE WHEN TRY_CAST(h.JWINWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
+        TRY_CAST(h.JWINWARDNO AS INT) DESC,
+        h.JWINWARDNO DESC
     `);
     
     // Fetch all details with ItemNames
@@ -57,7 +80,7 @@ exports.getJobworkIns = async (req, res) => {
 };
 
 exports.addJobworkIn = async (req, res) => {
-  const { JWINWARDNO, JWINWARDDATE, LEDGERID, JWOUTWARDNO, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
+  const { Bill, JWINWARDNO, JWINWARDDATE, LEDGERID, JWOUTWARDNO, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
 
   if (!JWINWARDNO || !JWINWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'JWInwardNo, Date, Ledger, and at least one detail row are required' });
@@ -74,6 +97,7 @@ exports.addJobworkIn = async (req, res) => {
       // 1. Insert Header
       const headerReq = new sql.Request(transaction);
       const headerRes = await headerReq
+        .input('Bill', sql.Bit, Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1)
         .input('JWINWARDNO', sql.VarChar(10), JWINWARDNO)
         .input('JWINWARDDATE', sql.Date, JWINWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
@@ -83,9 +107,9 @@ exports.addJobworkIn = async (req, res) => {
         .input('CREATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .input('UPDATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .query(`
-          INSERT INTO JobworkInHeader (JWINWARDNO, JWINWARDDATE, LEDGERID, JWOUTWARDNO, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
+          INSERT INTO JobworkInHeader (Bill, JWINWARDNO, JWINWARDDATE, LEDGERID, JWOUTWARDNO, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
           OUTPUT INSERTED.ID
-          VALUES (@JWINWARDNO, @JWINWARDDATE, @LEDGERID, @JWOUTWARDNO, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
+          VALUES (@Bill, @JWINWARDNO, @JWINWARDDATE, @LEDGERID, @JWOUTWARDNO, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
         `);
 
       const newJwInwardId = headerRes.recordset[0].ID;
@@ -103,6 +127,7 @@ exports.addJobworkIn = async (req, res) => {
           .input('INITEMCODE', sql.VarChar(10), d.INITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
+          .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
           .input('SCRAPITEMCODE', sql.VarChar(10), d.SCRAPITEMCODE || null)
           .input('SCRAPPCS', sql.Numeric(5,2), d.SCRAPPCS || 0)
           .input('SCRAPWT', sql.Numeric(10,3), d.SCRAPWT || 0)
@@ -112,8 +137,8 @@ exports.addJobworkIn = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO JobworkInDetail (JWINWARDID, OUTITEMCODE, INITEMCODE, GROSSWT, NETWT, SCRAPITEMCODE, SCRAPPCS, SCRAPWT, QUANTITY, PROCESS, UNIT, RATE, AMOUNT)
-            VALUES (@JWINWARDID, @OUTITEMCODE, @INITEMCODE, @GROSSWT, @NETWT, @SCRAPITEMCODE, @SCRAPPCS, @SCRAPWT, @QUANTITY, @PROCESS, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO JobworkInDetail (JWINWARDID, OUTITEMCODE, INITEMCODE, GROSSWT, NETWT, TENPCSWT, SCRAPITEMCODE, SCRAPPCS, SCRAPWT, QUANTITY, PROCESS, UNIT, RATE, AMOUNT)
+            VALUES (@JWINWARDID, @OUTITEMCODE, @INITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @SCRAPITEMCODE, @SCRAPPCS, @SCRAPWT, @QUANTITY, @PROCESS, @UNIT, @RATE, @AMOUNT);
 
             -- Increase finished item stock
             UPDATE ItemMaster
@@ -150,6 +175,8 @@ exports.addJobworkIn = async (req, res) => {
         const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
         const voucherNo = nextNoRes.recordset[0].NextVoucherNo;
 
+        const isBill = Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1;
+
         // Debit Purchase
         await new sql.Request(transaction)
           .input('VoucherNo', sql.Numeric(8,0), voucherNo)
@@ -159,11 +186,12 @@ exports.addJobworkIn = async (req, res) => {
           .input('Amount', sql.Numeric(10,2), TOTALAMOUNT)
           .input('Through', sql.VarChar(30), 'Jobwork In')
           .input('Remark', sql.VarChar(255), JWINWARDNO)
+          .input('Bill', sql.Bit, isBill)
           .input('CreatedBy', sql.VarChar(255), getSignature(CREATEDBY))
           .input('UpdatedBy', sql.VarChar(255), getSignature(CREATEDBY))
           .query(`
-            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
             UPDATE LedgerMaster 
             SET ClosingBalance = ISNULL(ClosingBalance, 0) + @Amount
@@ -179,11 +207,12 @@ exports.addJobworkIn = async (req, res) => {
           .input('Amount', sql.Numeric(10,2), TOTALAMOUNT)
           .input('Through', sql.VarChar(30), 'Jobwork In')
           .input('Remark', sql.VarChar(255), JWINWARDNO)
+          .input('Bill', sql.Bit, isBill)
           .input('CreatedBy', sql.VarChar(255), getSignature(CREATEDBY))
           .input('UpdatedBy', sql.VarChar(255), getSignature(CREATEDBY))
           .query(`
-            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
             UPDATE LedgerMaster 
             SET ClosingBalance = ISNULL(ClosingBalance, 0) - @Amount
@@ -205,7 +234,7 @@ exports.addJobworkIn = async (req, res) => {
 
 exports.updateJobworkIn = async (req, res) => {
   const { id } = req.params;
-  const { JWINWARDNO, JWINWARDDATE, LEDGERID, JWOUTWARDNO, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
+  const { Bill, JWINWARDNO, JWINWARDDATE, LEDGERID, JWOUTWARDNO, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
 
   if (!JWINWARDNO || !JWINWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'JWInwardNo, Date, Ledger, and at least one detail row are required' });
@@ -223,12 +252,10 @@ exports.updateJobworkIn = async (req, res) => {
       const oldDetailsReq = new sql.Request(transaction);
       const oldDetailsRes = await oldDetailsReq
         .input('JWINWARDID', sql.Numeric(8,0), id)
-        .query('SELECT OUTITEMCODE, INITEMCODE, SCRAPITEMCODE, QUANTITY, NETWT, SCRAPPCS, SCRAPWT, UNIT FROM JobworkInDetail WHERE JWINWARDID = @JWINWARDID');
+        .query('SELECT INITEMCODE, SCRAPITEMCODE, QUANTITY, NETWT, SCRAPPCS, SCRAPWT, UNIT FROM JobworkInDetail WHERE JWINWARDID = @JWINWARDID');
       
       for (const oldD of oldDetailsRes.recordset) {
-        const revertStockReq = new sql.Request(transaction);
-        await revertStockReq
-          .input('OUTITEMCODE', sql.VarChar(10), oldD.OUTITEMCODE)
+        await new sql.Request(transaction)
           .input('INITEMCODE', sql.VarChar(10), oldD.INITEMCODE)
           .input('SCRAPITEMCODE', sql.VarChar(10), oldD.SCRAPITEMCODE || null)
           .input('QUANTITY', sql.Numeric(10,2), oldD.QUANTITY)
@@ -273,7 +300,7 @@ exports.updateJobworkIn = async (req, res) => {
           .input('Remark', sql.VarChar(255), oldHeader.JWINWARDNO)
           .query(`
             UPDATE l
-            SET l.ClosingBalance = ISNULL(l.ClosingBalance, 0) - CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END
+            SET l.ClosingBalance = l.ClosingBalance + CASE WHEN v.Mode = 'Credit' THEN v.Amount ELSE -v.Amount END
             FROM LedgerMaster l
             INNER JOIN VoucherEntry v ON l.Id = v.LedgerId
             WHERE v.Through = @Through AND v.Remark = @Remark;
@@ -292,6 +319,7 @@ exports.updateJobworkIn = async (req, res) => {
       const headerReq = new sql.Request(transaction);
       await headerReq
         .input('ID', sql.Numeric(8,0), id)
+        .input('Bill', sql.Bit, Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1)
         .input('JWINWARDNO', sql.VarChar(10), JWINWARDNO)
         .input('JWINWARDDATE', sql.Date, JWINWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
@@ -301,7 +329,7 @@ exports.updateJobworkIn = async (req, res) => {
         .input('UPDATEDBY', sql.VarChar(40), getSignature(UPDATEDBY))
         .query(`
           UPDATE JobworkInHeader 
-          SET JWINWARDNO = @JWINWARDNO, JWINWARDDATE = @JWINWARDDATE, 
+          SET Bill = @Bill, JWINWARDNO = @JWINWARDNO, JWINWARDDATE = @JWINWARDDATE, 
               LEDGERID = @LEDGERID, JWOUTWARDNO = @JWOUTWARDNO, TOTALAMOUNT = @TOTALAMOUNT, 
               REMARK = @REMARK, UPDATEDBY = @UPDATEDBY
           WHERE ID = @ID
@@ -320,6 +348,7 @@ exports.updateJobworkIn = async (req, res) => {
           .input('INITEMCODE', sql.VarChar(10), d.INITEMCODE)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
+          .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
           .input('SCRAPITEMCODE', sql.VarChar(10), d.SCRAPITEMCODE || null)
           .input('SCRAPPCS', sql.Numeric(5,2), d.SCRAPPCS || 0)
           .input('SCRAPWT', sql.Numeric(10,3), d.SCRAPWT || 0)
@@ -329,8 +358,8 @@ exports.updateJobworkIn = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO JobworkInDetail (JWINWARDID, OUTITEMCODE, INITEMCODE, GROSSWT, NETWT, SCRAPITEMCODE, SCRAPPCS, SCRAPWT, QUANTITY, PROCESS, UNIT, RATE, AMOUNT)
-            VALUES (@JWINWARDID, @OUTITEMCODE, @INITEMCODE, @GROSSWT, @NETWT, @SCRAPITEMCODE, @SCRAPPCS, @SCRAPWT, @QUANTITY, @PROCESS, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO JobworkInDetail (JWINWARDID, OUTITEMCODE, INITEMCODE, GROSSWT, NETWT, TENPCSWT, SCRAPITEMCODE, SCRAPPCS, SCRAPWT, QUANTITY, PROCESS, UNIT, RATE, AMOUNT)
+            VALUES (@JWINWARDID, @OUTITEMCODE, @INITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @SCRAPITEMCODE, @SCRAPPCS, @SCRAPWT, @QUANTITY, @PROCESS, @UNIT, @RATE, @AMOUNT);
 
             -- Increase finished item stock
             UPDATE ItemMaster
@@ -367,6 +396,8 @@ exports.updateJobworkIn = async (req, res) => {
         const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
         const voucherNo = nextNoRes.recordset[0].NextVoucherNo;
 
+        const isBill = Bill !== undefined ? (Bill !== false && Bill !== 0 && Bill !== '0' ? 1 : 0) : 1;
+
         // Debit Purchase
         await new sql.Request(transaction)
           .input('VoucherNo', sql.Numeric(8,0), voucherNo)
@@ -376,11 +407,12 @@ exports.updateJobworkIn = async (req, res) => {
           .input('Amount', sql.Numeric(10,2), TOTALAMOUNT)
           .input('Through', sql.VarChar(30), 'Jobwork In')
           .input('Remark', sql.VarChar(255), JWINWARDNO)
+          .input('Bill', sql.Bit, isBill)
           .input('CreatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
           .input('UpdatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
           .query(`
-            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
             UPDATE LedgerMaster 
             SET ClosingBalance = ISNULL(ClosingBalance, 0) + @Amount
@@ -396,11 +428,12 @@ exports.updateJobworkIn = async (req, res) => {
           .input('Amount', sql.Numeric(10,2), TOTALAMOUNT)
           .input('Through', sql.VarChar(30), 'Jobwork In')
           .input('Remark', sql.VarChar(255), JWINWARDNO)
+          .input('Bill', sql.Bit, isBill)
           .input('CreatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
           .input('UpdatedBy', sql.VarChar(255), getSignature(UPDATEDBY))
           .query(`
-            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, CreatedBy, UpdatedBy)
-            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @CreatedBy, @UpdatedBy);
+            INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
+            VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
 
             UPDATE LedgerMaster 
             SET ClosingBalance = ISNULL(ClosingBalance, 0) - @Amount
@@ -524,10 +557,11 @@ exports.getJobworkInReport = async (req, res) => {
         h.JWINWARDNO, 
         h.JWINWARDDATE, 
         h.JWOUTWARDNO,
+        h.Bill,
         l.LedgerName, 
         d.OUTITEMCODE, 
         oi.ItemName as OutItemName,
-        d.INITEMCODE,
+        d.INITEMCODE, 
         ii.ItemName as InItemName,
         d.GROSSWT, 
         d.NETWT, 

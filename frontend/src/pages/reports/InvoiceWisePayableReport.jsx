@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -17,7 +18,9 @@ import {
   Card,
   CardContent,
   Chip,
-  Tooltip
+  Tooltip,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { 
@@ -27,7 +30,10 @@ import {
   Share,
   ReceiptLong,
   Receipt,
-  MoneyOff
+  MoneyOff,
+  ArrowBack,
+  AccessTime,
+  Payment as PaymentIcon
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -36,7 +42,57 @@ import * as XLSX from 'xlsx';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
+export const getAgingBucketInfo = (dueDays) => {
+  if (dueDays >= 0) {
+    return {
+      bucket: 'not_due',
+      label: 'Not Due / Current',
+      shortLabel: 'Not Due',
+      color: '#15803d',
+      bg: '#f0fdf4',
+      border: '#bbf7d0'
+    };
+  } else if (dueDays >= -30) {
+    return {
+      bucket: '1_30',
+      label: '1 - 30 Days Overdue',
+      shortLabel: '1-30 Days',
+      color: '#b45309',
+      bg: '#fffbeb',
+      border: '#fde68a'
+    };
+  } else if (dueDays >= -60) {
+    return {
+      bucket: '31_60',
+      label: '31 - 60 Days Overdue',
+      shortLabel: '31-60 Days',
+      color: '#c2410c',
+      bg: '#fff7ed',
+      border: '#fed7aa'
+    };
+  } else if (dueDays >= -90) {
+    return {
+      bucket: '61_90',
+      label: '61 - 90 Days Overdue',
+      shortLabel: '61-90 Days',
+      color: '#b91c1c',
+      bg: '#fef2f2',
+      border: '#fecaca'
+    };
+  } else {
+    return {
+      bucket: 'above_90',
+      label: '90+ Days Overdue',
+      shortLabel: '90+ Days',
+      color: '#881337',
+      bg: '#fff1f2',
+      border: '#fecdd3'
+    };
+  }
+};
+
 const InvoiceWisePayableReport = () => {
+  const navigate = useNavigate();
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -47,18 +103,12 @@ const InvoiceWisePayableReport = () => {
   const [selectedLedger, setSelectedLedger] = useState(null);
   const [viewMode, setViewMode] = useState('combined'); // 'combined', 'with_bill', 'without_bill'
 
-  const getFirstDayOfMonth = () => {
-    const date = new Date();
-    return new Date(date.getFullYear(), date.getMonth(), 1);
-  };
-
-  const getLastDayOfMonth = () => {
-    const date = new Date();
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  };
-
-  const [dateRange, setDateRange] = useState([getFirstDayOfMonth(), getLastDayOfMonth()]);
+  // Default to null dates so all pending dues and overdue invoices are immediately visible
+  const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
+
+  const [agingFilter, setAgingFilter] = useState('all'); // 'all', 'not_due', '1_30', '31_60', '61_90', 'above_90', 'overdue_only'
+  const [onlyOutstanding, setOnlyOutstanding] = useState(true);
 
   const fetchReportData = async () => {
     try {
@@ -91,7 +141,7 @@ const InvoiceWisePayableReport = () => {
     setPaymentModalOpen(true);
   };
 
-  // KPI Calculations based on date filter
+  // Primary KPI Calculations based on viewMode
   const summaryKPIs = useMemo(() => {
     let totalWithBill = 0;
     let totalWithoutBill = 0;
@@ -109,7 +159,65 @@ const InvoiceWisePayableReport = () => {
     return { totalWithBill, totalWithoutBill, totalCombined };
   }, [reportData]);
 
-  // Filter rows by date and viewMode
+  // Aging KPIs calculation (based on positive outstanding amounts)
+  const agingKPIs = useMemo(() => {
+    const buckets = {
+      not_due: { total: 0, count: 0 },
+      '1_30': { total: 0, count: 0 },
+      '31_60': { total: 0, count: 0 },
+      '61_90': { total: 0, count: 0 },
+      above_90: { total: 0, count: 0 },
+      totalOverdue: { total: 0, count: 0 }
+    };
+
+    reportData.forEach(row => {
+      // Date filter
+      if (row.inwardDate) {
+        const rowDate = new Date(row.inwardDate);
+        rowDate.setHours(0, 0, 0, 0);
+        const start = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : null;
+        const end = endDate ? new Date(endDate).setHours(23, 59, 59, 999) : null;
+        if (start && rowDate.getTime() < start) return;
+        if (end && rowDate.getTime() > end) return;
+      }
+
+      // Bill type filter
+      if (viewMode === 'with_bill' && !row.bill) return;
+      if (viewMode === 'without_bill' && row.bill) return;
+
+      const outstanding = viewMode === 'with_bill' ? parseFloat(row.outstandingWithBill || 0) :
+                          viewMode === 'without_bill' ? parseFloat(row.outstandingWithoutBill || 0) :
+                          parseFloat(row.outstandingAmount || 0);
+
+      if (outstanding > 0) {
+        if (row.dueDays >= 0) {
+          buckets.not_due.total += outstanding;
+          buckets.not_due.count += 1;
+        } else {
+          buckets.totalOverdue.total += outstanding;
+          buckets.totalOverdue.count += 1;
+
+          if (row.dueDays >= -30) {
+            buckets['1_30'].total += outstanding;
+            buckets['1_30'].count += 1;
+          } else if (row.dueDays >= -60) {
+            buckets['31_60'].total += outstanding;
+            buckets['31_60'].count += 1;
+          } else if (row.dueDays >= -90) {
+            buckets['61_90'].total += outstanding;
+            buckets['61_90'].count += 1;
+          } else {
+            buckets.above_90.total += outstanding;
+            buckets.above_90.count += 1;
+          }
+        }
+      }
+    });
+
+    return buckets;
+  }, [reportData, startDate, endDate, viewMode]);
+
+  // Filter rows by date, viewMode, onlyOutstanding, and agingFilter
   const filteredReportData = useMemo(() => {
     return reportData.filter(row => {
       // Date filter
@@ -127,9 +235,23 @@ const InvoiceWisePayableReport = () => {
       if (viewMode === 'with_bill' && !row.bill) return false;
       if (viewMode === 'without_bill' && row.bill) return false;
 
+      // Outstanding only filter
+      const outstanding = viewMode === 'with_bill' ? parseFloat(row.outstandingWithBill || 0) :
+                          viewMode === 'without_bill' ? parseFloat(row.outstandingWithoutBill || 0) :
+                          parseFloat(row.outstandingAmount || 0);
+      if (onlyOutstanding && outstanding <= 0) return false;
+
+      // Aging filter
+      if (agingFilter === 'not_due' && row.dueDays < 0) return false;
+      if (agingFilter === '1_30' && (row.dueDays >= 0 || row.dueDays < -30)) return false;
+      if (agingFilter === '31_60' && (row.dueDays >= -30 || row.dueDays < -60)) return false;
+      if (agingFilter === '61_90' && (row.dueDays >= -60 || row.dueDays < -90)) return false;
+      if (agingFilter === 'above_90' && row.dueDays >= -90) return false;
+      if (agingFilter === 'overdue_only' && row.dueDays >= 0) return false;
+
       return true;
     });
-  }, [reportData, startDate, endDate, viewMode]);
+  }, [reportData, startDate, endDate, viewMode, onlyOutstanding, agingFilter]);
 
   const columns = [
     { field: 'vendorName', headerName: 'Vendor Name', flex: 1.5, minWidth: 180 },
@@ -137,7 +259,7 @@ const InvoiceWisePayableReport = () => {
     { 
       field: 'bill', 
       headerName: 'Bill Type', 
-      width: 120,
+      width: 110,
       renderCell: (params) => (
         <Chip
           label={params.value ? 'With Bill' : 'Without Bill'}
@@ -157,7 +279,7 @@ const InvoiceWisePayableReport = () => {
       field: 'inwardDate', 
       headerName: 'Invoice Date', 
       flex: 1,
-      minWidth: 110,
+      minWidth: 105,
       valueFormatter: (value) => {
         if (!value) return '';
         return new Date(value).toLocaleDateString('en-GB');
@@ -166,19 +288,19 @@ const InvoiceWisePayableReport = () => {
     { 
       field: 'invoiceAmount', 
       headerName: 'Invoice Amount', 
-      flex: 1.2,
-      minWidth: 130,
+      flex: 1.1,
+      minWidth: 120,
       type: 'number',
       align: 'right',
       headerAlign: 'right',
       valueFormatter: (value) => formatCurrency(value)
     },
-    { field: 'creditDays', headerName: 'Credit Days', width: 100, type: 'number', align: 'center', headerAlign: 'center' },
+    { field: 'creditDays', headerName: 'Credit Days', width: 95, type: 'number', align: 'center', headerAlign: 'center' },
     { 
       field: 'dueDate', 
       headerName: 'Due Date', 
       flex: 1,
-      minWidth: 110,
+      minWidth: 105,
       valueFormatter: (value) => {
         if (!value) return '';
         return new Date(value).toLocaleDateString('en-GB');
@@ -187,27 +309,50 @@ const InvoiceWisePayableReport = () => {
     { 
       field: 'dueDays', 
       headerName: 'Days Left/Overdue', 
-      flex: 1.4,
-      minWidth: 150,
+      flex: 1.3,
+      minWidth: 145,
       renderCell: (params) => {
         const days = params.value;
         if (params.row.status === 'Paid') {
           return <span style={{ color: '#64748b', fontStyle: 'italic' }}>Paid</span>;
         }
         if (days < 0) {
-          return <span style={{ color: '#d32f2f', fontWeight: 'bold' }}>Overdue by {Math.abs(days)} days</span>;
+          return <span style={{ color: '#dc2626', fontWeight: 'bold' }}>Overdue by {Math.abs(days)} days</span>;
         } else if (days === 0) {
-          return <span style={{ color: '#f57c00', fontWeight: 'bold' }}>Due Today</span>;
+          return <span style={{ color: '#ea580c', fontWeight: 'bold' }}>Due Today</span>;
         } else {
-          return <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>{days} days left</span>;
+          return <span style={{ color: '#16a34a', fontWeight: 'bold' }}>{days} days left</span>;
         }
+      }
+    },
+    { 
+      field: 'agingBucket', 
+      headerName: 'Aging Category', 
+      width: 145,
+      valueGetter: (value, row) => getAgingBucketInfo(row.dueDays).shortLabel,
+      renderCell: (params) => {
+        const info = getAgingBucketInfo(params.row.dueDays);
+        return (
+          <Chip
+            label={info.label}
+            size="small"
+            sx={{
+              fontWeight: 700,
+              fontSize: '0.7rem',
+              height: 22,
+              bgcolor: info.bg,
+              color: info.color,
+              border: `1px solid ${info.border}`
+            }}
+          />
+        );
       }
     },
     { 
       field: 'outstandingAmount', 
       headerName: 'Outstanding (₹)', 
       flex: 1.2,
-      minWidth: 140,
+      minWidth: 130,
       type: 'number',
       align: 'right',
       headerAlign: 'right',
@@ -217,7 +362,7 @@ const InvoiceWisePayableReport = () => {
                     viewMode === 'without_bill' ? row.outstandingWithoutBill :
                     row.outstandingAmount;
         return (
-          <Typography variant="body2" sx={{ fontWeight: 700, color: val > 0 ? '#b91c1c' : '#166534' }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: val > 0 ? '#dc2626' : '#64748b' }}>
             {formatCurrency(val)}
           </Typography>
         );
@@ -226,7 +371,7 @@ const InvoiceWisePayableReport = () => {
     {
       field: 'status',
       headerName: 'Status',
-      width: 120,
+      width: 125,
       renderCell: (params) => {
         const val = params.value;
         let color = '#757575';
@@ -240,35 +385,48 @@ const InvoiceWisePayableReport = () => {
         }
         return (
           <Box sx={{ 
-            px: 1.5, py: 0.2, borderRadius: 10, fontWeight: 'bold', fontSize: '0.75rem',
-            color: color, bgcolor: bgcolor, display: 'inline-block'
+            color, 
+            bgcolor, 
+            px: 1, 
+            py: 0.25, 
+            borderRadius: 1, 
+            fontSize: '0.75rem', 
+            fontWeight: 'bold',
+            display: 'inline-block',
+            textAlign: 'center'
           }}>
             {val}
           </Box>
         );
       }
     },
-    { 
-      field: 'action', 
-      headerName: 'Action', 
-      width: 80, 
+    {
+      field: 'action',
+      headerName: 'Action',
+      width: 100,
       sortable: false,
       renderCell: (params) => {
-        const hasPaymentDetails = params.row.UPI || (params.row.BankName && params.row.AccountNo);
-        if (hasPaymentDetails && params.row.status !== 'Paid') {
-          return (
-            <Button 
-              variant="contained" 
-              color="success" 
-              size="small" 
-              onClick={() => handlePayClick(params.row)}
-              sx={{ textTransform: 'none', px: 1.5, py: 0.25, fontSize: '0.75rem' }}
-            >
-              Pay
-            </Button>
-          );
-        }
-        return null;
+        const row = params.row;
+        const isActionable = row.UPI || row.BankName;
+        return (
+          <Button
+            variant="contained"
+            size="small"
+            color="primary"
+            disabled={!isActionable || row.status === 'Paid'}
+            onClick={() => handlePayClick(row)}
+            sx={{ 
+              textTransform: 'none', 
+              fontSize: '0.75rem',
+              py: 0.25,
+              px: 1,
+              borderRadius: 1.5,
+              boxShadow: 'none'
+            }}
+          >
+            Pay Now
+          </Button>
+        );
       }
     }
   ];
@@ -282,14 +440,15 @@ const InvoiceWisePayableReport = () => {
     
     doc.setFontSize(13);
     doc.setTextColor(60);
-    const viewTitle = viewMode === 'with_bill' ? 'Inward Payable Report (With Bill)' :
-                      viewMode === 'without_bill' ? 'Inward Payable Report (Without Bill)' :
-                      'Inward Payable Report (Combined)';
+    const viewTitle = viewMode === 'with_bill' ? 'Inward Payable Report (With Bill) - Due by Days' :
+                      viewMode === 'without_bill' ? 'Inward Payable Report (Without Bill) - Due by Days' :
+                      'Inward Payable Report (Combined) - Due by Days';
     doc.text(viewTitle, 14, 26);
     
     doc.setFontSize(9);
     doc.setTextColor(120);
-    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, 14, 32);
+    const filterInfo = agingFilter !== 'all' ? ` | Filter: ${agingFilter}` : '';
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}${filterInfo}`, 14, 32);
     
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
@@ -304,12 +463,13 @@ const InvoiceWisePayableReport = () => {
       row.creditDays,
       new Date(row.dueDate).toLocaleDateString('en-GB'),
       row.status === 'Paid' ? 'Paid' : (row.dueDays < 0 ? `Overdue by ${Math.abs(row.dueDays)} days` : (row.dueDays === 0 ? 'Due Today' : `${row.dueDays} days left`)),
+      getAgingBucketInfo(row.dueDays).shortLabel,
       formatCurrency(viewMode === 'with_bill' ? row.outstandingWithBill : (viewMode === 'without_bill' ? row.outstandingWithoutBill : row.outstandingAmount), true),
       row.status
     ]);
     
     autoTable(doc, {
-      head: [['Vendor Name', 'Invoice No', 'Bill Type', 'Invoice Date', 'Invoice Amount', 'Credit Days', 'Due Date', 'Due Days Left', 'Outstanding', 'Status']],
+      head: [['Vendor Name', 'Invoice No', 'Bill Type', 'Invoice Date', 'Invoice Amount', 'Credit Days', 'Due Date', 'Due Days Left', 'Aging', 'Outstanding', 'Status']],
       body: tableData,
       startY: 40,
       theme: 'grid',
@@ -322,7 +482,7 @@ const InvoiceWisePayableReport = () => {
     if (action === 'share') {
       const pdfBase64 = doc.output('datauristring').split(',')[1];
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const reportName = `InwardPayableReport_${viewMode}`;
+      const reportName = `InwardPayableReport_Aging_${viewMode}`;
       
       fetch(`${baseUrl}/auth/share-pdf`, {
         method: 'POST',
@@ -346,7 +506,7 @@ const InvoiceWisePayableReport = () => {
       setPreviewUrl(blobUrl);
       setPreviewOpen(true);
     } else {
-      doc.save(`inward_payable_report_${viewMode}.pdf`);
+      doc.save(`inward_payable_aging_report_${viewMode}.pdf`);
     }
   };
 
@@ -360,23 +520,34 @@ const InvoiceWisePayableReport = () => {
       'Credit Days': row.creditDays,
       'Due Date': new Date(row.dueDate).toLocaleDateString('en-GB'),
       'Days Left/Overdue': row.dueDays,
+      'Aging Category': getAgingBucketInfo(row.dueDays).label,
       'Outstanding Amount (Rs.)': parseFloat(viewMode === 'with_bill' ? row.outstandingWithBill : (viewMode === 'without_bill' ? row.outstandingWithoutBill : row.outstandingAmount) || 0).toFixed(2),
       'Status': row.status
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inward Payable');
-    XLSX.writeFile(workbook, `inward_payable_report_${viewMode}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Payable Aging');
+    XLSX.writeFile(workbook, `inward_payable_aging_${viewMode}.xlsx`);
   };
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-          Inward Payable Report
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Button 
+            variant="outlined" 
+            startIcon={<ArrowBack />}
+            onClick={() => navigate('/dashboard/reports/payable')}
+            sx={{ color: '#0F3B66', borderColor: '#cbd5e1', fontWeight: 600 }}
+          >
+            Vendor Summary
+          </Button>
+          <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+            Payable Outstanding (Due by Days)
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           <Button 
             variant="outlined" 
@@ -413,8 +584,8 @@ const InvoiceWisePayableReport = () => {
         </Box>
       </Box>
 
-      {/* KPI Cards */}
-      <Grid container spacing={2} sx={{ mb: 2.5 }}>
+      {/* Primary KPI Cards */}
+      <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid item xs={12} sm={4}>
           <Card sx={{ bgcolor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 2 }}>
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -440,12 +611,12 @@ const InvoiceWisePayableReport = () => {
           </Card>
         </Grid>
         <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 2 }}>
+          <Card sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 2 }}>
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 🌐 COMBINED NET OUTSTANDING
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: '#991b1b', mt: 0.5 }}>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: '#14532d', mt: 0.5 }}>
                 ₹ {summaryKPIs.totalCombined.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Typography>
             </CardContent>
@@ -453,21 +624,138 @@ const InvoiceWisePayableReport = () => {
         </Grid>
       </Grid>
 
+      {/* Aging Due by Days Interactive Breakdown Cards */}
+      <Box sx={{ mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <AccessTime fontSize="small" /> AGING BREAKDOWN (DUE BY DAYS) — Click any card to filter
+          </Typography>
+          {agingFilter !== 'all' && (
+            <Button 
+              size="small" 
+              onClick={() => setAgingFilter('all')} 
+              sx={{ textTransform: 'none', fontWeight: 600, fontSize: '0.75rem', py: 0.2 }}
+            >
+              Reset Aging Filter (Show All)
+            </Button>
+          )}
+        </Box>
+        <Grid container spacing={1.5}>
+          {[
+            { id: 'not_due', title: 'NOT DUE (CURRENT)', data: agingKPIs.not_due, color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
+            { id: '1_30', title: '1 - 30 DAYS OVERDUE', data: agingKPIs['1_30'], color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
+            { id: '31_60', title: '31 - 60 DAYS OVERDUE', data: agingKPIs['31_60'], color: '#c2410c', bg: '#fff7ed', border: '#fed7aa' },
+            { id: '61_90', title: '61 - 90 DAYS OVERDUE', data: agingKPIs['61_90'], color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' },
+            { id: 'above_90', title: '90+ DAYS OVERDUE', data: agingKPIs.above_90, color: '#881337', bg: '#fff1f2', border: '#fecdd3' }
+          ].map(b => {
+            const isSelected = agingFilter === b.id;
+            return (
+              <Grid item xs={12} sm={6} md={2.4} key={b.id}>
+                <Card 
+                  onClick={() => setAgingFilter(prev => prev === b.id ? 'all' : b.id)}
+                  sx={{ 
+                    bgcolor: b.bg, 
+                    border: `2px solid ${isSelected ? b.color : b.border}`, 
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: isSelected ? `0 0 0 3px ${b.border}` : 'none',
+                    '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }
+                  }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: b.color, fontSize: '0.7rem' }}>
+                        {b.title}
+                      </Typography>
+                      {isSelected && (
+                        <Chip label="Filtered" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700, bgcolor: b.color, color: '#fff' }} />
+                      )}
+                    </Box>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: b.color, mt: 0.5, fontSize: '1.05rem' }}>
+                      ₹ {b.data.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 600 }}>
+                      {b.data.count} {b.data.count === 1 ? 'Invoice' : 'Invoices'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Box>
+
       {/* Toolbar & Filters */}
-      <Paper sx={{ p: 2, mb: 2.5, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ width: { xs: '100%', sm: 240 } }}>
-          <DatePicker
-            portalId="root"
-            selectsRange={true}
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(update) => setDateRange(update)}
-            isClearable={true}
-            customInput={<TextField size="small" label="Invoice Date Range" InputLabelProps={{ shrink: true }} fullWidth />}
-            dateFormat="dd/MM/yyyy"
+      <Paper sx={{ p: 2, mb: 2, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        {/* Date Filter with Clear Dates */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ width: 230 }}>
+            <DatePicker
+              portalId="root"
+              selectsRange={true}
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(update) => setDateRange(update)}
+              isClearable={true}
+              placeholderText="All Dates"
+              customInput={<TextField size="small" label="Invoice Date Range" InputLabelProps={{ shrink: true }} fullWidth placeholder="All Dates" />}
+              dateFormat="dd/MM/yyyy"
+            />
+          </Box>
+          {(startDate || endDate) && (
+            <Button size="small" onClick={() => setDateRange([null, null])} sx={{ textTransform: 'none' }}>
+              Clear Dates
+            </Button>
+          )}
+        </Box>
+
+        {/* Aging Buckets Filter Buttons */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>Aging:</Typography>
+          <ToggleButtonGroup
+            value={agingFilter}
+            exclusive
+            onChange={(e, val) => { if (val) setAgingFilter(val); }}
+            size="small"
+          >
+            <ToggleButton value="all" sx={{ fontWeight: 600, textTransform: 'none', px: 1.2, py: 0.4, fontSize: '0.75rem' }}>
+              All
+            </ToggleButton>
+            <ToggleButton value="not_due" sx={{ fontWeight: 600, textTransform: 'none', px: 1.2, py: 0.4, fontSize: '0.75rem', color: '#15803d' }}>
+              Not Due
+            </ToggleButton>
+            <ToggleButton value="1_30" sx={{ fontWeight: 600, textTransform: 'none', px: 1.2, py: 0.4, fontSize: '0.75rem', color: '#b45309' }}>
+              1-30d
+            </ToggleButton>
+            <ToggleButton value="31_60" sx={{ fontWeight: 600, textTransform: 'none', px: 1.2, py: 0.4, fontSize: '0.75rem', color: '#c2410c' }}>
+              31-60d
+            </ToggleButton>
+            <ToggleButton value="61_90" sx={{ fontWeight: 600, textTransform: 'none', px: 1.2, py: 0.4, fontSize: '0.75rem', color: '#b91c1c' }}>
+              61-90d
+            </ToggleButton>
+            <ToggleButton value="above_90" sx={{ fontWeight: 600, textTransform: 'none', px: 1.2, py: 0.4, fontSize: '0.75rem', color: '#881337' }}>
+              90+d
+            </ToggleButton>
+            <ToggleButton value="overdue_only" sx={{ fontWeight: 600, textTransform: 'none', px: 1.2, py: 0.4, fontSize: '0.75rem', color: '#b91c1c' }}>
+              Overdue ({agingKPIs.totalOverdue.count})
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          <FormControlLabel
+            control={
+              <Checkbox 
+                checked={onlyOutstanding} 
+                onChange={(e) => setOnlyOutstanding(e.target.checked)} 
+                size="small" 
+              />
+            }
+            label={<Typography variant="caption" sx={{ fontWeight: 600 }}>Pending Only</Typography>}
+            sx={{ ml: 1, mr: 0 }}
           />
         </Box>
 
+        {/* Bill Type Filter */}
         <ToggleButtonGroup
           value={viewMode}
           exclusive
@@ -646,7 +934,7 @@ const InvoiceWisePayableReport = () => {
         open={previewOpen} 
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
-        title="Inward Payable Report Preview" 
+        title="Payable Outstanding Report Preview" 
       />
     </Box>
   );

@@ -21,6 +21,7 @@ const emptyRow = {
   ITEMCODE: '',
   GROSSWT: '',
   NETWT: '',
+  TENPCSWT: '',
   QUANTITY: '',
   UNIT: '',
   RATE: '',
@@ -346,6 +347,7 @@ const OutwardEntry = () => {
         ITEMCODE: d.ITEMCODE || '',
         GROSSWT: d.GROSSWT || '',
         NETWT: d.NETWT || '',
+        TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
         QUANTITY: d.QUANTITY || '',
         UNIT: d.UNIT || '',
         RATE: d.RATE || '',
@@ -370,8 +372,18 @@ const OutwardEntry = () => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
     
-    // Auto calculate Amount if Qty, NetWt, Rate, Unit or Discount changes
-    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'DISCOUNT'].includes(field)) {
+    // Auto calculate Quantity if 10 Pcs Wt or Net Wt changes
+    if (field === 'TENPCSWT' || field === 'NETWT') {
+      const netWt = parseFloat(newRows[index].NETWT);
+      const tenPcsWt = parseFloat(newRows[index].TENPCSWT);
+      if (netWt > 0 && tenPcsWt > 0) {
+        const calculatedQty = Math.round((netWt / tenPcsWt) * 10);
+        newRows[index].QUANTITY = String(calculatedQty);
+      }
+    }
+
+    // Auto calculate Amount if Qty, NetWt, Rate, Unit, Discount or 10 Pcs Wt changes
+    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'DISCOUNT', 'TENPCSWT'].includes(field)) {
       newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
     
@@ -757,6 +769,7 @@ const OutwardEntry = () => {
         ...r,
         GROSSWT: parseFloat(r.GROSSWT) || 0,
         NETWT: parseFloat(r.NETWT) || 0,
+        TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
         QUANTITY: parseFloat(r.QUANTITY) || 0,
         RATE: parseFloat(r.RATE) || 0,
         DISCOUNT: parseFloat(r.DISCOUNT) || 0,
@@ -1002,15 +1015,16 @@ const OutwardEntry = () => {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '23%' }}>Item</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>Gross Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>Net Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Qty</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '12%' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>10 Pcs Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '8%' }}>Qty</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '11%' }}>Unit</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>Rate</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Discount (%)</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '12%' }}>Amount</TableCell>
-                  <TableCell sx={{ width: '5%' }}></TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Discount (%)</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Amount</TableCell>
+                  <TableCell sx={{ width: '3%' }}></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1048,6 +1062,7 @@ const OutwardEntry = () => {
                         <TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth />
                         {warningMsg && <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, lineHeight: 1.1 }}>{warningMsg}</Typography>}
                       </TableCell>
+                      <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
                       <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
                       <TableCell>
                         <Autocomplete
