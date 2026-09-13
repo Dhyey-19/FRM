@@ -59,7 +59,7 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
   const [surrenderError, setSurrenderError] = useState('');
   const [surrendering, setSurrendering] = useState(false);
 
-  const userRole = String(user?.role || '').toUpperCase();
+  const userRole = String(user?.role || user?.UserRole || '').toUpperCase();
   const isAdmin = userRole === 'ADMIN' || userRole === 'ADMINISTRATOR';
 
   useEffect(() => {
@@ -239,8 +239,18 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
           {(() => {
             const hasMenuAccess = (path) => {
               if (isAdmin) return true;
-              if (!user.AllowedMenus) return false;
-              const allowed = user.AllowedMenus.split(',');
+              if (!path || path === '/dashboard') return true;
+              
+              const menus = (user?.AllowedMenus !== undefined && user?.AllowedMenus !== null)
+                ? user.AllowedMenus
+                : (JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {}).AllowedMenus;
+
+              if (!menus) return false;
+              
+              const allowed = Array.isArray(menus)
+                ? menus
+                : String(menus).split(',').map(p => p.trim());
+                
               return allowed.includes(path);
             };
 

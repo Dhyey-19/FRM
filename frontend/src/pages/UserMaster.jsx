@@ -148,7 +148,9 @@ const UserMaster = () => {
         IsAdd: isAdmin ? true : !!user.IsAdd,
         IsEdit: isAdmin ? true : !!user.IsEdit,
         IsDelete: isAdmin ? true : !!user.IsDelete,
-        AllowedMenus: user.AllowedMenus ? user.AllowedMenus.split(',') : getAllMenuPaths()
+        AllowedMenus: (user.AllowedMenus !== undefined && user.AllowedMenus !== null)
+          ? (user.AllowedMenus ? user.AllowedMenus.split(',').map(s => s.trim()).filter(Boolean) : [])
+          : getAllMenuPaths()
       });
     } else {
       setFormData({ Username: '', Password: '', MobileNo: '', UserRole: 'OPERATOR', IsActive: false, IsAdd: false, IsEdit: false, IsDelete: false, AllowedMenus: getAllMenuPaths() });
@@ -217,6 +219,18 @@ const UserMaster = () => {
       if (response.ok) {
         handleCloseDialog();
         fetchUsers();
+
+        // If the edited user is currently logged in, sync their session immediately
+        const currentLogged = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
+        if (currentLogged.UserId === selectedUserId) {
+          const updatedLogged = { ...currentLogged, ...payload };
+          if (localStorage.getItem('user')) {
+            localStorage.setItem('user', JSON.stringify(updatedLogged));
+          } else if (sessionStorage.getItem('user')) {
+            sessionStorage.setItem('user', JSON.stringify(updatedLogged));
+          }
+          window.dispatchEvent(new Event('storage'));
+        }
       } else {
         const data = await response.json();
         setDialogError(data.message || 'Error saving user');

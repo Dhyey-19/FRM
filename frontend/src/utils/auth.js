@@ -26,3 +26,20 @@ export const hasDeletePermission = () => {
   if (role === 'ADMIN' || role === 'ADMINISTRATOR') return true;
   return user.IsDelete === true || user.IsDelete === 1;
 };
+
+export const hasMenuAccess = (path) => {
+  const user = getLoggedUser();
+  const role = String(user.UserRole || user.role || '').toUpperCase();
+  if (role === 'ADMIN' || role === 'ADMINISTRATOR') return true;
+  if (!path || path === '/dashboard') return true;
+  
+  const menus = user.AllowedMenus;
+  if (!menus) return false;
+  
+  const allowed = Array.isArray(menus)
+    ? menus
+    : String(menus).split(',').map(p => p.trim());
+    
+  return allowed.includes(path);
+};
+

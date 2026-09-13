@@ -128,6 +128,11 @@ const DashboardLayout = () => {
   const drawerWidth = isCollapsed ? 70 : 300;
 
   useEffect(() => {
+    const handleStorage = () => {
+      setLocalUser(JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {});
+    };
+    window.addEventListener('storage', handleStorage);
+
     const fetchCompany = async () => {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/company-profile`);
@@ -137,7 +142,11 @@ const DashboardLayout = () => {
             const current = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
             if (current.companyName !== data.CompanyName) {
               current.companyName = data.CompanyName;
-              localStorage.setItem('user', JSON.stringify(current));
+              if (localStorage.getItem('user')) {
+                localStorage.setItem('user', JSON.stringify(current));
+              } else if (sessionStorage.getItem('user')) {
+                sessionStorage.setItem('user', JSON.stringify(current));
+              }
               setLocalUser(current);
             }
           }
@@ -147,11 +156,42 @@ const DashboardLayout = () => {
       }
     };
     fetchCompany();
+
+    // Sync logged in user permissions from backend to make sure menu and access permissions are always up to date
+    const syncUser = async () => {
+      try {
+        const current = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
+        if (current.UserId) {
+          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/${current.UserId}`);
+          if (res.ok) {
+            const freshUser = await res.json();
+            if (freshUser && freshUser.UserId) {
+              const merged = { ...current, ...freshUser };
+              if (localStorage.getItem('user')) {
+                localStorage.setItem('user', JSON.stringify(merged));
+              } else if (sessionStorage.getItem('user')) {
+                sessionStorage.setItem('user', JSON.stringify(merged));
+              }
+              setLocalUser(merged);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error syncing user permissions:', err);
+      }
+    };
+    syncUser();
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   const user = {
-    username: localUser.Username || 'Dhyey Shah',
-    role: localUser.UserRole || 'Administrator',
+    ...localUser,
+    username: localUser.Username || localUser.username || 'Dhyey Shah',
+    role: localUser.UserRole || localUser.role || 'Administrator',
+    AllowedMenus: localUser.AllowedMenus,
     companyName: localUser.companyName || 'FactoryFlow',
     companyLogo: localUser.companyLogo || appLogo
   };

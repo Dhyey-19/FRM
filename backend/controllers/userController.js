@@ -17,6 +17,28 @@ exports.getUsers = async (req, res) => {
   }
 };
 
+// GET /api/users/:id
+exports.getUserById = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pool = await connectDB();
+    const result = await pool.request()
+      .input('UserId', sql.Int, id)
+      .query(`
+        SELECT UserId, Username, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus 
+        FROM Users 
+        WHERE UserId = @UserId
+      `);
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json(result.recordset[0]);
+  } catch (error) {
+    console.error('Error fetching user by id:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // POST /api/users
 exports.createUser = async (req, res) => {
   const { Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus } = req.body;

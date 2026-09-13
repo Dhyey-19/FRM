@@ -35,7 +35,7 @@ import {
   Storefront as StockIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
+import { hasAddPermission, hasEditPermission, hasDeletePermission, hasMenuAccess } from '../utils/auth';
 import appLogo from '../assets/app_logo.jpeg';
 import { APP_VERSION } from '../config/version';
 
@@ -340,7 +340,8 @@ const DashboardHome = () => {
           { label: 'Job Work Out', path: '/dashboard/jobwork-outs', icon: <ListIcon /> },
           { label: 'Assembly', path: '/dashboard/assembly', icon: <AssemblyIcon /> },
           { label: 'Stock Journal', path: '/dashboard/stock-journal', icon: <ReportsIcon /> }
-        ].map((action, index) => (
+        ].filter(action => hasMenuAccess(action.path))
+        .map((action, index) => (
           <Button
             key={index}
             variant="contained"
