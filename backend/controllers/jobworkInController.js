@@ -144,7 +144,7 @@ exports.addJobworkIn = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @INITEMCODE;
@@ -155,7 +155,7 @@ exports.addJobworkIn = async (req, res) => {
                 UPDATE ItemMaster
                 SET ClosingStock = ISNULL(ClosingStock, 0) + 
                   CASE 
-                    WHEN EXISTS(SELECT 1 FROM ItemMaster WHERE ItemCode = @SCRAPITEMCODE AND UPPER(Unit) IN ('KG', 'KGS')) THEN @SCRAPWT
+                    WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @SCRAPWT
                     ELSE @SCRAPPCS
                   END
                 WHERE ItemCode = @SCRAPITEMCODE;
@@ -268,7 +268,7 @@ exports.updateJobworkIn = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @INITEMCODE;
@@ -279,7 +279,7 @@ exports.updateJobworkIn = async (req, res) => {
                 UPDATE ItemMaster
                 SET ClosingStock = ISNULL(ClosingStock, 0) - 
                   CASE 
-                    WHEN EXISTS(SELECT 1 FROM ItemMaster WHERE ItemCode = @SCRAPITEMCODE AND UPPER(Unit) IN ('KG', 'KGS')) THEN @SCRAPWT
+                    WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @SCRAPWT
                     ELSE @SCRAPPCS
                   END
                 WHERE ItemCode = @SCRAPITEMCODE;
@@ -365,7 +365,7 @@ exports.updateJobworkIn = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @INITEMCODE;
@@ -376,7 +376,7 @@ exports.updateJobworkIn = async (req, res) => {
                 UPDATE ItemMaster
                 SET ClosingStock = ISNULL(ClosingStock, 0) + 
                   CASE 
-                    WHEN EXISTS(SELECT 1 FROM ItemMaster WHERE ItemCode = @SCRAPITEMCODE AND UPPER(Unit) IN ('KG', 'KGS')) THEN @SCRAPWT
+                    WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @SCRAPWT
                     ELSE @SCRAPPCS
                   END
                 WHERE ItemCode = @SCRAPITEMCODE;
@@ -486,7 +486,7 @@ exports.deleteJobworkIn = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @INITEMCODE;
@@ -497,7 +497,7 @@ exports.deleteJobworkIn = async (req, res) => {
                 UPDATE ItemMaster
                 SET ClosingStock = ISNULL(ClosingStock, 0) - 
                   CASE 
-                    WHEN EXISTS(SELECT 1 FROM ItemMaster WHERE ItemCode = @SCRAPITEMCODE AND UPPER(Unit) IN ('KG', 'KGS')) THEN @SCRAPWT
+                    WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @SCRAPWT
                     ELSE @SCRAPPCS
                   END
                 WHERE ItemCode = @SCRAPITEMCODE;

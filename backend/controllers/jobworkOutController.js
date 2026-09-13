@@ -131,7 +131,7 @@ exports.addJobworkOut = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @ITEMCODE;
@@ -183,7 +183,7 @@ exports.updateJobworkOut = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @ITEMCODE;
@@ -237,7 +237,7 @@ exports.updateJobworkOut = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @ITEMCODE;
@@ -284,7 +284,7 @@ exports.deleteJobworkOut = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
               CASE 
-                WHEN UPPER(@UNIT) IN ('KG', 'KGS') THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @ITEMCODE;
@@ -329,7 +329,10 @@ exports.getJobworkOutReport = async (req, res) => {
         d.GROSSWT, 
         d.NETWT, 
         d.RATE, 
-        (d.QUANTITY * d.RATE) AS AMOUNT,
+        CASE 
+          WHEN UPPER(d.UNIT) IN ('KG', 'KGS') THEN (ISNULL(d.NETWT, 0) * ISNULL(d.RATE, 0))
+          ELSE (ISNULL(d.QUANTITY, 0) * ISNULL(d.RATE, 0))
+        END AS AMOUNT,
         d.PROCESS
       FROM JobworkOutDetail d
       INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID

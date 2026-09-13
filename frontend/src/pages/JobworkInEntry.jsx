@@ -368,6 +368,18 @@ const JobworkInEntry = () => {
     setDialogError('');
   };
 
+  const calculateRowAmount = (row) => {
+    const unit = row.UNIT ? row.UNIT.trim().toUpperCase() : '';
+    const rate = parseFloat(row.RATE) || 0;
+    if (unit === 'KGS' || unit === 'KG') {
+      const netwt = parseFloat(row.NETWT) || 0;
+      return (netwt * rate).toFixed(2);
+    } else {
+      const qty = parseFloat(row.QUANTITY) || 0;
+      return (qty * rate).toFixed(2);
+    }
+  };
+
   const handleRowChange = (index, field, value) => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
@@ -382,11 +394,9 @@ const JobworkInEntry = () => {
       }
     }
 
-    // Auto calculate Amount if Qty, Rate, NetWt or 10 Pcs Wt changes
-    if (['QUANTITY', 'RATE', 'NETWT', 'TENPCSWT'].includes(field)) {
-      const qty = parseFloat(newRows[index].QUANTITY) || 0;
-      const rate = parseFloat(newRows[index].RATE) || 0;
-      newRows[index].AMOUNT = (qty * rate).toFixed(2);
+    // Auto calculate Amount if Qty, Rate, NetWt, Unit, GrossWt or 10 Pcs Wt changes
+    if (['QUANTITY', 'RATE', 'NETWT', 'GROSSWT', 'UNIT', 'TENPCSWT'].includes(field)) {
+      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
     
     setGridRows(newRows);
@@ -421,18 +431,15 @@ const JobworkInEntry = () => {
         if (outwardDetail) {
           newRows[index].PROCESS = outwardDetail.PROCESS || '';
           newRows[index].RATE = outwardDetail.RATE !== null && outwardDetail.RATE !== undefined ? outwardDetail.RATE.toString() : '';
-          
-          // Auto calculate Amount if Qty and Rate change
-          const qty = parseFloat(newRows[index].QUANTITY) || 0;
-          const rate = parseFloat(newRows[index].RATE) || 0;
-          newRows[index].AMOUNT = (qty * rate).toFixed(2);
         }
       }
       newRows[index].UNIT = item ? item.Unit : '';
+      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
     
     if (field === 'INITEMCODE') {
       newRows[index].UNIT = item ? item.Unit : '';
+      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
     
     setGridRows(newRows);

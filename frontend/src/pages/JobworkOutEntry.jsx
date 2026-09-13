@@ -31,6 +31,7 @@ const emptyRow = {
   QUANTITY: '',
   UNIT: '',
   RATE: '',
+  AMOUNT: '',
   PROCESS: ''
 };
 
@@ -228,6 +229,7 @@ const JobworkOutEntry = () => {
         QUANTITY: d.QUANTITY !== null ? d.QUANTITY.toString() : '',
         UNIT: d.UNIT || '',
         RATE: d.RATE !== null ? d.RATE.toString() : '',
+        AMOUNT: calculateRowAmount(d),
         PROCESS: d.PROCESS || ''
       })));
     } else {
@@ -240,6 +242,18 @@ const JobworkOutEntry = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setDialogError('');
+  };
+
+  const calculateRowAmount = (row) => {
+    const unit = row.UNIT ? row.UNIT.trim().toUpperCase() : '';
+    const rate = parseFloat(row.RATE) || 0;
+    if (unit === 'KGS' || unit === 'KG') {
+      const netwt = parseFloat(row.NETWT) || 0;
+      return (netwt * rate).toFixed(2);
+    } else {
+      const qty = parseFloat(row.QUANTITY) || 0;
+      return (qty * rate).toFixed(2);
+    }
   };
 
   const handleRowChange = (index, field, value) => {
@@ -256,6 +270,11 @@ const JobworkOutEntry = () => {
       }
     }
 
+    // Auto calculate Amount if Qty, Rate, NetWt, Unit, GrossWt or 10 Pcs Wt changes
+    if (['QUANTITY', 'RATE', 'NETWT', 'GROSSWT', 'UNIT', 'TENPCSWT'].includes(field)) {
+      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
+    }
+
     setGridRows(newRows);
   };
 
@@ -263,6 +282,7 @@ const JobworkOutEntry = () => {
     const newRows = [...gridRows];
     newRows[index].ITEMCODE = item ? item.ItemCode : '';
     newRows[index].UNIT = item ? item.Unit : '';
+    newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     setGridRows(newRows);
   };
 
@@ -379,11 +399,12 @@ const JobworkOutEntry = () => {
     
     const tableRows = detailsSource.map((d, index) => {
       const itemName = d.ItemName || items.find(item => item.ItemCode === d.ITEMCODE)?.ItemName || '';
+      const unit = (d.UNIT || '').trim().toUpperCase();
       const gross = parseFloat(d.GROSSWT) || 0;
       const net = parseFloat(d.NETWT) || 0;
       const qty = parseFloat(d.QUANTITY) || 0;
       const rate = parseFloat(d.RATE) || 0;
-      const amt = qty * rate;
+      const amt = (unit === 'KGS' || unit === 'KG') ? (net * rate) : (qty * rate);
       return [
         index + 1,
         `${d.ITEMCODE} - ${itemName}`,
@@ -783,7 +804,7 @@ const JobworkOutEntry = () => {
                       <TextField 
                         type="number" 
                         size="small" 
-                        value={((parseFloat(row.QUANTITY) || 0) * (parseFloat(row.RATE) || 0)).toFixed(2)} 
+                        value={row.AMOUNT !== undefined && row.AMOUNT !== '' ? row.AMOUNT : calculateRowAmount(row)} 
                         fullWidth 
                         InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}
                       />

@@ -319,6 +319,18 @@ const InwardEntry = () => {
 
 
 
+  const calculateRowAmount = (row) => {
+    const unit = row.UNIT ? row.UNIT.trim().toUpperCase() : '';
+    const rate = parseFloat(row.RATE) || 0;
+    if (unit === 'KGS' || unit === 'KG') {
+      const netwt = parseFloat(row.NETWT) || 0;
+      return (netwt * rate).toFixed(2);
+    } else {
+      const qty = parseFloat(row.QUANTITY) || 0;
+      return (qty * rate).toFixed(2);
+    }
+  };
+
   const handleRowChange = (index, field, value) => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
@@ -333,17 +345,9 @@ const InwardEntry = () => {
       }
     }
 
-    // Auto calculate Amount if Qty, NetWt, Rate, Unit or 10 Pcs Wt changes
-    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'TENPCSWT'].includes(field)) {
-      const unit = newRows[index].UNIT ? newRows[index].UNIT.toUpperCase() : '';
-      const rate = parseFloat(newRows[index].RATE) || 0;
-      if (unit === 'KGS' || unit === 'KG') {
-        const netwt = parseFloat(newRows[index].NETWT) || 0;
-        newRows[index].AMOUNT = (netwt * rate).toFixed(2);
-      } else {
-        const qty = parseFloat(newRows[index].QUANTITY) || 0;
-        newRows[index].AMOUNT = (qty * rate).toFixed(2);
-      }
+    // Auto calculate Amount if Qty, NetWt, Rate, Unit, GrossWt or 10 Pcs Wt changes
+    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'GROSSWT', 'TENPCSWT'].includes(field)) {
+      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
     
     setGridRows(newRows);
@@ -353,15 +357,7 @@ const InwardEntry = () => {
     const newRows = [...gridRows];
     newRows[index].ITEMCODE = item ? item.ItemCode : '';
     newRows[index].UNIT = item ? item.Unit : '';
-    const unit = newRows[index].UNIT ? newRows[index].UNIT.toUpperCase() : '';
-    const rate = parseFloat(newRows[index].RATE) || 0;
-    if (unit === 'KGS' || unit === 'KG') {
-      const netwt = parseFloat(newRows[index].NETWT) || 0;
-      newRows[index].AMOUNT = (netwt * rate).toFixed(2);
-    } else {
-      const qty = parseFloat(newRows[index].QUANTITY) || 0;
-      newRows[index].AMOUNT = (qty * rate).toFixed(2);
-    }
+    newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     setGridRows(newRows);
   };
 

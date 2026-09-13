@@ -173,7 +173,7 @@ exports.addOutward = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
               CASE 
-                WHEN UPPER(@UNIT) = 'KG' THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @ITEMCODE;
@@ -296,7 +296,7 @@ exports.updateOutward = async (req, res) => {
               UPDATE ItemMaster
               SET ClosingStock = ISNULL(ClosingStock, 0) + 
                 CASE 
-                  WHEN UPPER(@OLD_UNIT) = 'KG' THEN @OLD_NETWT
+                  WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @OLD_NETWT
                   ELSE @OLD_QUANTITY
                 END
               WHERE ItemCode = @OLD_ITEMCODE;
@@ -360,7 +360,7 @@ exports.updateOutward = async (req, res) => {
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
               CASE 
-                WHEN UPPER(@UNIT) = 'KG' THEN @NETWT
+                WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
             WHERE ItemCode = @ITEMCODE;
@@ -478,7 +478,7 @@ exports.deleteOutward = async (req, res) => {
               UPDATE ItemMaster
               SET ClosingStock = ISNULL(ClosingStock, 0) + 
                 CASE 
-                  WHEN UPPER(@OLD_UNIT) = 'KG' THEN @OLD_NETWT
+                  WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @OLD_NETWT
                   ELSE @OLD_QUANTITY
                 END
               WHERE ItemCode = @OLD_ITEMCODE;

@@ -142,7 +142,7 @@ const OutwardEntry = () => {
   }, []);
 
   const calculateRowAmount = (row) => {
-    const unit = row.UNIT ? row.UNIT.toUpperCase() : '';
+    const unit = row.UNIT ? row.UNIT.trim().toUpperCase() : '';
     const rate = parseFloat(row.RATE) || 0;
     const disc = parseFloat(row.DISCOUNT) || 0;
     let gross = 0;
@@ -382,8 +382,8 @@ const OutwardEntry = () => {
       }
     }
 
-    // Auto calculate Amount if Qty, NetWt, Rate, Unit, Discount or 10 Pcs Wt changes
-    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'DISCOUNT', 'TENPCSWT'].includes(field)) {
+    // Auto calculate Amount if Qty, NetWt, GrossWt, Rate, Unit, Discount or 10 Pcs Wt changes
+    if (['QUANTITY', 'RATE', 'UNIT', 'NETWT', 'GROSSWT', 'DISCOUNT', 'TENPCSWT'].includes(field)) {
       newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
     
