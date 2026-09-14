@@ -1,6 +1,30 @@
-import { useState, useEffect } from 'react';
-import { Box, Typography, Button, Paper, CircularProgress, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Divider } from '@mui/material';
-import { PictureAsPdf, Visibility, TableView } from '@mui/icons-material';
+import React, { useState, useEffect } from 'react';
+import { 
+  Box, 
+  Typography, 
+  Button, 
+  Paper, 
+  CircularProgress, 
+  Grid, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  Divider, 
+  Chip,
+  IconButton
+} from '@mui/material';
+import { 
+  PictureAsPdf, 
+  Visibility, 
+  TableView, 
+  KeyboardArrowDown, 
+  KeyboardArrowRight, 
+  UnfoldMore, 
+  UnfoldLess 
+} from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -13,6 +37,10 @@ const BalanceSheetReport = () => {
 
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Group collapse/expand state
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [allExpanded, setAllExpanded] = useState(true);
 
   const fetchBSData = async () => {
     try {
@@ -31,6 +59,27 @@ const BalanceSheetReport = () => {
     fetchBSData();
   }, []);
 
+  const toggleGroup = (groupKey) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey]
+    }));
+  };
+
+  const toggleAllGroups = () => {
+    if (!reportData) return;
+    if (allExpanded) {
+      const newCollapsed = {};
+      reportData.leftSide.forEach(g => { newCollapsed[`left-${g.groupName}`] = true; });
+      reportData.rightSide.forEach(g => { newCollapsed[`right-${g.groupName}`] = true; });
+      setCollapsedGroups(newCollapsed);
+      setAllExpanded(false);
+    } else {
+      setCollapsedGroups({});
+      setAllExpanded(true);
+    }
+  };
+
   const formatCurrency = (value, isPDF = false) => {
     const formatted = new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -47,6 +96,12 @@ const BalanceSheetReport = () => {
     const rows = [
       [`${localUser.companyName || 'FactoryFlow'} - Balance Sheet`],
       [`Report Date: ${new Date().toLocaleDateString()}`],
+      [],
+      ['SUMMARY OF ASSETS & LIABILITIES'],
+      ['Total Asset Value (As on Dashboard)', '', reportData.totalAssetValue || 0],
+      ['Total Balance Sheet Assets', '', reportData.totalAssets || 0],
+      ['Total Liabilities & Capital', '', reportData.totalLiabilities || 0],
+      [reportData.netProfit >= 0 ? 'Net Profit' : 'Net Loss', '', Math.abs(reportData.netProfit || 0)],
       [],
       ['LIABILITIES & CAPITAL (LEFT SIDE)', '', '', 'ASSETS (RIGHT SIDE)', '', ''],
       ['Ledger Name', 'Group Name', 'Amount (INR)', 'Ledger Name', 'Group Name', 'Amount (INR)']
@@ -108,18 +163,24 @@ const BalanceSheetReport = () => {
     
     doc.setFontSize(20);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 22);
+    doc.text(localUser.companyName || 'FactoryFlow', 14, 20);
     
     doc.setFontSize(14);
     doc.setTextColor(100);
-    doc.text('Balance Sheet', 14, 30);
+    doc.text('Balance Sheet', 14, 28);
     
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 34);
+
     doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 36);
+    doc.setTextColor(15, 59, 102);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Dashboard Asset Value: ${formatCurrency(reportData.totalAssetValue || 0, true)}    |    Total Assets: ${formatCurrency(reportData.totalAssets, true)}`, 14, 40);
     
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    doc.line(14, 40, 196, 40);
+    doc.line(14, 44, 196, 44);
 
     // Left items (Liabilities)
     const leftTableData = [];
@@ -151,14 +212,14 @@ const BalanceSheetReport = () => {
     }
     rightTableData.push([{ content: 'Total Assets', colSpan: 2, styles: { fontStyle: 'bold' } }, { content: formatCurrency(reportData.totalAssets, true), styles: { fontStyle: 'bold' } }]);
 
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setTextColor(15, 59, 102);
-    doc.text('Liabilities & Capital', 14, 48);
+    doc.text('Liabilities & Capital', 14, 52);
 
     autoTable(doc, {
       head: [['Ledger Name', 'Account Group', 'Amount']],
       body: leftTableData,
-      startY: 52,
+      startY: 56,
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 3 },
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255] }
@@ -166,6 +227,8 @@ const BalanceSheetReport = () => {
 
     const finalYLiabilities = doc.lastAutoTable.finalY;
 
+    doc.setFontSize(11);
+    doc.setTextColor(16, 124, 65);
     doc.text('Assets', 14, finalYLiabilities + 10);
 
     autoTable(doc, {
@@ -198,25 +261,33 @@ const BalanceSheetReport = () => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
-    </Box>
+      </Box>
     );
   }
 
   const hasDifference = reportData.differenceAmount > 0;
 
   return (
-    <Box sx={{ p: 1, height: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box sx={{ p: 1, height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       {/* Header Panel */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#0F3B66' }}>
             Balance Sheet
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Summarized financial position showing assets, liabilities, and equity.
+            Summarized financial position showing total assets, fixed assets, liabilities, and equity.
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Button 
+            variant="outlined" 
+            startIcon={allExpanded ? <UnfoldLess /> : <UnfoldMore />}
+            onClick={toggleAllGroups}
+            sx={{ color: '#0F3B66', borderColor: '#bfdbfe', '&:hover': { bgcolor: '#f0f7ff' } }}
+          >
+            {allExpanded ? 'Collapse All' : 'Expand All'}
+          </Button>
           <Button 
             variant="outlined" 
             startIcon={<TableView />}
@@ -248,30 +319,90 @@ const BalanceSheetReport = () => {
       <Grid container spacing={3} sx={{ flexGrow: 1 }}>
         {/* Left Side: Liabilities */}
         <Grid item xs={12} md={6}>
-          <Box sx={{ p: 3, height: '100%', border: '1px solid #e0e0e0', borderRadius: 2, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 2, pb: 1, borderBottom: '2px solid #0F3B66' }}>
-              Liabilities & Capital (Credit)
-            </Typography>
+          <Box sx={{ p: 2.5, height: '100%', border: '1px solid #e2e8f0', borderRadius: 2, display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #0F3B66' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                Liabilities & Capital (Credit)
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Click group to expand/collapse
+              </Typography>
+            </Box>
             <TableContainer sx={{ flexGrow: 1 }}>
-              <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.5, lineHeight: '1.2' } }}>
+              <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
                 <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Ledger Name</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Account Group</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }} align="right">Amount</TableCell>
+                  <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                    <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {/* Regular Liabilities */}
-                  {reportData.leftSide.map((group) => (
-                    group.ledgers.map((ledger, idx) => (
-                      <TableRow key={`${group.groupName}-${idx}`}>
-                        <TableCell sx={{ pl: 2 }}>{ledger.ledgerName}</TableCell>
-                        <TableCell color="text.secondary">{group.groupName}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 500 }}>{formatCurrency(ledger.balance)}</TableCell>
-                      </TableRow>
-                    ))
-                  ))}
+                  {/* Regular Liabilities Groups */}
+                  {reportData.leftSide.map((group) => {
+                    const groupKey = `left-${group.groupName}`;
+                    const isCollapsed = !!collapsedGroups[groupKey];
+
+                    return (
+                      <React.Fragment key={groupKey}>
+                        {/* Group Header Row */}
+                        <TableRow
+                          onClick={() => toggleGroup(groupKey)}
+                          sx={{
+                            cursor: 'pointer',
+                            bgcolor: '#f8fafc',
+                            '&:hover': { bgcolor: '#f1f5f9' },
+                            transition: 'background-color 0.15s',
+                            userSelect: 'none'
+                          }}
+                        >
+                          <TableCell colSpan={2} sx={{ py: 1, pl: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                              <IconButton size="small" sx={{ p: 0.25, color: '#0F3B66' }}>
+                                {isCollapsed ? <KeyboardArrowRight fontSize="small" /> : <KeyboardArrowDown fontSize="small" />}
+                              </IconButton>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                                {group.groupName}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={`${group.ledgers.length} ${group.ledgers.length === 1 ? 'item' : 'items'}`}
+                                sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e2e8f0', color: '#475569', fontWeight: 600 }}
+                              />
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right" sx={{ py: 1, fontWeight: 700, color: '#0F3B66' }}>
+                            {formatCurrency(group.total)}
+                          </TableCell>
+                        </TableRow>
+
+                        {/* Ledgers under this Group */}
+                        {!isCollapsed && group.ledgers.map((ledger, idx) => (
+                          <TableRow
+                            key={`${groupKey}-${idx}`}
+                            sx={{
+                              bgcolor: '#ffffff',
+                              '&:hover': { bgcolor: '#fbfcfd' },
+                              '&:last-child td, &:last-child th': { borderBottom: '1px solid #e2e8f0' }
+                            }}
+                          >
+                            <TableCell sx={{ pl: 4.5, py: 0.75 }}>
+                              <Typography variant="body2" sx={{ color: '#1e293b' }}>
+                                {ledger.ledgerName}
+                              </Typography>
+                            </TableCell>
+                            <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.85rem' }}>
+                              {group.groupName}
+                            </TableCell>
+                            <TableCell align="right" sx={{ py: 0.75, fontWeight: 500 }}>
+                              {formatCurrency(ledger.balance)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
+
                   {/* Profit & Loss carried forward (Profit) */}
                   {reportData.profitLossItem && reportData.netProfit > 0 && (
                     <TableRow sx={{ bgcolor: 'rgba(16, 124, 65, 0.04)' }}>
@@ -284,6 +415,7 @@ const BalanceSheetReport = () => {
                       </TableCell>
                     </TableRow>
                   )}
+
                   {/* Difference in Trial Balance (balancing adjustment) */}
                   {hasDifference && reportData.differenceSide === 'left' && (
                     <TableRow sx={{ bgcolor: 'rgba(245, 158, 11, 0.04)' }}>
@@ -296,6 +428,7 @@ const BalanceSheetReport = () => {
                       </TableCell>
                     </TableRow>
                   )}
+
                   {reportData.leftSide.length === 0 && !reportData.profitLossItem && !hasDifference && (
                     <TableRow>
                       <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
@@ -320,30 +453,103 @@ const BalanceSheetReport = () => {
 
         {/* Right Side: Assets */}
         <Grid item xs={12} md={6}>
-          <Box sx={{ p: 3, height: '100%', border: '1px solid #e0e0e0', borderRadius: 2, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#10b981', mb: 2, pb: 1, borderBottom: '2px solid #10b981' }}>
-              Assets (Debit)
-            </Typography>
+          <Box sx={{ p: 2.5, height: '100%', border: '1px solid #e2e8f0', borderRadius: 2, display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #10b981' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#10b981' }}>
+                Assets (Debit)
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Click group to expand/collapse
+              </Typography>
+            </Box>
             <TableContainer sx={{ flexGrow: 1 }}>
-              <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.5, lineHeight: '1.2' } }}>
+              <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
                 <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Ledger Name</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Account Group</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }} align="right">Amount</TableCell>
+                  <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                    <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {/* Regular Assets */}
-                  {reportData.rightSide.map((group) => (
-                    group.ledgers.map((ledger, idx) => (
-                      <TableRow key={`${group.groupName}-${idx}`}>
-                        <TableCell sx={{ pl: 2 }}>{ledger.ledgerName}</TableCell>
-                        <TableCell color="text.secondary">{group.groupName}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 500 }}>{formatCurrency(ledger.balance)}</TableCell>
-                      </TableRow>
-                    ))
-                  ))}
+                  {/* Regular Assets Groups */}
+                  {reportData.rightSide.map((group) => {
+                    const groupKey = `right-${group.groupName}`;
+                    const isCollapsed = !!collapsedGroups[groupKey];
+                    const isFixedAssetGroup = group.isAssetMaster || group.groupName === 'Fixed Assets';
+
+                    return (
+                      <React.Fragment key={groupKey}>
+                        {/* Group Header Row */}
+                        <TableRow
+                          onClick={() => toggleGroup(groupKey)}
+                          sx={{
+                            cursor: 'pointer',
+                            bgcolor: isFixedAssetGroup ? 'rgba(13, 148, 136, 0.04)' : '#f8fafc',
+                            '&:hover': { bgcolor: isFixedAssetGroup ? 'rgba(13, 148, 136, 0.08)' : '#f1f5f9' },
+                            transition: 'background-color 0.15s',
+                            userSelect: 'none'
+                          }}
+                        >
+                          <TableCell colSpan={2} sx={{ py: 1, pl: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                              <IconButton size="small" sx={{ p: 0.25, color: isFixedAssetGroup ? '#0d9488' : '#10b981' }}>
+                                {isCollapsed ? <KeyboardArrowRight fontSize="small" /> : <KeyboardArrowDown fontSize="small" />}
+                              </IconButton>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: isFixedAssetGroup ? '#0f766e' : '#10b981' }}>
+                                {group.groupName}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={`${group.ledgers.length} ${group.ledgers.length === 1 ? 'item' : 'items'}`}
+                                sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e2e8f0', color: '#475569', fontWeight: 600 }}
+                              />
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right" sx={{ py: 1, fontWeight: 700, color: isFixedAssetGroup ? '#0f766e' : '#10b981' }}>
+                            {formatCurrency(group.total)}
+                          </TableCell>
+                        </TableRow>
+
+                        {/* Ledgers under this Group */}
+                        {!isCollapsed && group.ledgers.map((ledger, idx) => {
+                          const isFixedAssetItem = isFixedAssetGroup || ledger.ledgerName === 'Total Asset Value';
+                          return (
+                            <TableRow
+                              key={`${groupKey}-${idx}`}
+                              sx={{
+                                bgcolor: isFixedAssetItem ? 'rgba(13, 148, 136, 0.02)' : '#ffffff',
+                                '&:hover': { bgcolor: '#fbfcfd' },
+                                '&:last-child td, &:last-child th': { borderBottom: '1px solid #e2e8f0' }
+                              }}
+                            >
+                              <TableCell sx={{ pl: 4.5, py: 0.75 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Typography variant="body2" sx={{ color: '#1e293b', fontWeight: isFixedAssetItem ? 600 : 400 }}>
+                                    {ledger.ledgerName}
+                                  </Typography>
+                                  {isFixedAssetItem && (
+                                    <Chip
+                                      size="small"
+                                      label="Asset Master"
+                                      sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#ccfbf1', color: '#0f766e', fontWeight: 600 }}
+                                    />
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.85rem' }}>
+                                {group.groupName}
+                              </TableCell>
+                              <TableCell align="right" sx={{ py: 0.75, fontWeight: isFixedAssetItem ? 600 : 400, color: isFixedAssetItem ? '#0f766e' : 'inherit' }}>
+                                {formatCurrency(ledger.balance)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+
                   {/* Profit & Loss carried forward (Loss) */}
                   {reportData.profitLossItem && reportData.netProfit < 0 && (
                     <TableRow sx={{ bgcolor: 'rgba(211, 47, 47, 0.04)' }}>
@@ -356,6 +562,7 @@ const BalanceSheetReport = () => {
                       </TableCell>
                     </TableRow>
                   )}
+
                   {/* Difference in Trial Balance (balancing adjustment) */}
                   {hasDifference && reportData.differenceSide === 'right' && (
                     <TableRow sx={{ bgcolor: 'rgba(245, 158, 11, 0.04)' }}>
@@ -368,6 +575,7 @@ const BalanceSheetReport = () => {
                       </TableCell>
                     </TableRow>
                   )}
+
                   {reportData.rightSide.length === 0 && !reportData.profitLossItem && !hasDifference && (
                     <TableRow>
                       <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
@@ -394,7 +602,7 @@ const BalanceSheetReport = () => {
       {/* Balancing status bar */}
       <Box 
         sx={{ 
-          p: 3, 
+          p: 2.5, 
           borderRadius: 2, 
           display: 'flex', 
           justifyContent: 'space-between', 

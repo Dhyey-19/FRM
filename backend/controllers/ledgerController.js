@@ -361,17 +361,55 @@ exports.getProfitLossReport = async (req, res) => {
       }
     });
     
-    // Clean empty groups
-    const leftSide = Object.values(expenseGroupsMap).filter(g => g.ledgers.length > 0);
-    const rightSide = Object.values(incomeGroupsMap).filter(g => g.ledgers.length > 0);
+    // Stock valuation from ItemMaster
+    const stockResult = await pool.request().query(`
+      SELECT 
+        ISNULL(SUM(ISNULL(OpeningStock, 0) * ISNULL(Costing, 0)), 0) AS totalOpeningStockValue,
+        ISNULL(SUM(ISNULL(ClosingStock, 0) * ISNULL(Costing, 0)), 0) AS totalClosingStockValue
+      FROM ItemMaster
+    `);
     
-    const netProfit = totalIncomes - totalExpenses;
+    const openingStockValue = Math.round((stockResult.recordset[0]?.totalOpeningStockValue || 0) * 100) / 100;
+    const closingStockValue = Math.round((stockResult.recordset[0]?.totalClosingStockValue || 0) * 100) / 100;
+
+    // Clean empty groups and inject stock
+    const leftSide = [];
+    if (openingStockValue > 0) {
+      leftSide.push({
+        groupName: 'Opening Stock',
+        isStock: true,
+        ledgers: [{ ledgerName: 'Opening Stock', balance: openingStockValue }],
+        total: openingStockValue
+      });
+    }
+    leftSide.push(...Object.values(expenseGroupsMap).filter(g => g.ledgers.length > 0));
+
+    const rightSide = Object.values(incomeGroupsMap).filter(g => g.ledgers.length > 0);
+    if (closingStockValue > 0) {
+      rightSide.push({
+        groupName: 'Closing Stock',
+        isStock: true,
+        ledgers: [{ ledgerName: 'Closing Stock', balance: closingStockValue }],
+        total: closingStockValue
+      });
+    }
+    
+    const ledgerExpenses = totalExpenses;
+    const ledgerIncomes = totalIncomes;
+
+    const finalTotalExpenses = Math.round((ledgerExpenses + openingStockValue) * 100) / 100;
+    const finalTotalIncomes = Math.round((ledgerIncomes + closingStockValue) * 100) / 100;
+    const netProfit = Math.round((finalTotalIncomes - finalTotalExpenses) * 100) / 100;
     
     res.status(200).json({
       leftSide,
       rightSide,
-      totalExpenses,
-      totalIncomes,
+      openingStockValue,
+      closingStockValue,
+      ledgerExpenses,
+      ledgerIncomes,
+      totalExpenses: finalTotalExpenses,
+      totalIncomes: finalTotalIncomes,
       netProfit
     });
   } catch (error) {
@@ -391,6 +429,17 @@ exports.getBalanceSheetReport = async (req, res) => {
     
     const records = result.recordset;
     
+    // Total Asset Value from Assets table (as available on dashboard)
+    const assetResult = await pool.request().query(`
+      SELECT SUM(TotalValue) AS totalAssetValue FROM Assets
+    `);
+    const totalAssetValue = Math.round((assetResult.recordset[0]?.totalAssetValue || 0) * 100) / 100;
+
+    const assetsListResult = await pool.request().query(`
+      SELECT AssetId, AssetName, Quantity, UnitValue, TotalValue FROM Assets ORDER BY AssetName
+    `);
+    const fixedAssetsList = assetsListResult.recordset;
+
     // Calculate Net Profit from PL accounts
     let totalExpenses = 0;
     let totalIncomes = 0;
@@ -402,7 +451,7 @@ exports.getBalanceSheetReport = async (req, res) => {
         totalIncomes += Math.abs(balance);
       }
     });
-    const netProfit = totalIncomes - totalExpenses;
+    const netProfit = Math.round((totalIncomes - totalExpenses) * 100) / 100;
     
     // Group Balance Sheet accounts
     const assetGroupsMap = {};
@@ -423,6 +472,20 @@ exports.getBalanceSheetReport = async (req, res) => {
     
     let rawAssetsTotal = 0;
     let rawLiabilitiesTotal = 0;
+
+    // Add Total Asset Value under Fixed Assets (as available on dashboard)
+    if (totalAssetValue > 0) {
+      assetGroupsMap['Fixed Assets'] = {
+        groupName: 'Fixed Assets',
+        isAssetMaster: true,
+        ledgers: [{
+          ledgerName: 'Total Asset Value',
+          balance: totalAssetValue
+        }],
+        total: totalAssetValue
+      };
+      rawAssetsTotal += totalAssetValue;
+    }
     
     records.forEach(r => {
       const balance = r.ClosingBalance;
@@ -455,9 +518,17 @@ exports.getBalanceSheetReport = async (req, res) => {
       }
     });
     
-    // Clean empty groups
+    // Clean empty groups - put Fixed Assets first on Assets side
     const leftSide = Object.values(liabilityGroupsMap).filter(g => g.ledgers.length > 0);
-    const rightSide = Object.values(assetGroupsMap).filter(g => g.ledgers.length > 0);
+    const rightSide = [];
+    if (assetGroupsMap['Fixed Assets'] && assetGroupsMap['Fixed Assets'].ledgers.length > 0) {
+      rightSide.push(assetGroupsMap['Fixed Assets']);
+    }
+    Object.values(assetGroupsMap).forEach(g => {
+      if (g.groupName !== 'Fixed Assets' && g.ledgers.length > 0) {
+        rightSide.push(g);
+      }
+    });
     
     let liabilitiesSum = rawLiabilitiesTotal;
     let assetsSum = rawAssetsTotal;
@@ -476,7 +547,7 @@ exports.getBalanceSheetReport = async (req, res) => {
     let differenceSide = null;
     const diff = assetsSum - liabilitiesSum;
     if (Math.abs(diff) > 0.01) {
-      differenceAmount = Math.abs(diff);
+      differenceAmount = Math.round(Math.abs(diff) * 100) / 100;
       if (diff > 0) {
         differenceSide = 'left'; // Add to Liabilities
         liabilitiesSum += differenceAmount;
@@ -491,6 +562,7 @@ exports.getBalanceSheetReport = async (req, res) => {
       rightSide, // Assets
       profitLossItem,
       netProfit,
+      totalAssetValue,
       rawAssetsTotal,
       rawLiabilitiesTotal,
       differenceAmount,
