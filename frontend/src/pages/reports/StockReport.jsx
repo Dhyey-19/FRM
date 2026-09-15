@@ -105,7 +105,7 @@ const StockReport = () => {
     let bValue = b[orderBy] || '';
 
     // Handle numeric sorting
-    if (['MRP', 'Costing', 'OpeningStock', 'ClosingStock', 'Pcs', 'Weight'].includes(orderBy)) {
+    if (['MRP', 'Costing', 'OpeningStock', 'ClosingStock', 'Pcs', 'Weight', 'Valuation'].includes(orderBy)) {
       aValue = parseFloat(aValue) || 0;
       bValue = parseFloat(bValue) || 0;
     } else {
@@ -122,7 +122,8 @@ const StockReport = () => {
   const totalOpening = sortedData.reduce((sum, row) => sum + (parseFloat(row.OpeningStock) || 0), 0);
   const totalClosing = sortedData.reduce((sum, row) => sum + (parseFloat(row.ClosingStock) || 0), 0);
   const totalPcs = sortedData.reduce((sum, row) => sum + (parseFloat(row.Pcs) || 0), 0);
-  const totalWeight = sortedData.reduce((sum, row) => sum + (parseFloat(row.Weight) || 0), 0);
+  const totalWeight = Math.round(sortedData.reduce((sum, row) => sum + (parseFloat(row.Weight) || 0), 0) * 1000) / 1000;
+  const totalValuation = Math.round(sortedData.reduce((sum, row) => sum + (parseFloat(row.Valuation) || 0), 0) * 100) / 100;
 
   const handleExportPDF = (action = 'download') => {
     const doc = new jsPDF('landscape');
@@ -169,21 +170,25 @@ const StockReport = () => {
         ]);
       }
     } else {
-      head = [['Department', 'Code', 'Item Name', 'Pcs', 'Weight']];
+      head = [['Department', 'Code', 'Item Name', 'Unit', 'Costing (Rs.)', 'Pcs', 'Weight (KG)', 'Valuation (Rs.)']];
       sortedData.forEach(row => {
         tableData.push([
           row.DeptName, 
           row.ItemCode, 
           row.ItemName || '-', 
+          row.Unit || '-',
+          Number(row.Costing || 0).toFixed(2),
           row.Pcs || 0, 
-          row.Weight || 0
+          row.Weight ? Number(row.Weight).toFixed(3) : '0.000',
+          Number(row.Valuation || 0).toFixed(2)
         ]);
       });
       if (sortedData.length > 0) {
         tableData.push([
-          { content: 'Total:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
+          { content: 'Total:', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
           { content: totalPcs, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
-          { content: totalWeight, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } }
+          { content: totalWeight.toFixed(3), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
+          { content: totalValuation.toFixed(2), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } }
         ]);
       }
     }
@@ -260,15 +265,19 @@ const StockReport = () => {
           'Department': row.DeptName,
           'Code': row.ItemCode,
           'Item Name': row.ItemName || '-',
+          'Unit': row.Unit || '-',
+          'Costing': Number(row.Costing || 0),
           'Pcs': row.Pcs || 0,
-          'Weight': row.Weight || 0
+          'Weight': Number(row.Weight || 0),
+          'Valuation': Number(row.Valuation || 0)
         });
       });
       if (sortedData.length > 0) {
         flatData.push({
-          'Department': '', 'Code': '', 'Item Name': 'Total:',
+          'Department': '', 'Code': '', 'Item Name': 'Total:', 'Unit': '', 'Costing': '',
           'Pcs': totalPcs,
-          'Weight': totalWeight
+          'Weight': totalWeight,
+          'Valuation': totalValuation
         });
       }
     }
@@ -401,11 +410,14 @@ const StockReport = () => {
                     </>
                   ) : (
                     <>
-                      <SortableTableCell label="Department" property="DeptName" width="25%" />
-                      <SortableTableCell label="Code" property="ItemCode" width="15%" />
-                      <SortableTableCell label="Item Name" property="ItemName" width="30%" />
-                      <SortableTableCell label="Pcs" property="Pcs" align="right" width="15%" />
-                      <SortableTableCell label="Weight" property="Weight" align="right" width="15%" />
+                      <SortableTableCell label="Department" property="DeptName" width="18%" />
+                      <SortableTableCell label="Code" property="ItemCode" width="12%" />
+                      <SortableTableCell label="Item Name" property="ItemName" width="22%" />
+                      <SortableTableCell label="Unit" property="Unit" width="8%" />
+                      <SortableTableCell label="Costing" property="Costing" align="right" width="10%" />
+                      <SortableTableCell label="Pcs" property="Pcs" align="right" width="10%" />
+                      <SortableTableCell label="Weight" property="Weight" align="right" width="10%" />
+                      <SortableTableCell label="Valuation" property="Valuation" align="right" width="10%" />
                     </>
                   )}
                 </TableRow>
@@ -435,10 +447,13 @@ const StockReport = () => {
                       ) : (
                         <>
                           <TableCell sx={{ fontWeight: 500 }}>{row.DeptName}</TableCell>
-                          <TableCell>{row.ItemCode}</TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace' }}>{row.ItemCode}</TableCell>
                           <TableCell>{row.ItemName || '-'}</TableCell>
+                          <TableCell>{row.Unit || '-'}</TableCell>
+                          <TableCell align="right">₹{Number(row.Costing || 0).toFixed(2)}</TableCell>
                           <TableCell align="right">{row.Pcs || 0}</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600, color: '#0F3B66' }}>{row.Weight || 0}</TableCell>
+                          <TableCell align="right">{row.Weight ? Number(row.Weight).toFixed(3) : 0}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600, color: '#c2410c' }}>₹{Number(row.Valuation || 0).toFixed(2)}</TableCell>
                         </>
                       )}
                     </TableRow>
@@ -454,9 +469,10 @@ const StockReport = () => {
                       </>
                     ) : (
                       <>
-                        <TableCell colSpan={3} sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0F3B66' }}>Total:</TableCell>
+                        <TableCell colSpan={5} sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0F3B66' }}>Total:</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{totalPcs}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{totalWeight}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{totalWeight.toFixed(3)}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#c2410c' }}>₹{totalValuation.toFixed(2)}</TableCell>
                       </>
                     )}
                   </TableRow>

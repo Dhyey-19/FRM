@@ -370,7 +370,65 @@ exports.getProfitLossReport = async (req, res) => {
     `);
     
     const openingStockValue = Math.round((stockResult.recordset[0]?.totalOpeningStockValue || 0) * 100) / 100;
-    const closingStockValue = Math.round((stockResult.recordset[0]?.totalClosingStockValue || 0) * 100) / 100;
+    const mainClosingStockValue = Math.round((stockResult.recordset[0]?.totalClosingStockValue || 0) * 100) / 100;
+
+    // In-process stock valuation from DepartmentStock (transferred to departments)
+    const deptStockResult = await pool.request().query(`
+      SELECT 
+        dm.DeptID,
+        dm.DeptName,
+        ds.ItemCode,
+        im.ItemName,
+        im.Unit,
+        ISNULL(im.Costing, 0) AS Costing,
+        ISNULL(ds.Pcs, 0) AS Pcs,
+        ISNULL(ds.Weight, 0) AS Weight,
+        (CASE WHEN UPPER(im.Unit) IN ('KG', 'KGS') THEN ISNULL(ds.Weight, 0) ELSE ISNULL(ds.Pcs, 0) END) AS EffectiveQty,
+        ROUND(
+          (CASE WHEN UPPER(im.Unit) IN ('KG', 'KGS') THEN ISNULL(ds.Weight, 0) ELSE ISNULL(ds.Pcs, 0) END) * ISNULL(im.Costing, 0),
+          2
+        ) AS Valuation
+      FROM DepartmentStock ds
+      JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID
+      JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+      WHERE (ISNULL(ds.Pcs, 0) > 0 OR ISNULL(ds.Weight, 0) > 0)
+        AND LOWER(dm.DeptName) != 'stock'
+      ORDER BY dm.DeptName ASC, im.ItemName ASC
+    `);
+
+    const deptMap = {};
+    let processStockValue = 0;
+
+    deptStockResult.recordset.forEach(row => {
+      if (!deptMap[row.DeptID]) {
+        deptMap[row.DeptID] = {
+          deptId: row.DeptID,
+          deptName: row.DeptName,
+          totalPcs: 0,
+          totalWeight: 0,
+          totalValuation: 0,
+          items: []
+        };
+      }
+      deptMap[row.DeptID].totalPcs += (row.Pcs || 0);
+      deptMap[row.DeptID].totalWeight = Math.round((deptMap[row.DeptID].totalWeight + (row.Weight || 0)) * 1000) / 1000;
+      deptMap[row.DeptID].totalValuation = Math.round((deptMap[row.DeptID].totalValuation + (row.Valuation || 0)) * 100) / 100;
+      deptMap[row.DeptID].items.push({
+        itemCode: row.ItemCode,
+        itemName: row.ItemName,
+        unit: row.Unit,
+        costing: row.Costing,
+        pcs: row.Pcs,
+        weight: row.Weight,
+        effectiveQty: row.EffectiveQty,
+        valuation: row.Valuation
+      });
+
+      processStockValue = Math.round((processStockValue + (row.Valuation || 0)) * 100) / 100;
+    });
+
+    const departmentStockBreakdown = Object.values(deptMap);
+    const combinedClosingStockValue = Math.round((mainClosingStockValue + processStockValue) * 100) / 100;
 
     // Clean empty groups and inject stock
     const leftSide = [];
@@ -385,12 +443,38 @@ exports.getProfitLossReport = async (req, res) => {
     leftSide.push(...Object.values(expenseGroupsMap).filter(g => g.ledgers.length > 0));
 
     const rightSide = Object.values(incomeGroupsMap).filter(g => g.ledgers.length > 0);
-    if (closingStockValue > 0) {
+    
+    // Build Closing Stock group including Main Store stock + Stock in Process per Department
+    const closingStockLedgers = [];
+    if (mainClosingStockValue > 0) {
+      closingStockLedgers.push({
+        ledgerName: 'Closing Stock (Main Store)',
+        balance: mainClosingStockValue,
+        type: 'main_stock'
+      });
+    }
+    departmentStockBreakdown.forEach(dept => {
+      if (dept.totalValuation > 0) {
+        closingStockLedgers.push({
+          ledgerName: `Stock in Process - ${dept.deptName}`,
+          balance: dept.totalValuation,
+          type: 'department_wip',
+          deptId: dept.deptId,
+          deptName: dept.deptName,
+          totalPcs: dept.totalPcs,
+          totalWeight: dept.totalWeight,
+          itemsCount: dept.items.length,
+          items: dept.items
+        });
+      }
+    });
+
+    if (closingStockLedgers.length > 0) {
       rightSide.push({
         groupName: 'Closing Stock',
         isStock: true,
-        ledgers: [{ ledgerName: 'Closing Stock', balance: closingStockValue }],
-        total: closingStockValue
+        ledgers: closingStockLedgers,
+        total: combinedClosingStockValue
       });
     }
     
@@ -398,14 +482,17 @@ exports.getProfitLossReport = async (req, res) => {
     const ledgerIncomes = totalIncomes;
 
     const finalTotalExpenses = Math.round((ledgerExpenses + openingStockValue) * 100) / 100;
-    const finalTotalIncomes = Math.round((ledgerIncomes + closingStockValue) * 100) / 100;
+    const finalTotalIncomes = Math.round((ledgerIncomes + combinedClosingStockValue) * 100) / 100;
     const netProfit = Math.round((finalTotalIncomes - finalTotalExpenses) * 100) / 100;
     
     res.status(200).json({
       leftSide,
       rightSide,
       openingStockValue,
-      closingStockValue,
+      mainClosingStockValue,
+      processStockValue,
+      closingStockValue: combinedClosingStockValue,
+      departmentStockBreakdown,
       ledgerExpenses,
       ledgerIncomes,
       totalExpenses: finalTotalExpenses,

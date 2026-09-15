@@ -14,7 +14,16 @@ import {
   TableRow, 
   Divider, 
   Chip,
-  IconButton
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  InputAdornment,
+  Tooltip,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { 
   PictureAsPdf, 
@@ -23,7 +32,13 @@ import {
   KeyboardArrowDown, 
   KeyboardArrowRight, 
   UnfoldMore, 
-  UnfoldLess 
+  UnfoldLess,
+  Search as SearchIcon,
+  Close as CloseIcon,
+  Inventory2,
+  PrecisionManufacturing,
+  Warehouse,
+  AccountBalanceWallet
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -41,6 +56,11 @@ const ProfitLossReport = () => {
   // Group collapse/expand state
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [allExpanded, setAllExpanded] = useState(true);
+
+  // Department WIP Costing Modal State
+  const [costingModalOpen, setCostingModalOpen] = useState(false);
+  const [selectedDeptTab, setSelectedDeptTab] = useState(0); // 0 = All, 1..N = Specific depts
+  const [costingSearch, setCostingSearch] = useState('');
 
   const fetchPLData = async () => {
     try {
@@ -81,27 +101,42 @@ const ProfitLossReport = () => {
   };
 
   const formatCurrency = (value, isPDF = false) => {
+    const num = Number(value) || 0;
     const formatted = new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 2
-    }).format(value);
+    }).format(num);
     return isPDF ? formatted.replace('₹', 'Rs.') : formatted;
+  };
+
+  const openDeptCosting = (deptName = null) => {
+    if (!reportData?.departmentStockBreakdown) return;
+    if (deptName) {
+      const idx = reportData.departmentStockBreakdown.findIndex(d => d.deptName === deptName);
+      setSelectedDeptTab(idx !== -1 ? idx + 1 : 0);
+    } else {
+      setSelectedDeptTab(0);
+    }
+    setCostingSearch('');
+    setCostingModalOpen(true);
   };
 
   const handleExportExcel = () => {
     if (!reportData) return;
 
-    // Create custom worksheet rows
+    // Sheet 1: Profit & Loss Statement
     const rows = [
       [`${localUser.companyName || 'FactoryFlow'} - Profit & Loss Statement`],
       [`Report Date: ${new Date().toLocaleDateString()}`],
       [],
-      ['SUMMARY OF STOCK VALUATION'],
+      ['SUMMARY OF INVENTORY VALUATION'],
       ['Total Opening Stock Value', '', reportData.openingStockValue || 0],
-      ['Total Closing Stock Value', '', reportData.closingStockValue || 0],
+      ['Main Store Closing Stock Value', '', reportData.mainClosingStockValue || 0],
+      ['Stock in Process (Departments WIP)', '', reportData.processStockValue || 0],
+      ['Total Closing Stock Valuation', '', reportData.closingStockValue || 0],
       [],
-      ['EXPENSES / PURCHASES (LEFT SIDE)', '', '', 'INCOMES / SALES (RIGHT SIDE)', '', ''],
+      ['EXPENSES / PURCHASES (LEFT SIDE)', '', '', 'INCOMES / SALES & CLOSING STOCK (RIGHT SIDE)', '', ''],
       ['Ledger Name', 'Group Name', 'Amount (INR)', 'Ledger Name', 'Group Name', 'Amount (INR)']
     ];
 
@@ -140,6 +175,39 @@ const ProfitLossReport = () => {
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Profit & Loss');
+
+    // Sheet 2: Stock in Process by Department (Goods Costing & Valuation)
+    if (reportData.departmentStockBreakdown && reportData.departmentStockBreakdown.length > 0) {
+      const wipRows = [
+        [`${localUser.companyName || 'FactoryFlow'} - Stock in Process by Department (Goods Costing & Valuation)`],
+        [`Report Date: ${new Date().toLocaleDateString()}`],
+        [],
+        ['Department', 'Item Code', 'Item Name', 'Unit', 'Master Costing Rate (INR)', 'Pcs', 'Weight (KG)', 'Valuation (INR)']
+      ];
+
+      reportData.departmentStockBreakdown.forEach(dept => {
+        dept.items.forEach(item => {
+          wipRows.push([
+            dept.deptName,
+            item.itemCode,
+            item.itemName || '-',
+            item.unit || '-',
+            item.costing || 0,
+            item.pcs || 0,
+            item.weight || 0,
+            item.valuation || 0
+          ]);
+        });
+        wipRows.push([`${dept.deptName} Subtotal`, '', '', '', '', dept.totalPcs, dept.totalWeight, dept.totalValuation]);
+        wipRows.push([]);
+      });
+
+      wipRows.push(['Total Stock in Process Valuation', '', '', '', '', '', '', reportData.processStockValue || 0]);
+
+      const wipWorksheet = XLSX.utils.aoa_to_sheet(wipRows);
+      XLSX.utils.book_append_sheet(workbook, wipWorksheet, 'Stock in Process');
+    }
+
     XLSX.writeFile(workbook, 'profit_loss_report.xlsx');
   };
 
@@ -148,26 +216,31 @@ const ProfitLossReport = () => {
 
     const doc = new jsPDF();
     
-    doc.setFontSize(20);
+    doc.setFontSize(18);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 20);
+    doc.text(localUser.companyName || 'FactoryFlow', 14, 18);
     
-    doc.setFontSize(14);
+    doc.setFontSize(13);
     doc.setTextColor(100);
-    doc.text('Profit & Loss Statement', 14, 28);
+    doc.text('Profit & Loss Statement', 14, 25);
     
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(120);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 34);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 31);
 
-    doc.setFontSize(10);
+    // Stock summary line
+    doc.setFontSize(9);
     doc.setTextColor(15, 59, 102);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Opening Stock: ${formatCurrency(reportData.openingStockValue || 0, true)}    |    Closing Stock: ${formatCurrency(reportData.closingStockValue || 0, true)}`, 14, 40);
+    doc.text(
+      `Opening Stock: ${formatCurrency(reportData.openingStockValue || 0, true)}  |  Main Store: ${formatCurrency(reportData.mainClosingStockValue || 0, true)}  |  Stock in Process: ${formatCurrency(reportData.processStockValue || 0, true)}  |  Total Closing: ${formatCurrency(reportData.closingStockValue || 0, true)}`,
+      14,
+      37
+    );
     
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    doc.line(14, 44, 196, 44);
+    doc.line(14, 41, 196, 41);
 
     // Left items (Expenses)
     const leftTableData = [];
@@ -176,7 +249,10 @@ const ProfitLossReport = () => {
         leftTableData.push([ledger.ledgerName, group.groupName, formatCurrency(ledger.balance, true)]);
       });
     });
-    leftTableData.push([{ content: 'Total Expenses & Opening Stock', colSpan: 2, styles: { fontStyle: 'bold' } }, { content: formatCurrency(reportData.totalExpenses, true), styles: { fontStyle: 'bold' } }]);
+    leftTableData.push([
+      { content: 'Total Expenses & Opening Stock', colSpan: 2, styles: { fontStyle: 'bold' } }, 
+      { content: formatCurrency(reportData.totalExpenses, true), styles: { fontStyle: 'bold' } }
+    ]);
 
     // Right items (Incomes)
     const rightTableData = [];
@@ -185,47 +261,94 @@ const ProfitLossReport = () => {
         rightTableData.push([ledger.ledgerName, group.groupName, formatCurrency(ledger.balance, true)]);
       });
     });
-    rightTableData.push([{ content: 'Total Incomes & Closing Stock', colSpan: 2, styles: { fontStyle: 'bold' } }, { content: formatCurrency(reportData.totalIncomes, true), styles: { fontStyle: 'bold' } }]);
+    rightTableData.push([
+      { content: 'Total Incomes & Closing Stock', colSpan: 2, styles: { fontStyle: 'bold' } }, 
+      { content: formatCurrency(reportData.totalIncomes, true), styles: { fontStyle: 'bold' } }
+    ]);
 
-    doc.setFontSize(11);
+    doc.setFontSize(10.5);
     doc.setTextColor(15, 59, 102);
-    doc.text('Expenses & Purchases (Debit)', 14, 52);
+    doc.text('Expenses & Purchases (Debit)', 14, 48);
 
     autoTable(doc, {
       head: [['Ledger Name', 'Account Group', 'Amount']],
       body: leftTableData,
-      startY: 56,
+      startY: 52,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 3 },
+      styles: { fontSize: 8, cellPadding: 2.5 },
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255] }
     });
 
     const finalYExpenses = doc.lastAutoTable.finalY;
 
-    doc.setFontSize(11);
+    doc.setFontSize(10.5);
     doc.setTextColor(16, 124, 65);
-    doc.text('Incomes & Sales (Credit)', 14, finalYExpenses + 10);
+    doc.text('Incomes, Sales & Closing Stock (Credit)', 14, finalYExpenses + 8);
 
     autoTable(doc, {
       head: [['Ledger Name', 'Account Group', 'Amount']],
       body: rightTableData,
-      startY: finalYExpenses + 14,
+      startY: finalYExpenses + 12,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 3 },
+      styles: { fontSize: 8, cellPadding: 2.5 },
       headStyles: { fillColor: [16, 124, 65], textColor: [255, 255, 255] }
     });
 
-    const finalYIncomes = doc.lastAutoTable.finalY;
+    let currentY = doc.lastAutoTable.finalY;
+
+    // Stock in Process Department Summary Table in PDF
+    if (reportData.departmentStockBreakdown && reportData.departmentStockBreakdown.length > 0) {
+      if (currentY > 220) {
+        doc.addPage();
+        currentY = 15;
+      } else {
+        currentY += 8;
+      }
+
+      doc.setFontSize(10.5);
+      doc.setTextColor(194, 65, 12);
+      doc.text('Stock in Process by Department (Goods Costing & Valuation)', 14, currentY);
+
+      const deptSummaryRows = reportData.departmentStockBreakdown.map(d => [
+        d.deptName,
+        `${d.items.length} items`,
+        d.totalPcs || 0,
+        d.totalWeight ? `${d.totalWeight} kg` : '0 kg',
+        formatCurrency(d.totalValuation, true)
+      ]);
+      deptSummaryRows.push([
+        { content: 'Total Stock in Process Valuation', colSpan: 4, styles: { fontStyle: 'bold' } },
+        { content: formatCurrency(reportData.processStockValue || 0, true), styles: { fontStyle: 'bold' } }
+      ]);
+
+      autoTable(doc, {
+        head: [['Department', 'Items Count', 'Total Pcs', 'Total Weight', 'Department Valuation']],
+        body: deptSummaryRows,
+        startY: currentY + 4,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [194, 65, 12], textColor: [255, 255, 255] }
+      });
+
+      currentY = doc.lastAutoTable.finalY;
+    }
+
+    if (currentY > 260) {
+      doc.addPage();
+      currentY = 20;
+    } else {
+      currentY += 10;
+    }
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     
     if (reportData.netProfit >= 0) {
       doc.setTextColor(16, 124, 65);
-      doc.text(`Net Profit: ${formatCurrency(reportData.netProfit, true)}`, 14, finalYIncomes + 12);
+      doc.text(`Net Profit: ${formatCurrency(reportData.netProfit, true)}`, 14, currentY);
     } else {
       doc.setTextColor(211, 47, 47);
-      doc.text(`Net Loss: ${formatCurrency(Math.abs(reportData.netProfit), true)}`, 14, finalYIncomes + 12);
+      doc.text(`Net Loss: ${formatCurrency(Math.abs(reportData.netProfit), true)}`, 14, currentY);
     }
 
     if (action === 'preview') {
@@ -248,6 +371,39 @@ const ProfitLossReport = () => {
 
   const isProfit = reportData.netProfit >= 0;
 
+  // Compute filtered items for Costing Breakdown Modal
+  const deptTabs = ['All Departments', ...(reportData.departmentStockBreakdown || []).map(d => d.deptName)];
+  
+  let modalItems = [];
+  if (reportData.departmentStockBreakdown) {
+    if (selectedDeptTab === 0) {
+      reportData.departmentStockBreakdown.forEach(dept => {
+        dept.items.forEach(item => {
+          modalItems.push({ ...item, deptName: dept.deptName });
+        });
+      });
+    } else {
+      const currentDept = reportData.departmentStockBreakdown[selectedDeptTab - 1];
+      if (currentDept) {
+        modalItems = currentDept.items.map(item => ({ ...item, deptName: currentDept.deptName }));
+      }
+    }
+  }
+
+  const filteredModalItems = modalItems.filter(item => {
+    if (!costingSearch) return true;
+    const q = costingSearch.toLowerCase();
+    return (
+      item.itemCode?.toLowerCase().includes(q) ||
+      item.itemName?.toLowerCase().includes(q) ||
+      item.deptName?.toLowerCase().includes(q)
+    );
+  });
+
+  const modalTotalPcs = filteredModalItems.reduce((acc, i) => acc + (i.pcs || 0), 0);
+  const modalTotalWeight = Math.round(filteredModalItems.reduce((acc, i) => acc + (i.weight || 0), 0) * 1000) / 1000;
+  const modalTotalValuation = Math.round(filteredModalItems.reduce((acc, i) => acc + (i.valuation || 0), 0) * 100) / 100;
+
   return (
     <Box sx={{ p: 1, height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       {/* Header Panel */}
@@ -257,7 +413,7 @@ const ProfitLossReport = () => {
             Profit & Loss Statement
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Standard reporting period statement of incomes, expenses, and inventory valuation.
+            Standard reporting period statement with department stock in-process valuation.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
@@ -268,6 +424,14 @@ const ProfitLossReport = () => {
             sx={{ color: '#0F3B66', borderColor: '#bfdbfe', '&:hover': { bgcolor: '#f0f7ff' } }}
           >
             {allExpanded ? 'Collapse All' : 'Expand All'}
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<PrecisionManufacturing />}
+            onClick={() => openDeptCosting()}
+            sx={{ color: '#c2410c', borderColor: '#fed7aa', bgcolor: '#fff7ed', '&:hover': { bgcolor: '#ffedd5', borderColor: '#fdba74' } }}
+          >
+            Stock in Process Costing
           </Button>
           <Button 
             variant="outlined" 
@@ -296,246 +460,303 @@ const ProfitLossReport = () => {
         </Box>
       </Box>
 
-      {/* Main Split Columns Layout */}
-      <Grid container spacing={3} sx={{ flexGrow: 1 }}>
-        {/* Left Side: Expenses */}
-        <Grid item xs={12} md={6}>
-          <Box sx={{ p: 2.5, height: '100%', border: '1px solid #e2e8f0', borderRadius: 2, display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #0F3B66' }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                Expenses & Purchases (Debit)
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Click group to expand/collapse
-              </Typography>
-            </Box>
-            <TableContainer sx={{ flexGrow: 1 }}>
-              <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                    <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
+      {/* Side-by-Side Columns Layout for Expenses and Incomes/Closing Stock */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', md: 'row' }, 
+        gap: 3, 
+        flexGrow: 1, 
+        alignItems: 'stretch' 
+      }}>
+        {/* Left Side: Expenses & Purchases (Debit) */}
+        <Box sx={{ 
+          flex: 1, 
+          width: { xs: '100%', md: '50%' }, 
+          minWidth: 0,
+          p: 2.5, 
+          border: '1px solid #e2e8f0', 
+          borderRadius: 2, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          bgcolor: '#ffffff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #0F3B66' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              Expenses & Purchases (Debit)
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Click group to expand/collapse
+            </Typography>
+          </Box>
+          <TableContainer sx={{ flexGrow: 1 }}>
+            <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                  <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {reportData.leftSide.map((group) => {
+                  const groupKey = `left-${group.groupName}`;
+                  const isCollapsed = !!collapsedGroups[groupKey];
+                  const isStockGroup = group.isStock || group.groupName === 'Opening Stock';
+
+                  return (
+                    <React.Fragment key={groupKey}>
+                      {/* Group Header Row */}
+                      <TableRow
+                        onClick={() => toggleGroup(groupKey)}
+                        sx={{
+                          cursor: 'pointer',
+                          bgcolor: isStockGroup ? 'rgba(15, 59, 102, 0.04)' : '#f8fafc',
+                          '&:hover': { bgcolor: isStockGroup ? 'rgba(15, 59, 102, 0.08)' : '#f1f5f9' },
+                          transition: 'background-color 0.15s',
+                          userSelect: 'none'
+                        }}
+                      >
+                        <TableCell colSpan={2} sx={{ py: 1, pl: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <IconButton size="small" sx={{ p: 0.25, color: '#0F3B66' }}>
+                              {isCollapsed ? <KeyboardArrowRight fontSize="small" /> : <KeyboardArrowDown fontSize="small" />}
+                            </IconButton>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                              {group.groupName}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={`${group.ledgers.length} ${group.ledgers.length === 1 ? 'item' : 'items'}`}
+                              sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e2e8f0', color: '#475569', fontWeight: 600 }}
+                            />
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right" sx={{ py: 1, fontWeight: 700, color: '#0F3B66' }}>
+                          {formatCurrency(group.total)}
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Ledgers under this Group */}
+                      {!isCollapsed && group.ledgers.map((ledger, idx) => {
+                        const isStockItem = isStockGroup || ledger.ledgerName === 'Opening Stock';
+                        return (
+                          <TableRow
+                            key={`${groupKey}-${idx}`}
+                            sx={{
+                              bgcolor: isStockItem ? 'rgba(15, 59, 102, 0.02)' : '#ffffff',
+                              '&:hover': { bgcolor: '#fbfcfd' },
+                              '&:last-child td, &:last-child th': { borderBottom: '1px solid #e2e8f0' }
+                            }}
+                          >
+                            <TableCell sx={{ pl: 4.5, py: 0.75 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: '#1e293b', fontWeight: isStockItem ? 600 : 400 }}>
+                                  {ledger.ledgerName}
+                                </Typography>
+                                {isStockItem && (
+                                  <Chip
+                                    size="small"
+                                    label="Opening Stock"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}
+                                  />
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.85rem' }}>
+                              {group.groupName}
+                            </TableCell>
+                            <TableCell align="right" sx={{ py: 0.75, fontWeight: isStockItem ? 600 : 400, color: isStockItem ? '#0F3B66' : 'inherit' }}>
+                              {formatCurrency(ledger.balance)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+                {reportData.leftSide.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
+                      No Expense accounts or Opening Stock found.
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {reportData.leftSide.map((group) => {
-                    const groupKey = `left-${group.groupName}`;
-                    const isCollapsed = !!collapsedGroups[groupKey];
-                    const isStockGroup = group.isStock || group.groupName === 'Opening Stock';
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              Total Expenses & Opening Stock
+            </Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              {formatCurrency(reportData.totalExpenses)}
+            </Typography>
+          </Box>
+        </Box>
 
-                    return (
-                      <React.Fragment key={groupKey}>
-                        {/* Group Header Row */}
-                        <TableRow
-                          onClick={() => toggleGroup(groupKey)}
-                          sx={{
-                            cursor: 'pointer',
-                            bgcolor: isStockGroup ? 'rgba(15, 59, 102, 0.04)' : '#f8fafc',
-                            '&:hover': { bgcolor: isStockGroup ? 'rgba(15, 59, 102, 0.08)' : '#f1f5f9' },
-                            transition: 'background-color 0.15s',
-                            userSelect: 'none'
-                          }}
-                        >
-                          <TableCell colSpan={2} sx={{ py: 1, pl: 0.5 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                              <IconButton size="small" sx={{ p: 0.25, color: '#0F3B66' }}>
-                                {isCollapsed ? <KeyboardArrowRight fontSize="small" /> : <KeyboardArrowDown fontSize="small" />}
-                              </IconButton>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                                {group.groupName}
-                              </Typography>
-                              <Chip
-                                size="small"
-                                label={`${group.ledgers.length} ${group.ledgers.length === 1 ? 'item' : 'items'}`}
-                                sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e2e8f0', color: '#475569', fontWeight: 600 }}
-                              />
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right" sx={{ py: 1, fontWeight: 700, color: '#0F3B66' }}>
-                            {formatCurrency(group.total)}
-                          </TableCell>
-                        </TableRow>
+        {/* Right Side: Incomes, Sales & Closing Stock (Credit) */}
+        <Box sx={{ 
+          flex: 1, 
+          width: { xs: '100%', md: '50%' }, 
+          minWidth: 0,
+          p: 2.5, 
+          border: '1px solid #e2e8f0', 
+          borderRadius: 2, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          bgcolor: '#ffffff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #10b981' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#10b981' }}>
+              Incomes, Sales & Closing Stock (Credit)
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Click group to expand/collapse
+            </Typography>
+          </Box>
+          <TableContainer sx={{ flexGrow: 1 }}>
+            <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                  <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {reportData.rightSide.map((group) => {
+                  const groupKey = `right-${group.groupName}`;
+                  const isCollapsed = !!collapsedGroups[groupKey];
+                  const isStockGroup = group.isStock || group.groupName === 'Closing Stock';
 
-                        {/* Ledgers under this Group */}
-                        {!isCollapsed && group.ledgers.map((ledger, idx) => {
-                          const isStockItem = isStockGroup || ledger.ledgerName === 'Opening Stock';
-                          return (
-                            <TableRow
-                              key={`${groupKey}-${idx}`}
-                              sx={{
-                                bgcolor: isStockItem ? 'rgba(15, 59, 102, 0.02)' : '#ffffff',
-                                '&:hover': { bgcolor: '#fbfcfd' },
-                                '&:last-child td, &:last-child th': { borderBottom: '1px solid #e2e8f0' }
-                              }}
-                            >
-                              <TableCell sx={{ pl: 4.5, py: 0.75 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Typography variant="body2" sx={{ color: '#1e293b', fontWeight: isStockItem ? 600 : 400 }}>
-                                    {ledger.ledgerName}
-                                  </Typography>
-                                  {isStockItem && (
+                  return (
+                    <React.Fragment key={groupKey}>
+                      {/* Group Header Row */}
+                      <TableRow
+                        onClick={() => toggleGroup(groupKey)}
+                        sx={{
+                          cursor: 'pointer',
+                          bgcolor: isStockGroup ? 'rgba(16, 185, 129, 0.04)' : '#f8fafc',
+                          '&:hover': { bgcolor: isStockGroup ? 'rgba(16, 185, 129, 0.08)' : '#f1f5f9' },
+                          transition: 'background-color 0.15s',
+                          userSelect: 'none'
+                        }}
+                      >
+                        <TableCell colSpan={2} sx={{ py: 1, pl: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <IconButton size="small" sx={{ p: 0.25, color: '#10b981' }}>
+                              {isCollapsed ? <KeyboardArrowRight fontSize="small" /> : <KeyboardArrowDown fontSize="small" />}
+                            </IconButton>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#10b981' }}>
+                              {group.groupName}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={`${group.ledgers.length} ${group.ledgers.length === 1 ? 'item' : 'items'}`}
+                              sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e2e8f0', color: '#475569', fontWeight: 600 }}
+                            />
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right" sx={{ py: 1, fontWeight: 700, color: '#10b981' }}>
+                          {formatCurrency(group.total)}
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Ledgers under this Group */}
+                      {!isCollapsed && group.ledgers.map((ledger, idx) => {
+                        const isStockItem = isStockGroup || ledger.ledgerName === 'Closing Stock';
+                        const isWipItem = ledger.type === 'department_wip';
+                        const isMainStockItem = ledger.type === 'main_stock';
+
+                        return (
+                          <TableRow
+                            key={`${groupKey}-${idx}`}
+                            sx={{
+                              bgcolor: isWipItem ? '#fffbf5' : isStockItem ? 'rgba(16, 185, 129, 0.02)' : '#ffffff',
+                              '&:hover': { bgcolor: isWipItem ? '#fff7ed' : '#fbfcfd' },
+                              '&:last-child td, &:last-child th': { borderBottom: '1px solid #e2e8f0' }
+                            }}
+                          >
+                            <TableCell sx={{ pl: 4.5, py: 0.75 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                <Typography variant="body2" sx={{ color: '#1e293b', fontWeight: isStockItem ? 600 : 400 }}>
+                                  {ledger.ledgerName}
+                                </Typography>
+                                
+                                {isMainStockItem && (
+                                  <Chip
+                                    size="small"
+                                    label="Main Store"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#dcfce7', color: '#15803d', fontWeight: 600 }}
+                                  />
+                                )}
+
+                                {isWipItem && (
+                                  <>
                                     <Chip
                                       size="small"
-                                      label="Opening Stock"
-                                      sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}
+                                      label={`${ledger.itemsCount || 0} goods in process`}
+                                      sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#fed7aa', color: '#9a3412', fontWeight: 600 }}
                                     />
-                                  )}
-                                </Box>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.85rem' }}>
-                                {group.groupName}
-                              </TableCell>
-                              <TableCell align="right" sx={{ py: 0.75, fontWeight: isStockItem ? 600 : 400, color: isStockItem ? '#0F3B66' : 'inherit' }}>
-                                {formatCurrency(ledger.balance)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                  {reportData.leftSide.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
-                        No Expense accounts or Opening Stock found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                Total Expenses & Opening Stock
-              </Typography>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                {formatCurrency(reportData.totalExpenses)}
-              </Typography>
-            </Box>
-          </Box>
-        </Grid>
-
-        {/* Right Side: Incomes */}
-        <Grid item xs={12} md={6}>
-          <Box sx={{ p: 2.5, height: '100%', border: '1px solid #e2e8f0', borderRadius: 2, display: 'flex', flexDirection: 'column', bgcolor: '#ffffff' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #10b981' }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#10b981' }}>
-                Incomes & Sales (Credit)
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Click group to expand/collapse
-              </Typography>
-            </Box>
-            <TableContainer sx={{ flexGrow: 1 }}>
-              <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                    <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {reportData.rightSide.map((group) => {
-                    const groupKey = `right-${group.groupName}`;
-                    const isCollapsed = !!collapsedGroups[groupKey];
-                    const isStockGroup = group.isStock || group.groupName === 'Closing Stock';
-
-                    return (
-                      <React.Fragment key={groupKey}>
-                        {/* Group Header Row */}
-                        <TableRow
-                          onClick={() => toggleGroup(groupKey)}
-                          sx={{
-                            cursor: 'pointer',
-                            bgcolor: isStockGroup ? 'rgba(16, 185, 129, 0.04)' : '#f8fafc',
-                            '&:hover': { bgcolor: isStockGroup ? 'rgba(16, 185, 129, 0.08)' : '#f1f5f9' },
-                            transition: 'background-color 0.15s',
-                            userSelect: 'none'
-                          }}
-                        >
-                          <TableCell colSpan={2} sx={{ py: 1, pl: 0.5 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                              <IconButton size="small" sx={{ p: 0.25, color: '#10b981' }}>
-                                {isCollapsed ? <KeyboardArrowRight fontSize="small" /> : <KeyboardArrowDown fontSize="small" />}
-                              </IconButton>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#10b981' }}>
-                                {group.groupName}
-                              </Typography>
-                              <Chip
-                                size="small"
-                                label={`${group.ledgers.length} ${group.ledgers.length === 1 ? 'item' : 'items'}`}
-                                sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e2e8f0', color: '#475569', fontWeight: 600 }}
-                              />
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right" sx={{ py: 1, fontWeight: 700, color: '#10b981' }}>
-                            {formatCurrency(group.total)}
-                          </TableCell>
-                        </TableRow>
-
-                        {/* Ledgers under this Group */}
-                        {!isCollapsed && group.ledgers.map((ledger, idx) => {
-                          const isStockItem = isStockGroup || ledger.ledgerName === 'Closing Stock';
-                          return (
-                            <TableRow
-                              key={`${groupKey}-${idx}`}
-                              sx={{
-                                bgcolor: isStockItem ? 'rgba(16, 185, 129, 0.02)' : '#ffffff',
-                                '&:hover': { bgcolor: '#fbfcfd' },
-                                '&:last-child td, &:last-child th': { borderBottom: '1px solid #e2e8f0' }
-                              }}
-                            >
-                              <TableCell sx={{ pl: 4.5, py: 0.75 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Typography variant="body2" sx={{ color: '#1e293b', fontWeight: isStockItem ? 600 : 400 }}>
-                                    {ledger.ledgerName}
-                                  </Typography>
-                                  {isStockItem && (
-                                    <Chip
+                                    <Button
                                       size="small"
-                                      label="Closing Stock"
-                                      sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#dcfce7', color: '#15803d', fontWeight: 600 }}
-                                    />
-                                  )}
-                                </Box>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.85rem' }}>
-                                {group.groupName}
-                              </TableCell>
-                              <TableCell align="right" sx={{ py: 0.75, fontWeight: isStockItem ? 600 : 400, color: isStockItem ? '#15803d' : 'inherit' }}>
-                                {formatCurrency(ledger.balance)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                  {reportData.rightSide.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
-                        No Income accounts or Closing Stock found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#10b981' }}>
-                Total Incomes & Closing Stock
-              </Typography>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#10b981' }}>
-                {formatCurrency(reportData.totalIncomes)}
-              </Typography>
-            </Box>
+                                      variant="text"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openDeptCosting(ledger.deptName);
+                                      }}
+                                      sx={{ 
+                                        p: 0, 
+                                        minWidth: 0, 
+                                        fontSize: '0.7rem', 
+                                        color: '#c2410c', 
+                                        textTransform: 'none', 
+                                        textDecoration: 'underline',
+                                        '&:hover': { textDecoration: 'underline', bgcolor: 'transparent' }
+                                      }}
+                                    >
+                                      View Costing
+                                    </Button>
+                                  </>
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.85rem' }}>
+                              {isWipItem ? `WIP (${ledger.deptName})` : group.groupName}
+                            </TableCell>
+                            <TableCell align="right" sx={{ py: 0.75, fontWeight: isStockItem ? 600 : 400, color: isWipItem ? '#c2410c' : isStockItem ? '#15803d' : 'inherit' }}>
+                              {formatCurrency(ledger.balance)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+                {reportData.rightSide.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
+                      No Income accounts or Closing Stock found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#10b981' }}>
+              Total Incomes & Closing Stock
+            </Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#10b981' }}>
+              {formatCurrency(reportData.totalIncomes)}
+            </Typography>
           </Box>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Net profit/loss summary banner */}
       <Box 
@@ -557,8 +778,8 @@ const ProfitLossReport = () => {
           </Typography>
           <Typography variant="body2" sx={{ color: isProfit ? '#047857' : '#b91c1c' }}>
             {isProfit 
-              ? 'Great! The company registered a positive surplus for this period.' 
-              : 'The company registered a deficit. Total debits (expenses & opening stock) exceeded credits (incomes & closing stock).'
+              ? 'Great! The company registered a positive surplus for this period including main stock and department in-process valuation.' 
+              : 'The company registered a deficit. Total debits (expenses & opening stock) exceeded credits (incomes & total closing stock).'
             }
           </Typography>
         </Box>
@@ -566,6 +787,148 @@ const ProfitLossReport = () => {
           {formatCurrency(Math.abs(reportData.netProfit))}
         </Typography>
       </Box>
+
+      {/* Department In-Process Goods Costing & Valuation Modal */}
+      <Dialog 
+        open={costingModalOpen} 
+        onClose={() => setCostingModalOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2.5, overflow: 'hidden' } }}
+      >
+        <DialogTitle sx={{ m: 0, p: 2, bgcolor: '#0F3B66', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PrecisionManufacturing />
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#ffffff' }}>
+              Stock in Process - Goods Costing & Department Valuation
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setCostingModalOpen(false)} sx={{ color: '#ffffff' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ p: 2.5 }}>
+          {/* Tabs for Department selection */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs 
+              value={selectedDeptTab} 
+              onChange={(e, val) => setSelectedDeptTab(val)}
+              variant="scrollable"
+              scrollButtons="auto"
+            >
+              {deptTabs.map((deptName, idx) => (
+                <Tab 
+                  key={deptName} 
+                  label={deptName} 
+                  sx={{ fontWeight: 600, textTransform: 'none', fontSize: '0.9rem' }}
+                />
+              ))}
+            </Tabs>
+          </Box>
+
+          {/* Search and Summary Toolbar */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+            <TextField
+              size="small"
+              placeholder="Search item code, item name, department..."
+              value={costingSearch}
+              onChange={(e) => setCostingSearch(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                )
+              }}
+              sx={{ width: 320 }}
+            />
+
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+              <Chip 
+                label={`Items: ${filteredModalItems.length}`} 
+                sx={{ bgcolor: '#f1f5f9', fontWeight: 600, color: '#334155' }} 
+              />
+              <Chip 
+                label={`Total Pcs: ${modalTotalPcs}`} 
+                sx={{ bgcolor: '#f1f5f9', fontWeight: 600, color: '#334155' }} 
+              />
+              <Chip 
+                label={`Total Weight: ${modalTotalWeight} kg`} 
+                sx={{ bgcolor: '#f1f5f9', fontWeight: 600, color: '#334155' }} 
+              />
+              <Chip 
+                label={`Valuation: ${formatCurrency(modalTotalValuation)}`} 
+                sx={{ bgcolor: '#ffedd5', color: '#c2410c', fontWeight: 700, border: '1px solid #fed7aa' }} 
+              />
+            </Box>
+          </Box>
+
+          {/* Costing Table */}
+          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 420 }}>
+            <Table stickyHeader size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#0F3B66' }}>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Department</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Item Code</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Item Name</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Unit</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Master Costing (₹)</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Pcs</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Weight (KG)</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Valuation (₹)</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredModalItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                      No items currently in process for this department.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredModalItems.map((item, idx) => (
+                    <TableRow key={`${item.deptName}-${item.itemCode}-${idx}`} hover>
+                      <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>{item.deptName}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{item.itemCode}</TableCell>
+                      <TableCell>{item.itemName || '-'}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={item.unit || '-'} sx={{ height: 20, fontSize: '0.7rem' }} />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                        ₹{Number(item.costing || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell align="right">{item.pcs || 0}</TableCell>
+                      <TableCell align="right">{item.weight ? Number(item.weight).toFixed(3) : '0.000'}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c' }}>
+                        {formatCurrency(item.valuation || 0)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+                {filteredModalItems.length > 0 && (
+                  <TableRow sx={{ bgcolor: '#f8fafc', fontWeight: 'bold' }}>
+                    <TableCell colSpan={5} sx={{ fontWeight: 700 }}>
+                      Subtotal
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>{modalTotalPcs}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>{modalTotalWeight.toFixed(3)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c' }}>
+                      {formatCurrency(modalTotalValuation)}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, bgcolor: '#f8fafc' }}>
+          <Button onClick={() => setCostingModalOpen(false)} variant="contained" sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#0d3258' } }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     
       <PdfPreviewModal 
         open={previewOpen} 

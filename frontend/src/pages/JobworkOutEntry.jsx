@@ -256,6 +256,16 @@ const JobworkOutEntry = () => {
     }
   };
 
+  const calculateEstimatedTotalValue = (rows) => {
+    if (!Array.isArray(rows)) return 0;
+    return rows.reduce((sum, row) => {
+      const rowAmt = (row.AMOUNT !== undefined && row.AMOUNT !== '' && !isNaN(parseFloat(row.AMOUNT)))
+        ? parseFloat(row.AMOUNT)
+        : parseFloat(calculateRowAmount(row)) || 0;
+      return sum + rowAmt;
+    }, 0);
+  };
+
   const handleRowChange = (index, field, value) => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
@@ -453,7 +463,7 @@ const JobworkOutEntry = () => {
     const totalQty = detailsSource.reduce((sum, r) => sum + (parseFloat(r.QUANTITY) || 0), 0);
     const totalGross = detailsSource.reduce((sum, r) => sum + (parseFloat(r.GROSSWT) || 0), 0);
     const totalNet = detailsSource.reduce((sum, r) => sum + (parseFloat(r.NETWT) || 0), 0);
-    const estVal = detailsSource.reduce((sum, r) => sum + ((parseFloat(r.QUANTITY) || 0) * (parseFloat(r.RATE) || 0)), 0);
+    const estVal = calculateEstimatedTotalValue(detailsSource);
 
     let labelY = checkY;
     const drawTotalLine = (label, value, isBold = false) => {
@@ -469,7 +479,7 @@ const JobworkOutEntry = () => {
     drawTotalLine('Total Quantity:', totalQty.toFixed(2));
     labelY += 1;
     doc.line(120, labelY - 3, 196, labelY - 3);
-    drawTotalLine('Estimated Value:', estVal.toFixed(2), true);
+    drawTotalLine('Estimated Total Value:', estVal.toFixed(2), true);
 
     // Remarks
     const remarkY = Math.max(checkY + 25, labelY + 2);
@@ -853,7 +863,7 @@ const JobworkOutEntry = () => {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="subtitle1" fontWeight={700}>Estimated Total Value:</Typography>
                     <Typography variant="subtitle1" fontWeight={700} color="primary.main">
-                      {gridRows.reduce((sum, row) => sum + ((parseFloat(row.QUANTITY) || 0) * (parseFloat(row.RATE) || 0)), 0).toFixed(2)}
+                      ₹{calculateEstimatedTotalValue(gridRows).toFixed(2)}
                     </Typography>
                   </Box>
                 </Box>

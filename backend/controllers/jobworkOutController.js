@@ -44,9 +44,13 @@ exports.getJobworkOuts = async (req, res) => {
         h.JWOUTWARDNO DESC
     `);
     
-    // Fetch all details with ItemName
+    // Fetch all details with ItemName and calculated AMOUNT
     const detailResult = await pool.request().query(`
-      SELECT d.*, i.ItemName
+      SELECT d.*, i.ItemName,
+        CASE 
+          WHEN UPPER(d.UNIT) IN ('KG', 'KGS') THEN (ISNULL(d.NETWT, 0) * ISNULL(d.RATE, 0))
+          ELSE (ISNULL(d.QUANTITY, 0) * ISNULL(d.RATE, 0))
+        END AS AMOUNT
       FROM JobworkOutDetail d
       LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
     `);

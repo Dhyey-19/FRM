@@ -140,9 +140,12 @@ exports.getDepartmentStockReport = async (req, res) => {
         ds.DeptID, 
         dm.DeptName, 
         ds.ItemCode, 
-        im.ItemName, 
-        ds.Pcs, 
-        ds.Weight
+        im.ItemName,
+        im.Unit,
+        ISNULL(im.Costing, 0) AS Costing,
+        ISNULL(ds.Pcs, 0) AS Pcs, 
+        ISNULL(ds.Weight, 0) AS Weight,
+        ROUND((CASE WHEN UPPER(im.Unit) IN ('KG', 'KGS') THEN ISNULL(ds.Weight, 0) ELSE ISNULL(ds.Pcs, 0) END) * ISNULL(im.Costing, 0), 2) AS Valuation
       FROM DepartmentStock ds
       LEFT JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID
       LEFT JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
