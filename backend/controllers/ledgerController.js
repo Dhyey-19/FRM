@@ -430,6 +430,35 @@ exports.getProfitLossReport = async (req, res) => {
     const departmentStockBreakdown = Object.values(deptMap);
     const combinedClosingStockValue = Math.round((mainClosingStockValue + processStockValue) * 100) / 100;
 
+    // Stock Transfer Process Loss
+    const lossResult = await pool.request().query(`
+      SELECT ISNULL(SUM(TransferLoss), 0) AS totalStockTransferLoss
+      FROM (
+        SELECT TransferID, MAX(ISNULL(LossAmount, 0)) AS TransferLoss
+        FROM StockTransfer
+        GROUP BY TransferID
+      ) t
+    `);
+    const stockTransferLoss = Math.round((lossResult.recordset[0]?.totalStockTransferLoss || 0) * 100) / 100;
+
+    if (stockTransferLoss > 0) {
+      if (expenseGroupsMap['Direct Expenses']) {
+        expenseGroupsMap['Direct Expenses'].ledgers.push({
+          ledgerName: 'Stock Transfer Process Loss',
+          balance: stockTransferLoss
+        });
+        expenseGroupsMap['Direct Expenses'].total = Math.round((expenseGroupsMap['Direct Expenses'].total + stockTransferLoss) * 100) / 100;
+        totalExpenses = Math.round((totalExpenses + stockTransferLoss) * 100) / 100;
+      } else {
+        expenseGroupsMap['Direct Expenses'] = {
+          groupName: 'Direct Expenses',
+          ledgers: [{ ledgerName: 'Stock Transfer Process Loss', balance: stockTransferLoss }],
+          total: stockTransferLoss
+        };
+        totalExpenses = Math.round((totalExpenses + stockTransferLoss) * 100) / 100;
+      }
+    }
+
     // Clean empty groups and inject stock
     const leftSide = [];
     if (openingStockValue > 0) {
@@ -493,6 +522,7 @@ exports.getProfitLossReport = async (req, res) => {
       processStockValue,
       closingStockValue: combinedClosingStockValue,
       departmentStockBreakdown,
+      stockTransferLoss,
       ledgerExpenses,
       ledgerIncomes,
       totalExpenses: finalTotalExpenses,

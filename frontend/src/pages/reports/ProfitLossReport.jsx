@@ -561,6 +561,13 @@ const ProfitLossReport = () => {
                                     sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}
                                   />
                                 )}
+                                {ledger.ledgerName === 'Stock Transfer Process Loss' && (
+                                  <Chip
+                                    size="small"
+                                    label="Stock Transfer Loss"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#fee2e2', color: '#b91c1c', fontWeight: 600 }}
+                                  />
+                                )}
                               </Box>
                             </TableCell>
                             <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.85rem' }}>
