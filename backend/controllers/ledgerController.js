@@ -693,6 +693,29 @@ exports.getBalanceSheetReport = async (req, res) => {
   }
 };
 
+const calculateDueInfo = (dateInput, creditDays = 0) => {
+  let y, m, d;
+  if (typeof dateInput === 'string' && dateInput.includes('-')) {
+    const parts = dateInput.split('T')[0].split('-');
+    y = parseInt(parts[0], 10);
+    m = parseInt(parts[1], 10) - 1;
+    d = parseInt(parts[2], 10);
+  } else {
+    const dt = new Date(dateInput);
+    y = dt.getUTCFullYear();
+    m = dt.getUTCMonth();
+    d = dt.getUTCDate();
+  }
+  const dueUTC = Date.UTC(y, m, d + (Number(creditDays) || 0));
+  const dueDate = new Date(dueUTC);
+  const dueDateStr = dueDate.toISOString().split('T')[0];
+
+  const now = new Date();
+  const todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((dueUTC - todayUTC) / (1000 * 60 * 60 * 24));
+  return { dueDate: dueDateStr, dueDays: diffDays };
+};
+
 exports.getInvoiceWisePayableReport = async (req, res) => {
   try {
     const pool = await connectDB();
@@ -792,17 +815,7 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
           outstandingLimitWithoutBill -= outstandingWithoutBill;
         }
         
-        const invoiceDate = new Date(inv.inwardDate);
-        const dueDate = new Date(invoiceDate);
-        dueDate.setDate(dueDate.getDate() + inv.creditDays);
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dueDate.setHours(0, 0, 0, 0);
-        
-        const diffTime = dueDate.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
+        const { dueDate, dueDays } = calculateDueInfo(inv.inwardDate, inv.creditDays);
         const relevantOutstanding = inv.bill ? outstandingWithBill : outstandingWithoutBill;
 
         finalReport.push({
@@ -819,8 +832,8 @@ exports.getInvoiceWisePayableReport = async (req, res) => {
           UPI: v.upi,
           invoiceAmount: inv.invoiceAmount,
           creditDays: inv.creditDays,
-          dueDate: dueDate.toISOString().split('T')[0],
-          dueDays: diffDays,
+          dueDate,
+          dueDays,
           outstandingAmount: Number(outstandingCombined.toFixed(2)),
           outstandingWithBill: Number(outstandingWithBill.toFixed(2)),
           outstandingWithoutBill: Number(outstandingWithoutBill.toFixed(2)),
@@ -929,16 +942,7 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
           outstandingLimitWithoutBill -= outstandingWithoutBill;
         }
         
-        const invoiceDate = new Date(inv.outwardDate);
-        const dueDate = new Date(invoiceDate);
-        dueDate.setDate(dueDate.getDate() + inv.creditDays);
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        dueDate.setHours(0, 0, 0, 0);
-        
-        const diffTime = dueDate.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const { dueDate, dueDays } = calculateDueInfo(inv.outwardDate, inv.creditDays);
         
         finalReport.push({
           RowId: `${inv.outwardId}_${ledgerId}`,
@@ -950,8 +954,8 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
           partyName: p.partyName,
           invoiceAmount: inv.invoiceAmount,
           creditDays: inv.creditDays,
-          dueDate: dueDate.toISOString().split('T')[0],
-          dueDays: diffDays,
+          dueDate,
+          dueDays,
           outstandingAmount: Number(outstandingCombined.toFixed(2)),
           outstandingWithBill: Number(outstandingWithBill.toFixed(2)),
           outstandingWithoutBill: Number(outstandingWithoutBill.toFixed(2)),

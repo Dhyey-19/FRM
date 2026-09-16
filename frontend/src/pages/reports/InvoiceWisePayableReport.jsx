@@ -20,7 +20,8 @@ import {
   Chip,
   Tooltip,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Autocomplete
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { 
@@ -91,6 +92,16 @@ export const getAgingBucketInfo = (dueDays) => {
   }
 };
 
+export const formatDate = (val) => {
+  if (!val) return '';
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+    const parts = val.split('T')[0].split('-');
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  const d = new Date(val);
+  return isNaN(d) ? '' : d.toLocaleDateString('en-GB');
+};
+
 const InvoiceWisePayableReport = () => {
   const navigate = useNavigate();
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -103,9 +114,13 @@ const InvoiceWisePayableReport = () => {
   const [selectedLedger, setSelectedLedger] = useState(null);
   const [viewMode, setViewMode] = useState('combined'); // 'combined', 'with_bill', 'without_bill'
 
-  // Default to null dates so all pending dues and overdue invoices are immediately visible
-  const [dateRange, setDateRange] = useState([null, null]);
-  const [startDate, endDate] = dateRange;
+  // Filter by Vendor
+  const [selectedVendor, setSelectedVendor] = useState(null);
+
+  const vendorOptions = useMemo(() => {
+    const unique = [...new Set(reportData.map(r => r.vendorName).filter(Boolean))];
+    return unique.sort((a, b) => a.localeCompare(b));
+  }, [reportData]);
 
   const [agingFilter, setAgingFilter] = useState('all'); // 'all', 'not_due', '1_30', '31_60', '61_90', 'above_90', 'overdue_only'
   const [onlyOutstanding, setOnlyOutstanding] = useState(true);
@@ -148,6 +163,7 @@ const InvoiceWisePayableReport = () => {
     let totalCombined = 0;
 
     reportData.forEach(row => {
+      if (selectedVendor && row.vendorName !== selectedVendor) return;
       if (row.bill) {
         totalWithBill += parseFloat(row.outstandingWithBill || 0);
       } else {
@@ -157,7 +173,7 @@ const InvoiceWisePayableReport = () => {
     });
 
     return { totalWithBill, totalWithoutBill, totalCombined };
-  }, [reportData]);
+  }, [reportData, selectedVendor]);
 
   // Aging KPIs calculation (based on positive outstanding amounts)
   const agingKPIs = useMemo(() => {
@@ -171,15 +187,8 @@ const InvoiceWisePayableReport = () => {
     };
 
     reportData.forEach(row => {
-      // Date filter
-      if (row.inwardDate) {
-        const rowDate = new Date(row.inwardDate);
-        rowDate.setHours(0, 0, 0, 0);
-        const start = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : null;
-        const end = endDate ? new Date(endDate).setHours(23, 59, 59, 999) : null;
-        if (start && rowDate.getTime() < start) return;
-        if (end && rowDate.getTime() > end) return;
-      }
+      // Vendor filter
+      if (selectedVendor && row.vendorName !== selectedVendor) return;
 
       // Bill type filter
       if (viewMode === 'with_bill' && !row.bill) return;
@@ -215,21 +224,13 @@ const InvoiceWisePayableReport = () => {
     });
 
     return buckets;
-  }, [reportData, startDate, endDate, viewMode]);
+  }, [reportData, selectedVendor, viewMode]);
 
-  // Filter rows by date, viewMode, onlyOutstanding, and agingFilter
+  // Filter rows by vendor, viewMode, onlyOutstanding, and agingFilter
   const filteredReportData = useMemo(() => {
     return reportData.filter(row => {
-      // Date filter
-      if (row.inwardDate) {
-        const rowDate = new Date(row.inwardDate);
-        rowDate.setHours(0,0,0,0);
-        const start = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
-        const end = endDate ? new Date(endDate).setHours(23,59,59,999) : null;
-        const isAfterFrom = start ? rowDate.getTime() >= start : true;
-        const isBeforeTo = end ? rowDate.getTime() <= end : true;
-        if (!isAfterFrom || !isBeforeTo) return false;
-      }
+      // Vendor filter
+      if (selectedVendor && row.vendorName !== selectedVendor) return false;
 
       // Bill type filter
       if (viewMode === 'with_bill' && !row.bill) return false;
@@ -250,8 +251,8 @@ const InvoiceWisePayableReport = () => {
       if (agingFilter === 'overdue_only' && row.dueDays >= 0) return false;
 
       return true;
-    });
-  }, [reportData, startDate, endDate, viewMode, onlyOutstanding, agingFilter]);
+    }).sort((a, b) => (Number(a.dueDays) || 0) - (Number(b.dueDays) || 0));
+  }, [reportData, selectedVendor, viewMode, onlyOutstanding, agingFilter]);
 
   const columns = [
     { field: 'vendorName', headerName: 'Vendor Name', flex: 1.5, minWidth: 180 },
@@ -280,10 +281,7 @@ const InvoiceWisePayableReport = () => {
       headerName: 'Invoice Date', 
       flex: 1,
       minWidth: 105,
-      valueFormatter: (value) => {
-        if (!value) return '';
-        return new Date(value).toLocaleDateString('en-GB');
-      }
+      valueFormatter: (value) => formatDate(value)
     },
     { 
       field: 'invoiceAmount', 
@@ -301,14 +299,15 @@ const InvoiceWisePayableReport = () => {
       headerName: 'Due Date', 
       flex: 1,
       minWidth: 105,
-      valueFormatter: (value) => {
-        if (!value) return '';
-        return new Date(value).toLocaleDateString('en-GB');
-      }
+      valueFormatter: (value) => formatDate(value)
     },
     { 
       field: 'dueDays', 
       headerName: 'Days Left/Overdue', 
+      type: 'number',
+      align: 'left',
+      headerAlign: 'left',
+      sortComparator: (v1, v2) => (Number(v1) || 0) - (Number(v2) || 0),
       flex: 1.3,
       minWidth: 145,
       renderCell: (params) => {
@@ -447,7 +446,10 @@ const InvoiceWisePayableReport = () => {
     
     doc.setFontSize(9);
     doc.setTextColor(120);
-    const filterInfo = agingFilter !== 'all' ? ` | Filter: ${agingFilter}` : '';
+    const filterParts = [];
+    if (selectedVendor) filterParts.push(`Vendor: ${selectedVendor}`);
+    if (agingFilter !== 'all') filterParts.push(`Aging: ${agingFilter}`);
+    const filterInfo = filterParts.length > 0 ? ` | ${filterParts.join(' | ')}` : '';
     doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}${filterInfo}`, 14, 32);
     
     doc.setDrawColor(15, 59, 102);
@@ -458,10 +460,10 @@ const InvoiceWisePayableReport = () => {
       row.vendorName,
       row.inwardNo,
       row.bill ? 'With Bill' : 'Without Bill',
-      new Date(row.inwardDate).toLocaleDateString('en-GB'),
+      formatDate(row.inwardDate),
       formatCurrency(row.invoiceAmount, true),
       row.creditDays,
-      new Date(row.dueDate).toLocaleDateString('en-GB'),
+      formatDate(row.dueDate),
       row.status === 'Paid' ? 'Paid' : (row.dueDays < 0 ? `Overdue by ${Math.abs(row.dueDays)} days` : (row.dueDays === 0 ? 'Due Today' : `${row.dueDays} days left`)),
       getAgingBucketInfo(row.dueDays).shortLabel,
       formatCurrency(viewMode === 'with_bill' ? row.outstandingWithBill : (viewMode === 'without_bill' ? row.outstandingWithoutBill : row.outstandingAmount), true),
@@ -515,10 +517,10 @@ const InvoiceWisePayableReport = () => {
       'Vendor Name': row.vendorName,
       'Invoice No': row.inwardNo,
       'Bill Type': row.bill ? 'With Bill' : 'Without Bill',
-      'Invoice Date': new Date(row.inwardDate).toLocaleDateString('en-GB'),
+      'Invoice Date': formatDate(row.inwardDate),
       'Invoice Amount (Rs.)': parseFloat(row.invoiceAmount || 0).toFixed(2),
       'Credit Days': row.creditDays,
-      'Due Date': new Date(row.dueDate).toLocaleDateString('en-GB'),
+      'Due Date': formatDate(row.dueDate),
       'Days Left/Overdue': row.dueDays,
       'Aging Category': getAgingBucketInfo(row.dueDays).label,
       'Outstanding Amount (Rs.)': parseFloat(viewMode === 'with_bill' ? row.outstandingWithBill : (viewMode === 'without_bill' ? row.outstandingWithoutBill : row.outstandingAmount) || 0).toFixed(2),
@@ -688,27 +690,23 @@ const InvoiceWisePayableReport = () => {
 
       {/* Toolbar & Filters */}
       <Paper sx={{ p: 2, mb: 2, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-        {/* Date Filter with Clear Dates */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 230 }}>
-            <DatePicker
-              portalId="root"
-              selectsRange={true}
-              startDate={startDate}
-              endDate={endDate}
-              onChange={(update) => setDateRange(update)}
-              isClearable={true}
-              placeholderText="All Dates"
-              customInput={<TextField size="small" label="Invoice Date Range" InputLabelProps={{ shrink: true }} fullWidth placeholder="All Dates" />}
-              dateFormat="dd/MM/yyyy"
+        {/* Vendor Filter */}
+        <Autocomplete
+          options={vendorOptions}
+          value={selectedVendor}
+          onChange={(event, newValue) => setSelectedVendor(newValue)}
+          size="small"
+          sx={{ width: { xs: '100%', sm: 260, md: 300 } }}
+          renderInput={(params) => (
+            <TextField 
+              {...params} 
+              label="Filter by Vendor" 
+              placeholder="All Vendors" 
+              InputLabelProps={{ shrink: true }} 
             />
-          </Box>
-          {(startDate || endDate) && (
-            <Button size="small" onClick={() => setDateRange([null, null])} sx={{ textTransform: 'none' }}>
-              Clear Dates
-            </Button>
           )}
-        </Box>
+          clearOnEscape
+        />
 
         {/* Aging Buckets Filter Buttons */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
@@ -811,6 +809,9 @@ const InvoiceWisePayableReport = () => {
             }}
             initialState={{
               pagination: { paginationModel: { pageSize: 25 } },
+              sorting: {
+                sortModel: [{ field: 'dueDays', sort: 'asc' }],
+              },
             }}
             pageSizeOptions={[10, 25, 50, 100]}
             disableRowSelectionOnClick
