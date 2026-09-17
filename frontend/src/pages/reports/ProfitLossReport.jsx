@@ -182,7 +182,7 @@ const ProfitLossReport = () => {
         [`${localUser.companyName || 'FactoryFlow'} - Stock in Process by Department (Goods Costing & Valuation)`],
         [`Report Date: ${new Date().toLocaleDateString()}`],
         [],
-        ['Department', 'Item Code', 'Item Name', 'Unit', 'Master Costing Rate (INR)', 'Pcs', 'Weight (KG)', 'Valuation (INR)']
+        ['Department', 'Item Code', 'Item Name', 'Unit', 'Transfer Rate (INR)', 'Pcs', 'Weight (KG)', 'Valuation (INR)']
       ];
 
       reportData.departmentStockBreakdown.forEach(dept => {
@@ -192,7 +192,7 @@ const ProfitLossReport = () => {
             item.itemCode,
             item.itemName || '-',
             item.unit || '-',
-            item.costing || 0,
+            item.rate || item.costing || 0,
             item.pcs || 0,
             item.weight || 0,
             item.valuation || 0
@@ -807,7 +807,7 @@ const ProfitLossReport = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <PrecisionManufacturing />
             <Typography variant="h6" sx={{ fontWeight: 700, color: '#ffffff' }}>
-              Stock in Process - Goods Costing & Department Valuation
+              Stock in Process - Department Stock Valuation (Stock Transfer)
             </Typography>
           </Box>
           <IconButton onClick={() => setCostingModalOpen(false)} sx={{ color: '#ffffff' }}>
@@ -880,7 +880,7 @@ const ProfitLossReport = () => {
                   <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Item Code</TableCell>
                   <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Item Name</TableCell>
                   <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Unit</TableCell>
-                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Master Costing (₹)</TableCell>
+                  <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Transfer Rate (₹)</TableCell>
                   <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Pcs</TableCell>
                   <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Weight (KG)</TableCell>
                   <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }} align="right">Valuation (₹)</TableCell>
@@ -903,7 +903,7 @@ const ProfitLossReport = () => {
                         <Chip size="small" label={item.unit || '-'} sx={{ height: 20, fontSize: '0.7rem' }} />
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 600, color: '#0F3B66' }}>
-                        ₹{Number(item.costing || 0).toFixed(2)}
+                        ₹{Number(item.rate || item.costing || 0).toFixed(2)}
                       </TableCell>
                       <TableCell align="right">{item.pcs || 0}</TableCell>
                       <TableCell align="right">{item.weight ? Number(item.weight).toFixed(3) : '0.000'}</TableCell>

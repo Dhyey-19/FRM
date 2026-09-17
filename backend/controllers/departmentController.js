@@ -136,19 +136,50 @@ exports.getDepartmentStockReport = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
+      WITH TransferRates AS (
+        SELECT 
+          ds.DeptID,
+          ds.ItemCode,
+          COALESCE(
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            im.Costing,
+            0
+          ) AS TransferRate,
+          COALESCE(
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            im.Unit
+          ) AS ValuationUnit
+        FROM DepartmentStock ds
+        JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+      )
       SELECT 
         ds.DeptID, 
         dm.DeptName, 
         ds.ItemCode, 
         im.ItemName,
-        im.Unit,
-        ISNULL(im.Costing, 0) AS Costing,
+        im.Costing AS MasterCosting,
+        tr.TransferRate AS Costing,
+        tr.TransferRate AS Rate,
+        tr.ValuationUnit AS Unit,
         ISNULL(ds.Pcs, 0) AS Pcs, 
         ISNULL(ds.Weight, 0) AS Weight,
-        ROUND((CASE WHEN UPPER(im.Unit) IN ('KG', 'KGS') THEN ISNULL(ds.Weight, 0) ELSE ISNULL(ds.Pcs, 0) END) * ISNULL(im.Costing, 0), 2) AS Valuation
+        ROUND(
+          (CASE 
+            WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+            WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
+            WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+            ELSE ISNULL(ds.Pcs, 0)
+          END) * tr.TransferRate,
+          2
+        ) AS Valuation
       FROM DepartmentStock ds
       LEFT JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID
       LEFT JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+      JOIN TransferRates tr ON ds.DeptID = tr.DeptID AND ds.ItemCode = tr.ItemCode
       ORDER BY dm.DeptName ASC, im.ItemName ASC
     `);
     res.status(200).json(result.recordset);

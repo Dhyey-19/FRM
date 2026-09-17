@@ -29,15 +29,43 @@ exports.getDashboardKPIs = async (req, res) => {
 
     // 2b. Department Stock Values (including Pcs and Weight sums)
     const deptStockResult = await pool.request().query(`
+      WITH TransferRates AS (
+        SELECT 
+          ds.DeptID,
+          ds.ItemCode,
+          COALESCE(
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            im.Costing,
+            0
+          ) AS TransferRate,
+          COALESCE(
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            im.Unit
+          ) AS ValuationUnit
+        FROM DepartmentStock ds
+        JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+      )
       SELECT 
         dm.DeptID,
         dm.DeptName,
-        ISNULL(SUM(CASE WHEN UPPER(im.Unit) = 'KG' THEN ds.Weight ELSE ds.Pcs END * im.Costing), 0) AS totalValue,
+        ISNULL(SUM(
+          (CASE 
+            WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+            WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
+            WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+            ELSE ISNULL(ds.Pcs, 0)
+          END) * tr.TransferRate
+        ), 0) AS totalValue,
         ISNULL(SUM(ds.Pcs), 0) AS totalPcs,
         ISNULL(SUM(ds.Weight), 0) AS totalWeight
       FROM DepartmentMaster dm
       LEFT JOIN DepartmentStock ds ON dm.DeptID = ds.DeptID
       LEFT JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+      LEFT JOIN TransferRates tr ON ds.DeptID = tr.DeptID AND ds.ItemCode = tr.ItemCode
       GROUP BY dm.DeptID, dm.DeptName
     `);
 
