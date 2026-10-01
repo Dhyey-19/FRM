@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Box, Typography, Button, Paper, CircularProgress, 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, InputAdornment, Toolbar, TableSortLabel,
   ToggleButton, ToggleButtonGroup,
-  FormControl, InputLabel, Select, MenuItem
+  FormControl, InputLabel, Select, MenuItem, Tooltip
 } from '@mui/material';
-import { PictureAsPdf, Visibility, TableView, Share, Search as SearchIcon } from '@mui/icons-material';
+import { PictureAsPdf, Visibility, TableView, Share, Search as SearchIcon, MenuBook } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const StockReport = () => {
+  const navigate = useNavigate();
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -434,7 +436,20 @@ const StockReport = () => {
                     <TableRow hover key={index}>
                       {reportType === 'item' ? (
                         <>
-                          <TableCell sx={{ fontWeight: 500 }}>{row.ItemCode}</TableCell>
+                          <TableCell 
+                            sx={{ 
+                              fontWeight: 700, 
+                              color: '#0F3B66', 
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              textUnderlineOffset: 3,
+                              '&:hover': { color: '#F88A01' }
+                            }}
+                            onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}`)}
+                            title="Click to view Item Stock Ledger statement"
+                          >
+                            {row.ItemCode}
+                          </TableCell>
                           <TableCell>{row.ItemName}</TableCell>
                           <TableCell>{row.ItemType || '-'}</TableCell>
                           <TableCell>{row.Series || '-'}</TableCell>
@@ -447,7 +462,21 @@ const StockReport = () => {
                       ) : (
                         <>
                           <TableCell sx={{ fontWeight: 500 }}>{row.DeptName}</TableCell>
-                          <TableCell sx={{ fontFamily: 'monospace' }}>{row.ItemCode}</TableCell>
+                          <TableCell 
+                            sx={{ 
+                              fontFamily: 'monospace', 
+                              fontWeight: 700, 
+                              color: '#0F3B66', 
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              textUnderlineOffset: 3,
+                              '&:hover': { color: '#F88A01' }
+                            }}
+                            onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}`)}
+                            title="Click to view Item Stock Ledger statement"
+                          >
+                            {row.ItemCode}
+                          </TableCell>
                           <TableCell>{row.ItemName || '-'}</TableCell>
                           <TableCell>{row.Unit || '-'}</TableCell>
                           <TableCell align="right">₹{Number(row.Costing || 0).toFixed(2)}</TableCell>

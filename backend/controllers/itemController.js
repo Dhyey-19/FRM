@@ -232,3 +232,566 @@ exports.bulkCreateItems = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// GET /api/items/stock-ledger
+exports.getItemStockLedger = async (req, res) => {
+  try {
+    const { itemCode, startDate, endDate, scope = 'all', deptId } = req.query;
+
+    if (!itemCode) {
+      return res.status(400).json({ message: 'itemCode query parameter is required' });
+    }
+
+    const pool = await connectDB();
+
+    // 1. Fetch Item Info
+    const itemRes = await pool.request()
+      .input('ItemCode', sql.VarChar(10), itemCode)
+      .query(`
+        SELECT ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock
+        FROM ItemMaster
+        WHERE ItemCode = @ItemCode
+      `);
+
+    if (itemRes.recordset.length === 0) {
+      return res.status(404).json({ message: `Item with code "${itemCode}" not found.` });
+    }
+
+    const item = itemRes.recordset[0];
+    const isWeightBased = ['KG', 'KGS'].includes((item.Unit || '').trim().toUpperCase());
+
+    // 2. Query Inward Transactions
+    const inwardReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const inwardRes = await inwardReq.query(`
+      SELECT 
+        h.ID as HeaderId,
+        h.INWARDNO as DocNo,
+        CONVERT(VARCHAR(10), h.INWARDDATE, 120) as TxDate,
+        'Inward' as TxType,
+        'Inward' as TxCategory,
+        'IN' as Direction,
+        h.Bill,
+        l.LedgerName as PartyName,
+        'Supplier: ' + ISNULL(l.LedgerName, 'N/A') as Particulars,
+        h.REMARK as Remark,
+        NULL as Process,
+        d.QUANTITY as Pcs,
+        d.NETWT as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(d.NETWT, 0) ELSE ISNULL(d.QUANTITY, 0) END as EffectiveQty,
+        d.UNIT as Unit,
+        d.RATE as Rate,
+        d.AMOUNT as Amount,
+        h.CREATEDBY as CreatedBy,
+        NULL as FromDeptName,
+        'Stock' as ToDeptName
+      FROM InwardDetail d
+      INNER JOIN InwardHeader h ON d.INWARDID = h.ID
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      WHERE d.ITEMCODE = @ItemCode
+    `);
+
+    // 3. Query Outward Transactions
+    const outwardReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const outwardRes = await outwardReq.query(`
+      SELECT 
+        h.ID as HeaderId,
+        h.OUTWARDNO as DocNo,
+        CONVERT(VARCHAR(10), h.OUTWARDDATE, 120) as TxDate,
+        'Outward' as TxType,
+        'Outward' as TxCategory,
+        'OUT' as Direction,
+        h.Bill,
+        l.LedgerName as PartyName,
+        'Customer: ' + ISNULL(l.LedgerName, 'N/A') as Particulars,
+        h.REMARK as Remark,
+        NULL as Process,
+        d.QUANTITY as Pcs,
+        d.NETWT as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(d.NETWT, 0) ELSE ISNULL(d.QUANTITY, 0) END as EffectiveQty,
+        d.UNIT as Unit,
+        d.RATE as Rate,
+        d.AMOUNT as Amount,
+        h.CREATEDBY as CreatedBy,
+        'Stock' as FromDeptName,
+        NULL as ToDeptName
+      FROM OutwardDetail d
+      INNER JOIN OutwardHeader h ON d.OUTWARDID = h.ID
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      WHERE d.ITEMCODE = @ItemCode
+    `);
+
+    // 4. Query Jobwork Out Transactions
+    const jwOutReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const jwOutRes = await jwOutReq.query(`
+      SELECT 
+        h.ID as HeaderId,
+        h.JWOUTWARDNO as DocNo,
+        CONVERT(VARCHAR(10), h.JWOUTWARDDATE, 120) as TxDate,
+        'Jobwork Out' as TxType,
+        'Jobwork' as TxCategory,
+        'OUT' as Direction,
+        h.Bill,
+        l.LedgerName as PartyName,
+        'Jobwork Sent: ' + ISNULL(l.LedgerName, 'N/A') + 
+          CASE WHEN dm.DeptName IS NOT NULL AND dm.DeptName <> 'Stock' THEN ' [From ' + dm.DeptName + ']' ELSE '' END +
+          CASE WHEN d.PROCESS IS NOT NULL AND d.PROCESS <> '' THEN ' (' + d.PROCESS + ')' ELSE '' END as Particulars,
+        h.REMARK as Remark,
+        d.PROCESS as Process,
+        d.QUANTITY as Pcs,
+        d.NETWT as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(d.NETWT, 0) ELSE ISNULL(d.QUANTITY, 0) END as EffectiveQty,
+        d.UNIT as Unit,
+        d.RATE as Rate,
+        ROUND(ISNULL(d.RATE, 0) * (CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(d.NETWT, 0) ELSE ISNULL(d.QUANTITY, 0) END), 2) as Amount,
+        h.CREATEDBY as CreatedBy,
+        ISNULL(dm.DeptName, 'Stock') as FromDeptName,
+        NULL as ToDeptName
+      FROM JobworkOutDetail d
+      INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      LEFT JOIN DepartmentMaster dm ON h.DeptID = dm.DeptID
+      WHERE d.ITEMCODE = @ItemCode
+    `);
+
+    // 5. Query Jobwork In (Received finished items)
+    const jwInReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const jwInRes = await jwInReq.query(`
+      SELECT 
+        h.ID as HeaderId,
+        h.JWINWARDNO as DocNo,
+        CONVERT(VARCHAR(10), h.JWINWARDDATE, 120) as TxDate,
+        'Jobwork In' as TxType,
+        'Jobwork' as TxCategory,
+        'IN' as Direction,
+        h.Bill,
+        l.LedgerName as PartyName,
+        'Jobwork Received: ' + ISNULL(l.LedgerName, 'N/A') + 
+          CASE WHEN d.OUTITEMCODE IS NOT NULL AND d.OUTITEMCODE <> '' THEN ' [From Raw: ' + d.OUTITEMCODE + ']' ELSE '' END +
+          CASE WHEN d.PROCESS IS NOT NULL AND d.PROCESS <> '' THEN ' (' + d.PROCESS + ')' ELSE '' END as Particulars,
+        h.REMARK as Remark,
+        d.PROCESS as Process,
+        d.QUANTITY as Pcs,
+        d.NETWT as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(d.NETWT, 0) ELSE ISNULL(d.QUANTITY, 0) END as EffectiveQty,
+        d.UNIT as Unit,
+        d.RATE as Rate,
+        d.AMOUNT as Amount,
+        h.CREATEDBY as CreatedBy,
+        NULL as FromDeptName,
+        'Stock' as ToDeptName
+      FROM JobworkInDetail d
+      INNER JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      WHERE d.INITEMCODE = @ItemCode
+    `);
+
+    // 6. Query Jobwork In (Scrap generated)
+    const jwInScrapReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const jwInScrapRes = await jwInScrapReq.query(`
+      SELECT 
+        h.ID as HeaderId,
+        h.JWINWARDNO as DocNo,
+        CONVERT(VARCHAR(10), h.JWINWARDDATE, 120) as TxDate,
+        'Jobwork In (Scrap)' as TxType,
+        'Jobwork' as TxCategory,
+        'IN' as Direction,
+        h.Bill,
+        l.LedgerName as PartyName,
+        'Jobwork Scrap: ' + ISNULL(l.LedgerName, 'N/A') + 
+          CASE WHEN d.OUTITEMCODE IS NOT NULL AND d.OUTITEMCODE <> '' THEN ' [From Raw: ' + d.OUTITEMCODE + ']' ELSE '' END as Particulars,
+        h.REMARK as Remark,
+        NULL as Process,
+        d.SCRAPPCS as Pcs,
+        d.SCRAPWT as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(d.SCRAPWT, 0) ELSE ISNULL(d.SCRAPPCS, 0) END as EffectiveQty,
+        d.UNIT as Unit,
+        0 as Rate,
+        0 as Amount,
+        h.CREATEDBY as CreatedBy,
+        NULL as FromDeptName,
+        'Stock' as ToDeptName
+      FROM JobworkInDetail d
+      INNER JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      WHERE d.SCRAPITEMCODE = @ItemCode
+    `);
+
+    // 7. Query Stock Transfers (Out Item)
+    const stOutReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const stOutRes = await stOutReq.query(`
+      SELECT 
+        st.MoveID as HeaderId,
+        CAST(st.TransferID as VARCHAR(20)) as DocNo,
+        CONVERT(VARCHAR(10), st.MoveDate, 120) as TxDate,
+        'Stock Transfer Out' as TxType,
+        'Stock Transfer' as TxCategory,
+        'OUT' as Direction,
+        1 as Bill,
+        NULL as PartyName,
+        'Transfer Out: ' + ISNULL(fd.DeptName, 'Stock') + ' -> ' + ISNULL(td.DeptName, 'Unknown') as Particulars,
+        st.Remarks as Remark,
+        NULL as Process,
+        st.OutPcs as Pcs,
+        st.OutWeight as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(st.OutWeight, 0) ELSE ISNULL(st.OutPcs, 0) END as EffectiveQty,
+        st.Unit as Unit,
+        st.Rate as Rate,
+        st.Amount as Amount,
+        st.CreatedBy as CreatedBy,
+        fd.DeptName as FromDeptName,
+        td.DeptName as ToDeptName,
+        fd.DeptID as FromDeptID,
+        td.DeptID as ToDeptID
+      FROM StockTransfer st
+      LEFT JOIN DepartmentMaster fd ON st.FromDeptID = fd.DeptID
+      LEFT JOIN DepartmentMaster td ON st.ToDeptID = td.DeptID
+      WHERE st.OutItemCode = @ItemCode
+    `);
+
+    // 8. Query Stock Transfers (In Item)
+    const stInReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const stInRes = await stInReq.query(`
+      SELECT 
+        st.MoveID as HeaderId,
+        CAST(st.TransferID as VARCHAR(20)) as DocNo,
+        CONVERT(VARCHAR(10), st.MoveDate, 120) as TxDate,
+        'Stock Transfer In' as TxType,
+        'Stock Transfer' as TxCategory,
+        'IN' as Direction,
+        1 as Bill,
+        NULL as PartyName,
+        'Transfer In: ' + ISNULL(fd.DeptName, 'Unknown') + ' -> ' + ISNULL(td.DeptName, 'Stock') as Particulars,
+        st.Remarks as Remark,
+        NULL as Process,
+        st.InPcs as Pcs,
+        st.InWeight as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(st.InWeight, 0) ELSE ISNULL(st.InPcs, 0) END as EffectiveQty,
+        st.Unit as Unit,
+        st.Rate as Rate,
+        st.Amount as Amount,
+        st.CreatedBy as CreatedBy,
+        fd.DeptName as FromDeptName,
+        td.DeptName as ToDeptName,
+        fd.DeptID as FromDeptID,
+        td.DeptID as ToDeptID
+      FROM StockTransfer st
+      LEFT JOIN DepartmentMaster fd ON st.FromDeptID = fd.DeptID
+      LEFT JOIN DepartmentMaster td ON st.ToDeptID = td.DeptID
+      WHERE st.InItemCode = @ItemCode
+    `);
+
+    // 9. Query Stock Transfers (Scrap Item)
+    const stScrapReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const stScrapRes = await stScrapReq.query(`
+      SELECT 
+        st.MoveID as HeaderId,
+        CAST(st.TransferID as VARCHAR(20)) as DocNo,
+        CONVERT(VARCHAR(10), st.MoveDate, 120) as TxDate,
+        'Stock Transfer (Scrap)' as TxType,
+        'Stock Transfer' as TxCategory,
+        'IN' as Direction,
+        1 as Bill,
+        NULL as PartyName,
+        'Transfer Scrap: ' + ISNULL(fd.DeptName, 'Unknown') + ' -> ' + ISNULL(td.DeptName, 'Stock') as Particulars,
+        st.Remarks as Remark,
+        NULL as Process,
+        st.ScrapPcs as Pcs,
+        st.ScrapWeight as Weight,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN ISNULL(st.ScrapWeight, 0) ELSE ISNULL(st.ScrapPcs, 0) END as EffectiveQty,
+        st.Unit as Unit,
+        st.Rate as Rate,
+        st.Amount as Amount,
+        st.CreatedBy as CreatedBy,
+        fd.DeptName as FromDeptName,
+        td.DeptName as ToDeptName,
+        fd.DeptID as FromDeptID,
+        td.DeptID as ToDeptID
+      FROM StockTransfer st
+      LEFT JOIN DepartmentMaster fd ON st.FromDeptID = fd.DeptID
+      LEFT JOIN DepartmentMaster td ON st.ToDeptID = td.DeptID
+      WHERE st.ScrapItemCode = @ItemCode
+    `);
+
+    // 10. Query Stock Journal Entries
+    const sjReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const sjRes = await sjReq.query(`
+      SELECT 
+        sj.SJID as HeaderId,
+        CAST(sj.SJID as VARCHAR(20)) as DocNo,
+        CONVERT(VARCHAR(10), sj.SJDate, 120) as TxDate,
+        CASE WHEN sj.SJType = 'Production' THEN 'Stock Journal (Production)' ELSE 'Stock Journal (Consumption)' END as TxType,
+        'Stock Journal' as TxCategory,
+        CASE WHEN sj.SJType = 'Production' THEN 'IN' ELSE 'OUT' END as Direction,
+        1 as Bill,
+        NULL as PartyName,
+        'Stock Journal: ' + sj.SJType as Particulars,
+        sj.Remarks as Remark,
+        NULL as Process,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN 0 ELSE sj.Qty END as Pcs,
+        CASE WHEN ${isWeightBased ? 1 : 0} = 1 THEN sj.Qty ELSE 0 END as Weight,
+        sj.Qty as EffectiveQty,
+        '${item.Unit || 'PCS'}' as Unit,
+        0 as Rate,
+        0 as Amount,
+        sj.CreatedBy as CreatedBy,
+        CASE WHEN sj.SJType = 'Production' THEN NULL ELSE 'Stock' END as FromDeptName,
+        CASE WHEN sj.SJType = 'Production' THEN 'Stock' ELSE NULL END as ToDeptName
+      FROM StockJournal sj
+      WHERE sj.ItemCode = @ItemCode
+    `);
+
+    // 11. Query Assembly Transactions
+    const assemProdReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const assemProdRes = await assemProdReq.query(`
+      SELECT 
+        a.ID as HeaderId,
+        CAST(a.AssemblyNo as VARCHAR(20)) as DocNo,
+        CONVERT(VARCHAR(10), a.AssemblyDate, 120) as TxDate,
+        'Assembly (Production)' as TxType,
+        'Assembly' as TxCategory,
+        'IN' as Direction,
+        1 as Bill,
+        NULL as PartyName,
+        'Assembly Produced' as Particulars,
+        a.Remark as Remark,
+        NULL as Process,
+        a.Quantity as Pcs,
+        0 as Weight,
+        a.Quantity as EffectiveQty,
+        '${item.Unit || 'PCS'}' as Unit,
+        0 as Rate,
+        0 as Amount,
+        a.CreatedBy as CreatedBy,
+        NULL as FromDeptName,
+        'Stock' as ToDeptName
+      FROM AssemblyTransactions a
+      WHERE a.ItemCode = @ItemCode
+    `);
+
+    const assemConsReq = pool.request().input('ItemCode', sql.VarChar(10), itemCode);
+    const assemConsRes = await assemConsReq.query(`
+      SELECT 
+        a.ID as HeaderId,
+        CAST(a.AssemblyNo as VARCHAR(20)) as DocNo,
+        CONVERT(VARCHAR(10), a.AssemblyDate, 120) as TxDate,
+        'Assembly (Consumption)' as TxType,
+        'Assembly' as TxCategory,
+        'OUT' as Direction,
+        1 as Bill,
+        NULL as PartyName,
+        'Assembly Consumed for: ' + ISNULL(pi.ItemName, a.ItemCode) as Particulars,
+        a.Remark as Remark,
+        NULL as Process,
+        (b.Quantity * a.Quantity) as Pcs,
+        0 as Weight,
+        (b.Quantity * a.Quantity) as EffectiveQty,
+        '${item.Unit || 'PCS'}' as Unit,
+        0 as Rate,
+        0 as Amount,
+        a.CreatedBy as CreatedBy,
+        'Stock' as FromDeptName,
+        NULL as ToDeptName
+      FROM AssemblyTransactions a
+      INNER JOIN BOM_Master b ON a.ItemCode = b.ParentItemCode
+      LEFT JOIN ItemMaster pi ON a.ItemCode = pi.ItemCode
+      WHERE b.ChildItemCode = @ItemCode
+    `);
+
+    // Combine all records
+    let allTransactions = [
+      ...inwardRes.recordset,
+      ...outwardRes.recordset,
+      ...jwOutRes.recordset,
+      ...jwInRes.recordset,
+      ...jwInScrapRes.recordset,
+      ...stOutRes.recordset,
+      ...stInRes.recordset,
+      ...stScrapRes.recordset,
+      ...sjRes.recordset,
+      ...assemProdRes.recordset,
+      ...assemConsRes.recordset
+    ];
+
+    // Filter by Scope / Department if requested
+    if (scope === 'stock') {
+      // Only movements that directly affect central warehouse (ItemMaster)
+      allTransactions = allTransactions.filter(tx => {
+        if (tx.TxCategory === 'Stock Transfer') {
+          const fromStock = (tx.FromDeptName || '').toLowerCase() === 'stock';
+          const toStock = (tx.ToDeptName || '').toLowerCase() === 'stock';
+          return fromStock || toStock || tx.TxType.includes('Scrap');
+        }
+        return true;
+      });
+    } else if (deptId && deptId !== 'all') {
+      const targetDeptId = Number(deptId);
+      allTransactions = allTransactions.filter(tx => {
+        if (tx.TxCategory === 'Stock Transfer') {
+          return tx.FromDeptID === targetDeptId || tx.ToDeptID === targetDeptId;
+        }
+        // Central transactions count as Stock department (DeptID 1)
+        if (targetDeptId === 1) return true;
+        return false;
+      });
+    }
+
+    // Sort chronologically
+    allTransactions.sort((a, b) => {
+      const dateA = new Date(a.TxDate || '1970-01-01').getTime();
+      const dateB = new Date(b.TxDate || '1970-01-01').getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      return (Number(a.HeaderId) || 0) - (Number(b.HeaderId) || 0);
+    });
+
+    // Calculate Opening Stock prior to startDate
+    let openingStock = Number(item.OpeningStock || 0);
+    let activeTransactions = [];
+
+    const startFilter = startDate ? new Date(startDate) : null;
+    const endFilter = endDate ? new Date(endDate) : null;
+
+    if (startFilter) {
+      startFilter.setHours(0, 0, 0, 0);
+    }
+    if (endFilter) {
+      endFilter.setHours(23, 59, 59, 999);
+    }
+
+    for (const tx of allTransactions) {
+      const txDate = tx.TxDate ? new Date(tx.TxDate) : new Date('1970-01-01');
+      const qty = Number(tx.EffectiveQty || 0);
+
+      if (startFilter && txDate < startFilter) {
+        if (tx.Direction === 'IN') {
+          openingStock += qty;
+        } else {
+          openingStock -= qty;
+        }
+      } else if (!endFilter || txDate <= endFilter) {
+        activeTransactions.push(tx);
+      }
+    }
+
+    // Compute running balance across in-period active transactions
+    let runningBalance = openingStock;
+    let totalIn = 0;
+    let totalOut = 0;
+
+    const formattedTransactions = activeTransactions.map((tx, idx) => {
+      const qty = Number(tx.EffectiveQty || 0);
+      if (tx.Direction === 'IN') {
+        runningBalance += qty;
+        totalIn += qty;
+      } else {
+        runningBalance -= qty;
+        totalOut += qty;
+      }
+
+      return {
+        id: `${tx.TxCategory}-${tx.HeaderId}-${idx}`,
+        headerId: tx.HeaderId,
+        date: tx.TxDate,
+        docNo: tx.DocNo,
+        type: tx.TxType,
+        category: tx.TxCategory,
+        direction: tx.Direction,
+        bill: tx.Bill,
+        partyName: tx.PartyName,
+        particulars: tx.Particulars,
+        remark: tx.Remark,
+        process: tx.Process,
+        pcs: Number(tx.Pcs || 0),
+        weight: Number(tx.Weight || 0),
+        effectiveQty: qty,
+        unit: tx.Unit || item.Unit,
+        rate: Number(tx.Rate || 0),
+        amount: Number(tx.Amount || 0),
+        createdBy: tx.CreatedBy,
+        fromDeptName: tx.FromDeptName,
+        toDeptName: tx.ToDeptName,
+        runningStock: Number(runningBalance.toFixed(3))
+      };
+    });
+
+    const netMovement = Number((totalIn - totalOut).toFixed(3));
+    const closingStock = Number(runningBalance.toFixed(3));
+
+    // 10. Query Department-wise Stock Bifurcation
+    const deptStockRes = await pool.request()
+      .input('ItemCode', sql.VarChar(10), itemCode)
+      .query(`
+        SELECT 
+          dm.DeptID,
+          dm.DeptName,
+          ISNULL(ds.Pcs, 0) as Pcs,
+          ISNULL(ds.Weight, 0) as Weight
+        FROM DepartmentMaster dm
+        LEFT JOIN DepartmentStock ds ON dm.DeptID = ds.DeptID AND ds.ItemCode = @ItemCode
+        ORDER BY dm.DeptID ASC
+      `);
+
+    const mainDept = deptStockRes.recordset.find(d => d.DeptName.toLowerCase() === 'stock') || { DeptID: 1, DeptName: 'Stock' };
+    const otherDepts = deptStockRes.recordset.filter(d => d.DeptName.toLowerCase() !== 'stock');
+
+    const isWeight = ['KG', 'KGS'].includes((item.Unit || '').trim().toUpperCase());
+    const mainStockQty = Number(item.ClosingStock || 0);
+
+    const departmentPositions = otherDepts.map(d => {
+      const pcs = Number(d.Pcs || 0);
+      const weight = Number(d.Weight || 0);
+      const qty = isWeight ? weight : pcs;
+      return {
+        deptId: d.DeptID,
+        deptName: d.DeptName,
+        pcs,
+        weight,
+        qty: Number(qty.toFixed(3)),
+        unit: item.Unit
+      };
+    });
+
+    const totalDeptPcs = departmentPositions.reduce((sum, d) => sum + d.pcs, 0);
+    const totalDeptWeight = Number(departmentPositions.reduce((sum, d) => sum + d.weight, 0).toFixed(3));
+    const totalDeptQty = Number(departmentPositions.reduce((sum, d) => sum + d.qty, 0).toFixed(3));
+    const totalCompanyStock = Number((mainStockQty + totalDeptQty).toFixed(3));
+
+    const stockBifurcation = {
+      mainStock: {
+        deptId: mainDept.DeptID,
+        deptName: 'Main Stock (Central Store)',
+        qty: mainStockQty,
+        unit: item.Unit,
+        pcs: isWeight ? null : mainStockQty,
+        weight: isWeight ? mainStockQty : null
+      },
+      departmentStocks: departmentPositions,
+      totalDepartmentStock: totalDeptQty,
+      totalDepartmentPcs: totalDeptPcs,
+      totalDepartmentWeight: totalDeptWeight,
+      totalCompanyStock,
+      unit: item.Unit,
+      isWeightBased: isWeight
+    };
+
+    res.status(200).json({
+      item,
+      summary: {
+        openingStock: Number(openingStock.toFixed(3)),
+        totalIn: Number(totalIn.toFixed(3)),
+        totalOut: Number(totalOut.toFixed(3)),
+        netMovement,
+        closingStock,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        transactionCount: formattedTransactions.length
+      },
+      stockBifurcation,
+      transactions: formattedTransactions
+    });
+
+  } catch (error) {
+    console.error('Error fetching item stock ledger:', error);
+    res.status(500).json({ message: 'Server error fetching item stock ledger', error: error.message });
+  }
+};
+

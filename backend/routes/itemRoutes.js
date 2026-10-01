@@ -11,6 +11,9 @@ router.post('/', itemController.createItem);
 // POST bulk import items
 router.post('/bulk', itemController.bulkCreateItems);
 
+// GET item stock ledger statement
+router.get('/stock-ledger', itemController.getItemStockLedger);
+
 // PUT update an item (using ItemCode)
 router.put('/:id', itemController.updateItem);
 

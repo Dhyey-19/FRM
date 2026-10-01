@@ -37,6 +37,9 @@ const emptyRow = {
 
 const JobworkOutEntry = () => {
   const [jwOutwards, setJwOutwards] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [deptId, setDeptId] = useState(1);
+  const [availableStockMap, setAvailableStockMap] = useState({});
   const [ledgers, setLedgers] = useState([]);
   const [items, setItems] = useState([]);
   const [dbUnits, setDbUnits] = useState([]);
@@ -68,6 +71,16 @@ const JobworkOutEntry = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/departments`);
+      const data = await response.json();
+      if (response.ok && Array.isArray(data)) setDepartments(data);
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
 
   const fetchJwOutwards = async () => {
     try {
@@ -129,12 +142,35 @@ const JobworkOutEntry = () => {
   };
 
   useEffect(() => {
+    fetchDepartments();
     fetchJwOutwards();
     fetchLedgers();
     fetchItems();
     fetchUnits();
     fetchCompanyProfile();
   }, []);
+
+  useEffect(() => {
+    const fetchStockForDept = async () => {
+      if (!deptId) return;
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/stock-transfers/available-stock/${deptId}`);
+        const data = await response.json();
+        if (response.ok && Array.isArray(data)) {
+          const map = {};
+          data.forEach(item => {
+            map[item.ItemCode] = { Pcs: item.Pcs || 0, Weight: item.Weight || 0 };
+          });
+          setAvailableStockMap(map);
+        } else {
+          setAvailableStockMap({});
+        }
+      } catch (err) {
+        console.error('Error fetching available stock for department:', err);
+      }
+    };
+    fetchStockForDept();
+  }, [deptId]);
 
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
@@ -205,6 +241,7 @@ const JobworkOutEntry = () => {
 
     setJwOutwardDate(new Date().toISOString().split('T')[0]);
     setBill(true);
+    setDeptId(1);
     setLedgerId(null);
     setRemark('');
     setGridRows([{ ...emptyRow }]);
@@ -215,6 +252,7 @@ const JobworkOutEntry = () => {
     setDialogError('');
     setEditingId(jw.ID);
     setBill(jw.Bill !== false && jw.Bill !== 0);
+    setDeptId(jw.DeptID || 1);
     setJwOutwardNo(jw.JWOUTWARDNO || '');
     setJwOutwardDate(jw.JWOUTWARDDATE ? jw.JWOUTWARDDATE.split('T')[0] : new Date().toISOString().split('T')[0]);
     setLedgerId(jw.LEDGERID);
@@ -366,10 +404,12 @@ const JobworkOutEntry = () => {
     const dateVal = jw.JWOUTWARDDATE || new Date();
     const formattedDate = new Date(dateVal).toLocaleDateString('en-GB'); // DD/MM/YYYY
     doc.text(`Date: ${formattedDate}`, 196, 29, { align: 'right' });
+    const fromDeptStr = jw.DeptName || departments.find(d => d.DeptID === (jw.DeptID || deptId))?.DeptName || 'Stock';
+    doc.text(`From Dept: ${fromDeptStr}`, 196, 33, { align: 'right' });
 
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    const dividerY = Math.max(headerY + 2, 33);
+    const dividerY = Math.max(headerY + 2, 36);
     doc.line(14, dividerY, 196, dividerY);
 
     // Receiver Details (Vendor details)
@@ -532,6 +572,7 @@ const JobworkOutEntry = () => {
       JWOUTWARDNO: jwOutwardNo,
       JWOUTWARDDATE: jwOutwardDate,
       LEDGERID: ledgerId,
+      DeptID: deptId || 1,
       Bill: bill ? 1 : 0,
       REMARK: remark,
       CREATEDBY: username,
@@ -667,6 +708,7 @@ const JobworkOutEntry = () => {
                 <TableCell sx={{ fontWeight: 600 }}>Challan No</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>From Dept</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger / Party</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Remarks</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -690,6 +732,19 @@ const JobworkOutEntry = () => {
                     />
                   </TableCell>
                   <TableCell>{row.JWOUTWARDDATE ? row.JWOUTWARDDATE.split('T')[0] : ''}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      size="small" 
+                      label={row.DeptName || 'Stock'} 
+                      sx={{ 
+                        fontSize: '0.72rem', 
+                        height: 20, 
+                        fontWeight: 700, 
+                        bgcolor: (row.DeptName && row.DeptName !== 'Stock') ? '#e0f2fe' : '#f1f5f9',
+                        color: (row.DeptName && row.DeptName !== 'Stock') ? '#0369a1' : '#475569'
+                      }} 
+                    />
+                  </TableCell>
                   <TableCell>{row.LedgerName}</TableCell>
                   <TableCell>{row.REMARK || '-'}</TableCell>
                   <TableCell align="center">
@@ -707,7 +762,7 @@ const JobworkOutEntry = () => {
               ))}
               {filteredJwOutwards.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>No Job Work Out entries found.</TableCell>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>No Job Work Out entries found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -736,19 +791,31 @@ const JobworkOutEntry = () => {
           {/* Header Section */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={1}>
+              <Grid item xs={6} sm={2} md={1}>
                 <FormControlLabel
                   control={<Checkbox checked={bill} onChange={(e) => setBill(e.target.checked)} />}
                   label="Bill"
                 />
               </Grid>
-              <Grid item xs={12} sm={3} md={2}>
+              <Grid item xs={6} sm={2.5} md={1.5}>
                 <TextField fullWidth label="Challan No" size="small" value={jwOutwardNo} onChange={(e) => setJwOutwardNo(e.target.value)} required />
               </Grid>
-              <Grid item xs={12} sm={3} md={2}>
+              <Grid item xs={12} sm={3.5} md={2}>
                 <TextField fullWidth label="Date" type="date" size="small" value={jwOutwardDate} onChange={(e) => setJwOutwardDate(e.target.value)} InputLabelProps={{ shrink: true }} required />
               </Grid>
-              <Grid item xs={12} sm={5} md={7}>
+              <Grid item xs={12} sm={6} md={3.5}>
+                <Autocomplete
+                  options={departments}
+                  getOptionLabel={(option) => option.DeptName || ''}
+                  value={departments.find(d => d.DeptID === deptId) || null}
+                  onChange={(e, newValue) => setDeptId(newValue ? newValue.DeptID : 1)}
+                  renderInput={(params) => <TextField {...params} label="From Department *" size="small" required fullWidth />}
+                  fullWidth
+                  sx={{ minWidth: 280 }}
+                  slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
                 <Autocomplete
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
@@ -756,7 +823,7 @@ const JobworkOutEntry = () => {
                   onChange={(e, newValue) => setLedgerId(newValue ? newValue.Id : null)}
                   renderInput={(params) => <TextField {...params} label="Ledger / Party" size="small" required fullWidth />}
                   fullWidth
-                  sx={{ minWidth: `${Math.max(20, maxLedgerLength) + 6}ch` }}
+                  sx={{ minWidth: 280 }}
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
                 />
               </Grid>
@@ -786,7 +853,14 @@ const JobworkOutEntry = () => {
                     <TableCell>
                       <Autocomplete
                         options={items}
-                        getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
+                        getOptionLabel={(option) => {
+                          if (!option) return '';
+                          const avail = availableStockMap[option.ItemCode];
+                          if (avail !== undefined) {
+                            return `${option.ItemCode} - ${option.ItemName} [Avail: ${avail.Pcs || 0} ${option.Unit || 'PCS'}${avail.Weight > 0 ? ` / ${avail.Weight}kg` : ''}]`;
+                          }
+                          return `${option.ItemCode} - ${option.ItemName}`;
+                        }}
                         value={items.find(i => i.ItemCode === row.ITEMCODE) || null}
                         onChange={(e, newValue) => handleItemSelect(index, newValue)}
                         renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}

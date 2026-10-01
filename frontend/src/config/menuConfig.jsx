@@ -88,6 +88,7 @@ export const MENU_STRUCTURE = [
         groupTitle: 'Inventory & Production',
         children: [
           { title: 'Stock', path: '/dashboard/reports/stock', icon: <ListIcon fontSize="small" /> },
+          { title: 'Item Stock Ledger', path: '/dashboard/reports/item-ledger', icon: <ReportsIcon fontSize="small" /> },
           { title: 'BOM', path: '/dashboard/reports/bom', icon: <BOMIcon fontSize="small" /> },
           { title: 'Assembly', path: '/dashboard/reports/assembly', icon: <AssemblyIcon fontSize="small" /> },
           { title: 'Stock Journal', path: '/dashboard/reports/stock-journal', icon: <ReportsIcon fontSize="small" /> },

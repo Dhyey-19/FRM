@@ -58,6 +58,7 @@ const JobworkOutReport = () => {
         return new Date(value).toLocaleDateString();
       }
     },
+    { field: 'FromDepartment', headerName: 'From Dept', width: 120 },
     { field: 'LedgerName', headerName: 'Ledger Name', width: 180 },
     { field: 'ITEMCODE', headerName: 'Item Code', width: 110 },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
@@ -106,6 +107,7 @@ const JobworkOutReport = () => {
     const tableData = filteredJobworkOuts.map(row => [
       row.JWOUTWARDNO,
       row.JWOUTWARDDATE ? new Date(row.JWOUTWARDDATE).toLocaleDateString() : '',
+      row.FromDepartment || 'Stock',
       row.LedgerName || '',
       row.ITEMCODE,
       row.ItemName,
@@ -119,7 +121,7 @@ const JobworkOutReport = () => {
     ]);
     
     autoTable(doc, {
-      head: [['Challan No', 'Date', 'Ledger', 'Item Code', 'Item Name', 'Process', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Amount']],
+      head: [['Challan No', 'Date', 'From Dept', 'Ledger', 'Item Code', 'Item Name', 'Process', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Amount']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -176,6 +178,7 @@ const JobworkOutReport = () => {
     const exportData = filteredJobworkOuts.map(row => ({
       'Challan No': row.JWOUTWARDNO,
       'Date': row.JWOUTWARDDATE ? new Date(row.JWOUTWARDDATE).toLocaleDateString() : '',
+      'From Department': row.FromDepartment || 'Stock',
       'Ledger Name': row.LedgerName,
       'Item Code': row.ITEMCODE,
       'Item Name': row.ItemName,

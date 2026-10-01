@@ -45,6 +45,7 @@ import InvoiceWiseReceivableReport from './pages/reports/InvoiceWiseReceivableRe
 import JobworkOutReport from './pages/reports/JobworkOutReport';
 import JobworkInReport from './pages/reports/JobworkInReport';
 import JobworkStockReport from './pages/reports/JobworkStockReport';
+import ItemStockLedgerReport from './pages/reports/ItemStockLedgerReport';
 function AuthApp() {
   const [currentPage, setCurrentPage] = useState('login');
   const navigate = useNavigate();
@@ -150,6 +151,7 @@ function App() {
           <Route path="reports/prices" element={<PriceReport />} />
           <Route path="reports/bom" element={<BOMReport />} />
           <Route path="reports/stock" element={<StockReport />} />
+          <Route path="reports/item-ledger" element={<ItemStockLedgerReport />} />
           <Route path="reports/account-ledger" element={<AccountLedgerReport />} />
           <Route path="reports/assembly" element={<AssemblyReport />} />
           <Route path="reports/stock-journal" element={<StockJournalReport />} />
