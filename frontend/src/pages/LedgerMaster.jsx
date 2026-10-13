@@ -34,6 +34,7 @@ const LedgerMaster = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAccountGroup, setSelectedAccountGroup] = useState('All');
   
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState('add');
@@ -89,10 +90,22 @@ const LedgerMaster = () => {
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
 
-  const filteredLedgers = ledgers.filter(l => 
-    (l.LedgerName && l.LedgerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (l.AccountGroupName && l.AccountGroupName.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const uniqueAccountGroups = Array.from(
+    new Set([
+      ...accountGroups.map(g => g.GroupName).filter(Boolean),
+      ...ledgers.map(l => l.AccountGroupName).filter(Boolean)
+    ])
+  ).sort((a, b) => a.localeCompare(b));
+
+  const filteredLedgers = ledgers.filter(l => {
+    const matchesSearch = (l.LedgerName && l.LedgerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (l.AccountGroupName && l.AccountGroupName.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+    const matchesGroup = selectedAccountGroup === 'All' || 
+      (l.AccountGroupName && l.AccountGroupName.toLowerCase() === selectedAccountGroup.toLowerCase());
+
+    return matchesSearch && matchesGroup;
+  });
 
   const handleOpenDialog = (mode, ledger = null) => {
     setDialogMode(mode);
@@ -220,15 +233,51 @@ const LedgerMaster = () => {
       </Box>
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2 }}>
-          <TextField
-            size="small"
-            placeholder="Search ledgers..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
-            sx={{ width: '300px' }}
-          />
+        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 2, pb: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              size="small"
+              placeholder="Search ledgers..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(0);
+              }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
+              sx={{ width: '260px' }}
+            />
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel>Account Group</InputLabel>
+              <Select
+                label="Account Group"
+                value={selectedAccountGroup}
+                onChange={(e) => {
+                  setSelectedAccountGroup(e.target.value);
+                  setPage(0);
+                }}
+                MenuProps={{ PaperProps: { sx: { maxHeight: 350 } } }}
+              >
+                <MenuItem value="All">All Groups</MenuItem>
+                {uniqueAccountGroups.map((groupName) => (
+                  <MenuItem key={groupName} value={groupName}>
+                    {groupName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {(searchTerm || selectedAccountGroup !== 'All') && (
+              <Button 
+                size="small" 
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedAccountGroup('All');
+                  setPage(0);
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </Box>
           <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}>
             Add Ledger
           </Button>

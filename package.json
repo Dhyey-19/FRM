@@ -1,6 +1,6 @@
 {
   "name": "factory-flow-desktop",
-  "version": "20260902.0.0",
+  "version": "0902.0.0",
   "description": "FactoryFlow Desktop Application",
   "author": "FactoryFlow",
   "main": "electron/main.js",
@@ -50,7 +50,7 @@
       "target": "nsis",
       "publisherName": "DTech",
       "icon": "build/icon.png",
-      "artifactName": "${productName}-20260902.${ext}",
+      "artifactName": "${productName}-20261013.${ext}",
       "certificateFile": "certs/DTech.pfx",
       "certificatePassword": "factoryflow"
     },

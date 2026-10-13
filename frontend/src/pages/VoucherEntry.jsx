@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import { 
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
-  MenuItem, Select, FormControl, InputLabel, Autocomplete, Grid, Divider, Chip
+  MenuItem, Select, FormControl, InputLabel, Autocomplete, Grid, Divider, Chip, Stack
 } from '@mui/material';
-import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Receipt as ReceiptIcon, Print as PrintIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon } from '@mui/icons-material';
+import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Receipt as ReceiptIcon, Print as PrintIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon, AccountBalance as BankIcon } from '@mui/icons-material';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
@@ -40,6 +41,7 @@ const getDefaultRows = (voucherType) => {
 };
 
 const VoucherEntry = ({ user }) => {
+  const navigate = useNavigate();
   const [vouchers, setVouchers] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,7 @@ const VoucherEntry = ({ user }) => {
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [searchTerm, setSearchTerm] = useState('');
   const [billFilter, setBillFilter] = useState('All');
+  const [voucherTypeFilter, setVoucherTypeFilter] = useState('All');
   
   const todayDate = new Date().toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(todayDate);
@@ -112,10 +115,23 @@ const VoucherEntry = ({ user }) => {
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
 
+  const standardVoucherTypes = ['Receipt', 'Payment', 'Contra', 'Journal', 'Purchase', 'Sales'];
+  const dynamicVoucherTypes = Array.from(
+    new Set(
+      vouchers
+        .map(v => (v.VoucherType === 'General' ? 'Journal' : (v.VoucherType || 'Journal')))
+        .filter(Boolean)
+    )
+  );
+  const voucherTypeOptions = Array.from(new Set([...standardVoucherTypes, ...dynamicVoucherTypes]));
+
   const filteredVouchers = vouchers.filter(v => {
+    const vType = v.VoucherType === 'General' ? 'Journal' : (v.VoucherType || 'Journal');
+
     const matchesSearch = (v.LedgerName && v.LedgerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (v.Mode && v.Mode.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          (v.VoucherNo && v.VoucherNo.toString().includes(searchTerm));
+                          (v.VoucherNo && v.VoucherNo.toString().includes(searchTerm)) ||
+                          (vType && vType.toLowerCase().includes(searchTerm.toLowerCase()));
                           
     const voucherDateStr = v.VoucherDate ? v.VoucherDate.split('T')[0] : '';
     let matchesDate = true;
@@ -128,8 +144,13 @@ const VoucherEntry = ({ user }) => {
     } else if (billFilter === 'Without Bill') {
       matchesBill = (v.Bill === false || v.Bill === 0);
     }
+
+    let matchesType = true;
+    if (voucherTypeFilter !== 'All') {
+      matchesType = vType.toLowerCase() === voucherTypeFilter.toLowerCase();
+    }
     
-    return matchesSearch && matchesDate && matchesBill;
+    return matchesSearch && matchesDate && matchesBill && matchesType;
   });
 
   const handleOpenDialog = () => {
@@ -610,11 +631,30 @@ const VoucherEntry = ({ user }) => {
               sx={{ width: '220px' }}
             />
             <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Voucher Type</InputLabel>
+              <Select
+                label="Voucher Type"
+                value={voucherTypeFilter}
+                onChange={(e) => {
+                  setVoucherTypeFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="All">All Types</MenuItem>
+                {voucherTypeOptions.map((type) => (
+                  <MenuItem key={type} value={type}>{type}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
               <InputLabel>Bill Type</InputLabel>
               <Select
                 label="Bill Type"
                 value={billFilter}
-                onChange={(e) => setBillFilter(e.target.value)}
+                onChange={(e) => {
+                  setBillFilter(e.target.value);
+                  setPage(0);
+                }}
               >
                 <MenuItem value="All">All Vouchers</MenuItem>
                 <MenuItem value="With Bill">With Bill</MenuItem>
@@ -626,7 +666,10 @@ const VoucherEntry = ({ user }) => {
               type="date"
               size="small"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setPage(0);
+              }}
               InputLabelProps={{ shrink: true }}
               sx={{ width: '150px' }}
             />
@@ -635,15 +678,28 @@ const VoucherEntry = ({ user }) => {
               type="date"
               size="small"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setPage(0);
+              }}
               InputLabelProps={{ shrink: true }}
               sx={{ width: '150px' }}
             />
-            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); setBillFilter('All'); }}>Clear</Button>
+            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); setBillFilter('All'); setVoucherTypeFilter('All'); setSearchTerm(''); setPage(0); }}>Clear</Button>
           </Box>
-          <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
-            Bulk Add Vouchers
-          </Button>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Button
+              variant="outlined"
+              startIcon={<BankIcon />}
+              onClick={() => navigate('/dashboard/bank-reconciliation')}
+              sx={{ borderColor: '#0F3B66', color: '#0F3B66' }}
+            >
+              Bank Reconciliation
+            </Button>
+            <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
+              Bulk Add Vouchers
+            </Button>
+          </Stack>
         </Toolbar>
 
         <TableContainer>

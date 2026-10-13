@@ -17,6 +17,7 @@ import AccountGroupMaster from './pages/AccountGroupMaster';
 import CompanyProfile from './pages/CompanyProfile';
 import LedgerMaster from './pages/LedgerMaster';
 import VoucherEntry from './pages/VoucherEntry';
+import BankReconciliation from './pages/BankReconciliation';
 import InwardEntry from './pages/InwardEntry';
 import OutwardEntry from './pages/OutwardEntry';
 import StockTransfer from './pages/StockTransfer';
@@ -139,6 +140,7 @@ function App() {
           <Route path="account-groups" element={<AccountGroupMaster />} />
           <Route path="ledgers" element={<LedgerMaster />} />
           <Route path="vouchers" element={<VoucherEntry />} />
+          <Route path="bank-reconciliation" element={<BankReconciliation />} />
           <Route path="inwards" element={<InwardEntry />} />
           <Route path="outwards" element={<OutwardEntry />} />
           <Route path="jobwork-outs" element={<JobworkOutEntry />} />

@@ -15,6 +15,7 @@ import {
   Business as DepartmentIcon,
   Build as AssemblyIcon,
   Settings as SettingsIcon,
+  AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -69,6 +70,7 @@ export const MENU_STRUCTURE = [
       { title: 'Account Group', path: '/dashboard/account-groups', icon: <AccountGroupIcon /> },
       { title: 'Account Ledger', path: '/dashboard/ledgers', icon: <PeopleIcon /> },
       { title: 'Vouchers', path: '/dashboard/vouchers', icon: <TransactionIcon /> },
+      { title: 'Bank Reconciliation', path: '/dashboard/bank-reconciliation', icon: <AccountBalanceIcon /> },
     ]
   },
   {
