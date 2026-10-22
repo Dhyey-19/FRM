@@ -4,9 +4,20 @@ exports.getLedgers = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
-      SELECT l.*, a.GroupName as AccountGroupName
+      SELECT 
+        l.Id, l.LedgerName, l.AccountGroupID, l.Address, l.City, l.State, l.GSTIN, l.MobileNo, l.Email,
+        l.BankName, l.AccountNo, l.IFSC, l.UPI, l.OwnBrand, l.OtherBrand, l.Discount, l.CD, l.Bill,
+        l.PaymentTerm, l.Transport, l.Remark,
+        ISNULL(l.OpeningBalance, 0) as OpeningBalance,
+        ISNULL(l.OpeningBalance, 0) + ISNULL(v.NetVouchers, 0) AS ClosingBalance,
+        a.GroupName as AccountGroupName
       FROM LedgerMaster l
       LEFT JOIN AccountGroup a ON l.AccountGroupID = a.Id
+      LEFT JOIN (
+        SELECT LedgerId, SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END) AS NetVouchers
+        FROM VoucherEntry
+        GROUP BY LedgerId
+      ) v ON l.Id = v.LedgerId
       ORDER BY l.LedgerName ASC
     `);
     res.status(200).json(result.recordset);
@@ -264,7 +275,9 @@ exports.updateLedger = async (req, res) => {
         UPDATE LedgerMaster SET 
           LedgerName = @LedgerName, AccountGroupID = @AccountGroupID, Address = @Address, 
           City = @City, State = @State, GSTIN = @GSTIN, MobileNo = @MobileNo, Email = @Email,
-          OpeningBalance = @OpeningBalance, ClosingBalance = @ClosingBalance, BankName = @BankName, 
+          OpeningBalance = @OpeningBalance, 
+          ClosingBalance = @OpeningBalance + ISNULL((SELECT SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END) FROM VoucherEntry WHERE LedgerId = @Id), 0),
+          BankName = @BankName, 
           AccountNo = @AccountNo, IFSC = @IFSC, UPI = @UPI, OwnBrand = @OwnBrand, OtherBrand = @OtherBrand,
           Discount = @Discount, CD = @CD, Bill = @Bill, PaymentTerm = @PaymentTerm, 
           Transport = @Transport, Remark = @Remark
@@ -321,9 +334,17 @@ exports.getProfitLossReport = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
-      SELECT l.LedgerName, ISNULL(l.ClosingBalance, 0) as ClosingBalance, a.GroupName
+      SELECT 
+        l.LedgerName, 
+        ISNULL(l.OpeningBalance, 0) + ISNULL(v.NetVouchers, 0) as ClosingBalance, 
+        a.GroupName
       FROM LedgerMaster l
       LEFT JOIN AccountGroup a ON l.AccountGroupID = a.Id
+      LEFT JOIN (
+        SELECT LedgerId, SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END) AS NetVouchers
+        FROM VoucherEntry
+        GROUP BY LedgerId
+      ) v ON l.Id = v.LedgerId
     `);
     
     const records = result.recordset;
@@ -574,9 +595,17 @@ exports.getBalanceSheetReport = async (req, res) => {
   try {
     const pool = await connectDB();
     const result = await pool.request().query(`
-      SELECT l.LedgerName, ISNULL(l.ClosingBalance, 0) as ClosingBalance, a.GroupName
+      SELECT 
+        l.LedgerName, 
+        ISNULL(l.OpeningBalance, 0) + ISNULL(v.NetVouchers, 0) as ClosingBalance, 
+        a.GroupName
       FROM LedgerMaster l
       LEFT JOIN AccountGroup a ON l.AccountGroupID = a.Id
+      LEFT JOIN (
+        SELECT LedgerId, SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END) AS NetVouchers
+        FROM VoucherEntry
+        GROUP BY LedgerId
+      ) v ON l.Id = v.LedgerId
     `);
     
     const records = result.recordset;
