@@ -17,6 +17,8 @@ dist/
 dist-ssr/
 *.local
 out/
+*.zip
+dist.zip
 
 # Environment variables / Secrets
 .env

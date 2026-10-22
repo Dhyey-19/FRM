@@ -1,6 +1,6 @@
 {
   "name": "factory-flow-desktop",
-  "version": "0902.0.0",
+  "version": "20261014.0.0",
   "description": "FactoryFlow Desktop Application",
   "author": "FactoryFlow",
   "main": "electron/main.js",
