@@ -50,7 +50,7 @@
       "target": "nsis",
       "publisherName": "DTech",
       "icon": "build/icon.png",
-      "artifactName": "${productName}-20261013.${ext}",
+      "artifactName": "${productName}-20261022.${ext}",
       "certificateFile": "certs/DTech.pfx",
       "certificatePassword": "factoryflow"
     },
