@@ -101,7 +101,7 @@ export const MENU_STRUCTURE = [
         children: [
           { title: 'Job Work Out', path: '/dashboard/reports/jobwork-out', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Job Work In', path: '/dashboard/reports/jobwork-in', icon: <ReportsIcon fontSize="small" /> },
-          { title: 'Job Work Stock', path: '/dashboard/reports/jobwork-stock', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Job Work Movement', path: '/dashboard/reports/jobwork-movement', icon: <ReportsIcon fontSize="small" /> },
         ]
       },
       {

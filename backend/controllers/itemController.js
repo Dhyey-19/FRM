@@ -233,6 +233,43 @@ exports.bulkCreateItems = async (req, res) => {
   }
 };
 
+// Helper to parse entry timestamp from CreatedBy signature (e.g. 'USERNAME - DD/MM/YYYY HH:mm')
+const parseEntryTimestamp = (sig) => {
+  if (!sig || typeof sig !== 'string') return 0;
+  // Match DD/MM/YYYY HH:mm(:ss)?
+  const dmyMatch = sig.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
+    const min = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
+    const sec = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hour, min, sec);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  // Match YYYY-MM-DD HH:mm(:ss)?
+  const ymdMatch = sig.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const hour = ymdMatch[4] ? parseInt(ymdMatch[4], 10) : 0;
+    const min = ymdMatch[5] ? parseInt(ymdMatch[5], 10) : 0;
+    const sec = ymdMatch[6] ? parseInt(ymdMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hour, min, sec);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return 0;
+};
+
+// Helper to extract time portion (e.g. '10:00') from CreatedBy
+const extractEntryTime = (sig) => {
+  if (!sig || typeof sig !== 'string') return '';
+  const match = sig.match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
+  return match ? match[1] : '';
+};
+
 // GET /api/items/stock-ledger
 exports.getItemStockLedger = async (req, res) => {
   try {
@@ -422,6 +459,7 @@ exports.getItemStockLedger = async (req, res) => {
       SELECT 
         st.MoveID as HeaderId,
         CAST(st.TransferID as VARCHAR(20)) as DocNo,
+        st.ManualChallanNo as ManualChallanNo,
         CONVERT(VARCHAR(10), st.MoveDate, 120) as TxDate,
         'Stock Transfer Out' as TxType,
         'Stock Transfer' as TxCategory,
@@ -454,6 +492,7 @@ exports.getItemStockLedger = async (req, res) => {
       SELECT 
         st.MoveID as HeaderId,
         CAST(st.TransferID as VARCHAR(20)) as DocNo,
+        st.ManualChallanNo as ManualChallanNo,
         CONVERT(VARCHAR(10), st.MoveDate, 120) as TxDate,
         'Stock Transfer In' as TxType,
         'Stock Transfer' as TxCategory,
@@ -486,6 +525,7 @@ exports.getItemStockLedger = async (req, res) => {
       SELECT 
         st.MoveID as HeaderId,
         CAST(st.TransferID as VARCHAR(20)) as DocNo,
+        st.ManualChallanNo as ManualChallanNo,
         CONVERT(VARCHAR(10), st.MoveDate, 120) as TxDate,
         'Stock Transfer (Scrap)' as TxType,
         'Stock Transfer' as TxCategory,
@@ -635,11 +675,16 @@ exports.getItemStockLedger = async (req, res) => {
       });
     }
 
-    // Sort chronologically
+    // Sort chronologically: ascending order of date, then by entry timestamp (from CreatedBy)
     allTransactions.sort((a, b) => {
       const dateA = new Date(a.TxDate || '1970-01-01').getTime();
       const dateB = new Date(b.TxDate || '1970-01-01').getTime();
       if (dateA !== dateB) return dateA - dateB;
+
+      const timeA = parseEntryTimestamp(a.CreatedBy);
+      const timeB = parseEntryTimestamp(b.CreatedBy);
+      if (timeA !== timeB) return timeA - timeB;
+
       return (Number(a.HeaderId) || 0) - (Number(b.HeaderId) || 0);
     });
 
@@ -691,7 +736,8 @@ exports.getItemStockLedger = async (req, res) => {
         id: `${tx.TxCategory}-${tx.HeaderId}-${idx}`,
         headerId: tx.HeaderId,
         date: tx.TxDate,
-        docNo: tx.DocNo,
+        docNo: tx.ManualChallanNo ? `${tx.DocNo} (Ch: ${tx.ManualChallanNo})` : tx.DocNo,
+        manualChallanNo: tx.ManualChallanNo || null,
         type: tx.TxType,
         category: tx.TxCategory,
         direction: tx.Direction,
@@ -707,6 +753,7 @@ exports.getItemStockLedger = async (req, res) => {
         rate: Number(tx.Rate || 0),
         amount: Number(tx.Amount || 0),
         createdBy: tx.CreatedBy,
+        entryTime: extractEntryTime(tx.CreatedBy),
         fromDeptName: tx.FromDeptName,
         toDeptName: tx.ToDeptName,
         runningStock: Number(runningBalance.toFixed(3))
@@ -794,4 +841,114 @@ exports.getItemStockLedger = async (req, res) => {
     res.status(500).json({ message: 'Server error fetching item stock ledger', error: error.message });
   }
 };
+
+// GET /api/items/combined-stock
+exports.getCombinedStockReport = async (req, res) => {
+  try {
+    const pool = await connectDB();
+
+    const [itemsRes, deptRes, jwRes] = await Promise.all([
+      pool.request().query(`
+        SELECT 
+          ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, 
+          ISNULL(ClosingStock, 0) AS MainStock 
+        FROM ItemMaster 
+        ORDER BY ItemCode ASC
+      `),
+      pool.request().query(`
+        SELECT 
+          ds.DeptID, 
+          ISNULL(dm.DeptName, 'Unknown Department') AS DeptName, 
+          ds.ItemCode, 
+          ISNULL(ds.Pcs, 0) AS Pcs, 
+          ISNULL(ds.Weight, 0) AS Weight 
+        FROM DepartmentStock ds 
+        LEFT JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID 
+        WHERE ISNULL(ds.Pcs, 0) != 0 OR ISNULL(ds.Weight, 0) != 0
+      `),
+      pool.request().query(`
+        SELECT 
+          l.Id AS LedgerId,
+          ISNULL(l.LedgerName, 'Unknown Job Worker') AS LedgerName,
+          d.ITEMCODE AS ItemCode,
+          (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) AS BalQty,
+          (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) AS BalNetWt
+        FROM JobworkOutDetail d
+        INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
+        LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+        LEFT JOIN (
+          SELECT 
+            jwh.LEDGERID,
+            jwd.OUTITEMCODE,
+            SUM(jwd.QUANTITY) AS InQty,
+            SUM(jwd.NETWT) AS InNetWt
+          FROM JobworkInDetail jwd
+          INNER JOIN JobworkInHeader jwh ON jwd.JWINWARDID = jwh.ID
+          GROUP BY jwh.LEDGERID, jwd.OUTITEMCODE
+        ) inwards ON l.Id = inwards.LEDGERID AND d.ITEMCODE = inwards.OUTITEMCODE
+        GROUP BY l.Id, l.LedgerName, d.ITEMCODE, inwards.InQty, inwards.InNetWt
+        HAVING (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) > 0 OR (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) > 0
+      `)
+    ]);
+
+    // Group DepartmentStock by ItemCode
+    const deptMap = {};
+    for (const row of deptRes.recordset) {
+      if (!deptMap[row.ItemCode]) deptMap[row.ItemCode] = [];
+      deptMap[row.ItemCode].push({
+        DeptID: row.DeptID,
+        DeptName: row.DeptName,
+        Pcs: Number(row.Pcs || 0),
+        Weight: Number(Number(row.Weight || 0).toFixed(3))
+      });
+    }
+
+    // Group Jobwork by ItemCode
+    const jwMap = {};
+    for (const row of jwRes.recordset) {
+      if (!jwMap[row.ItemCode]) jwMap[row.ItemCode] = [];
+      jwMap[row.ItemCode].push({
+        LedgerId: row.LedgerId,
+        LedgerName: row.LedgerName,
+        BalQty: Number(row.BalQty || 0),
+        BalNetWt: Number(Number(row.BalNetWt || 0).toFixed(3))
+      });
+    }
+
+    const combined = itemsRes.recordset.map(item => {
+      const depts = deptMap[item.ItemCode] || [];
+      const jws = jwMap[item.ItemCode] || [];
+
+      const mainStock = Number(item.MainStock || 0);
+      const deptStock = depts.reduce((sum, d) => sum + d.Pcs, 0);
+      const deptWeight = Number(depts.reduce((sum, d) => sum + d.Weight, 0).toFixed(3));
+      const jwStock = jws.reduce((sum, j) => sum + j.BalQty, 0);
+      const jwWeight = Number(jws.reduce((sum, j) => sum + j.BalNetWt, 0).toFixed(3));
+
+      const totalStock = mainStock + deptStock + jwStock;
+      const totalWeight = Number((item.StdWeight ? totalStock * Number(item.StdWeight) : (deptWeight + jwWeight)).toFixed(3));
+      const valuation = Number((totalStock * Number(item.Costing || 0)).toFixed(2));
+
+      return {
+        ...item,
+        MainStock: mainStock,
+        DeptStock: deptStock,
+        DeptWeight: deptWeight,
+        JwStock: jwStock,
+        JwWeight: jwWeight,
+        TotalStock: totalStock,
+        TotalWeight: totalWeight,
+        Valuation: valuation,
+        Departments: depts,
+        Jobworkers: jws
+      };
+    });
+
+    res.status(200).json(combined);
+  } catch (error) {
+    console.error('Error fetching combined stock report:', error);
+    res.status(500).json({ message: 'Server error fetching combined stock report', error: error.message });
+  }
+};
+
 

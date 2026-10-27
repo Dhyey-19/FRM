@@ -5,6 +5,7 @@ const jobworkInController = require('../controllers/jobworkInController');
 router.get('/next-no', jobworkInController.getNextJobworkInNo);
 router.get('/report', jobworkInController.getJobworkInReport);
 router.get('/stock-report', jobworkInController.getJobworkStockReport);
+router.get('/movement-report', jobworkInController.getJobworkMovementReport);
 router.get('/', jobworkInController.getJobworkIns);
 router.post('/', jobworkInController.addJobworkIn);
 router.put('/:id', jobworkInController.updateJobworkIn);

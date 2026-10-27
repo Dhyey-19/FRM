@@ -28,6 +28,51 @@ exports.getNextJobworkOutNo = async (req, res) => {
   }
 };
 
+exports.getDepartmentItems = async (req, res) => {
+  try {
+    const { deptId } = req.params;
+    if (!deptId) return res.status(400).json({ message: 'DeptID is required' });
+
+    const pool = await connectDB();
+    const deptResult = await pool.request().query(`SELECT DeptName FROM DepartmentMaster WHERE DeptID = ${parseInt(deptId, 10)}`);
+    if (deptResult.recordset.length === 0) return res.status(404).json({ message: 'Department not found' });
+
+    const deptName = (deptResult.recordset[0].DeptName || '').toLowerCase();
+
+    if (deptName === 'stock') {
+      const dbRes = await pool.request().query(`
+        SELECT ItemCode, ItemName, Unit, ClosingStock, Costing
+        FROM ItemMaster
+        ORDER BY ItemName ASC
+      `);
+      const mapped = dbRes.recordset.map(item => {
+        const isWeight = (item.Unit || '').toUpperCase() === 'KG' || (item.Unit || '').toUpperCase() === 'KGS';
+        return {
+          ItemCode: item.ItemCode,
+          ItemName: item.ItemName,
+          Unit: item.Unit,
+          Costing: item.Costing,
+          Pcs: isWeight ? 0 : (item.ClosingStock || 0),
+          Weight: isWeight ? (item.ClosingStock || 0) : 0
+        };
+      });
+      return res.json(mapped);
+    } else {
+      const dbRes = await pool.request().query(`
+        SELECT d.ItemCode, i.ItemName, i.Unit, i.Costing, ISNULL(d.Pcs, 0) as Pcs, ISNULL(d.Weight, 0) as Weight
+        FROM DepartmentStock d
+        JOIN ItemMaster i ON d.ItemCode = i.ItemCode
+        WHERE d.DeptID = ${parseInt(deptId, 10)}
+        ORDER BY i.ItemName ASC
+      `);
+      return res.json(dbRes.recordset);
+    }
+  } catch (error) {
+    console.error('Error fetching department items for jobwork out:', error);
+    res.status(500).json({ message: 'Server error fetching department items' });
+  }
+};
+
 // Helper to update stock for a detail row based on DeptID
 async function applyJobworkOutStock(request, deptId, itemCode, quantity, netWt, multiplier = -1) {
   // multiplier = -1 means deduct stock (outward)

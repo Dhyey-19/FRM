@@ -81,6 +81,25 @@ exports.getAvailableStock = async (req, res) => {
   }
 };
 
+exports.getNextChallanNo = async (req, res) => {
+  try {
+    const { deptId } = req.params;
+    if (!deptId) return res.status(400).json({ message: 'DeptID is required' });
+
+    const pool = await connectDB();
+    const result = await pool.request().query(`
+      SELECT ISNULL(MAX(TRY_CAST(ManualChallanNo AS INT)), 0) + 1 AS NextChallanNo 
+      FROM StockTransfer 
+      WHERE FromDeptID = ${parseInt(deptId, 10)}
+    `);
+    const nextNo = result.recordset[0]?.NextChallanNo || 1;
+    res.json({ nextChallanNo: String(nextNo) });
+  } catch (error) {
+    console.error('Error fetching next challan no:', error);
+    res.status(500).json({ message: 'Server error fetching next challan no' });
+  }
+};
+
 const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1) => {
   // 1. Get Department Names
   const deptResult = await request.query(`SELECT DeptID, DeptName FROM DepartmentMaster WHERE DeptID IN (${FromDeptID}, ${ToDeptID})`);
@@ -191,7 +210,7 @@ exports.createStockTransfers = async (req, res) => {
   let pool;
   let transaction;
   try {
-    const { MoveDate, FromDeptID, ToDeptID, Remarks, outItems = [], inItems = [], scrapItems = [], LossWeight = 0, LossRate = 0, LossAmount = 0, CreatedBy } = req.body;
+    const { MoveDate, FromDeptID, ToDeptID, ManualChallanNo, Remarks, outItems = [], inItems = [], scrapItems = [], LossWeight = 0, LossRate = 0, LossAmount = 0, CreatedBy } = req.body;
 
     if (!MoveDate || !FromDeptID || !ToDeptID || outItems.length === 0) {
       return res.status(400).json({ message: 'Missing required fields or Out Items.' });
@@ -217,6 +236,7 @@ exports.createStockTransfers = async (req, res) => {
     }
 
     const remarksEscaped = Remarks ? `'${Remarks.replace(/'/g, "''")}'` : 'NULL';
+    const manualChallanEscaped = ManualChallanNo ? `'${String(ManualChallanNo).replace(/'/g, "''")}'` : 'NULL';
     const sig = getSignature(CreatedBy);
 
     // Insert Out Items
@@ -231,8 +251,8 @@ exports.createStockTransfers = async (req, res) => {
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
 
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, OutItemCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, OutItemCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
       await modifyStock(request, { OutItemCode: item.ItemCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
@@ -244,8 +264,8 @@ exports.createStockTransfers = async (req, res) => {
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, InItemCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, InItemCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
       await modifyStock(request, { InItemCode: item.ItemCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
@@ -257,8 +277,8 @@ exports.createStockTransfers = async (req, res) => {
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ScrapItemCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, ScrapItemCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
       await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
@@ -277,7 +297,7 @@ exports.updateStockTransfer = async (req, res) => {
   let transaction;
   try {
     const { id } = req.params; // id is now TransferID
-    const { MoveDate, FromDeptID, ToDeptID, Remarks, outItems = [], inItems = [], scrapItems = [], LossWeight = 0, LossRate = 0, LossAmount = 0, UpdatedBy } = req.body;
+    const { MoveDate, FromDeptID, ToDeptID, ManualChallanNo, Remarks, outItems = [], inItems = [], scrapItems = [], LossWeight = 0, LossRate = 0, LossAmount = 0, UpdatedBy } = req.body;
 
     if (!MoveDate || !FromDeptID || !ToDeptID || outItems.length === 0) {
       return res.status(400).json({ message: 'Missing required fields or Out Items.' });
@@ -304,6 +324,7 @@ exports.updateStockTransfer = async (req, res) => {
 
     // 3. Insert new records (similar to create)
     const remarksEscaped = Remarks ? `'${Remarks.replace(/'/g, "''")}'` : 'NULL';
+    const manualChallanEscaped = ManualChallanNo ? `'${String(ManualChallanNo).replace(/'/g, "''")}'` : 'NULL';
     const sig = getSignature(UpdatedBy);
 
     // Insert Out Items
@@ -318,8 +339,8 @@ exports.updateStockTransfer = async (req, res) => {
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
 
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, OutItemCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, OutItemCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
       await modifyStock(request, { OutItemCode: item.ItemCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
@@ -331,8 +352,8 @@ exports.updateStockTransfer = async (req, res) => {
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, InItemCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, InItemCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
       await modifyStock(request, { InItemCode: item.ItemCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
@@ -344,8 +365,8 @@ exports.updateStockTransfer = async (req, res) => {
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ScrapItemCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, ScrapItemCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
       await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }

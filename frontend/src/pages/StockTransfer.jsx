@@ -4,7 +4,7 @@ import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
-  Autocomplete, Grid, Divider
+  Autocomplete, Grid, Divider, FormControl, InputLabel, Select, MenuItem, Chip
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -15,7 +15,8 @@ import {
   Visibility as ViewIcon,
   Close as CloseIcon,
   Description as DescriptionIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import PdfPreviewModal from '../components/common/PdfPreviewModal';
@@ -76,7 +77,25 @@ const StockTransfer = ({ user }) => {
   const [moveDate, setMoveDate] = useState(todayDate);
   const [fromDeptId, setFromDeptId] = useState(null);
   const [toDeptId, setToDeptId] = useState(null);
+  const [manualChallanNo, setManualChallanNo] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [fromDeptFilter, setFromDeptFilter] = useState('');
+  const [toDeptFilter, setToDeptFilter] = useState('');
+
+  const fetchNextChallanNo = async (deptId) => {
+    if (!deptId) return;
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/stock-transfers/next-challan/${deptId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.nextChallanNo) {
+          setManualChallanNo(String(data.nextChallanNo));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching next challan no:', err);
+    }
+  };
   
   // Grid State
   const [outItems, setOutItems] = useState([{ ...emptyItemRow }]);
@@ -181,17 +200,30 @@ const StockTransfer = ({ user }) => {
 
   const filteredTransfers = transfers.filter(t => {
     const matchesSearch = 
+      (t.ManualChallanNo && t.ManualChallanNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.TransferID && String(t.TransferID).toLowerCase().includes(searchTerm.toLowerCase())) ||
       (t.OutItemName && t.OutItemName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (t.InItemName && t.InItemName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (t.FromDeptName && t.FromDeptName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (t.ToDeptName && t.ToDeptName.toLowerCase().includes(searchTerm.toLowerCase()));
+      (t.ToDeptName && t.ToDeptName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.Remarks && t.Remarks.toLowerCase().includes(searchTerm.toLowerCase()));
       
     const dateStr = t.MoveDate ? t.MoveDate.split('T')[0] : '';
     let matchesDate = true;
     if (fromDate && dateStr < fromDate) matchesDate = false;
     if (toDate && dateStr > toDate) matchesDate = false;
+
+    let matchesFrom = true;
+    if (fromDeptFilter && t.FromDeptID !== parseInt(fromDeptFilter, 10)) {
+      matchesFrom = false;
+    }
+
+    let matchesTo = true;
+    if (toDeptFilter && t.ToDeptID !== parseInt(toDeptFilter, 10)) {
+      matchesTo = false;
+    }
     
-    return matchesSearch && matchesDate;
+    return matchesSearch && matchesDate && matchesFrom && matchesTo;
   });
 
   const handleOpenDialog = () => {
@@ -201,6 +233,7 @@ const StockTransfer = ({ user }) => {
     setMoveDate(todayDate);
     setFromDeptId(null);
     setToDeptId(null);
+    setManualChallanNo('');
     setRemarks('');
     setOutItems([{ ...emptyItemRow }]);
     setInItems([{ ...emptyItemRow }]);
@@ -220,6 +253,7 @@ const StockTransfer = ({ user }) => {
     const firstDetail = group.details && group.details.length > 0 ? group.details[0] : group;
     setFromDeptId(firstDetail.FromDeptID || group.FromDeptID);
     setToDeptId(firstDetail.ToDeptID || group.ToDeptID);
+    setManualChallanNo(firstDetail.ManualChallanNo || group.ManualChallanNo || '');
     setRemarks(firstDetail.Remarks || group.Remarks || '');
     
     const outs = [];
@@ -357,6 +391,7 @@ const StockTransfer = ({ user }) => {
       MoveDate: moveDate,
       FromDeptID: fromDeptId,
       ToDeptID: toDeptId,
+      ManualChallanNo: manualChallanNo,
       Remarks: remarks,
       CreatedBy: user?.username || 'Admin',
       UpdatedBy: user?.username || 'Admin',
@@ -401,6 +436,7 @@ const StockTransfer = ({ user }) => {
 
           const groupData = {
             TransferID: returnedId,
+            ManualChallanNo: manualChallanNo,
             MoveDate: moveDate,
             FromDeptName: departments.find(d => d.DeptID === fromDeptId)?.DeptName || '',
             ToDeptName: departments.find(d => d.DeptID === toDeptId)?.DeptName || '',
@@ -464,23 +500,28 @@ const StockTransfer = ({ user }) => {
     doc.setFont('helvetica', 'bold');
     doc.text('Transfer ID:', 14, yPos);
     doc.setFont('helvetica', 'normal');
-    doc.text(group.TransferID?.toString() || 'N/A', 40, yPos);
+    doc.text(group.TransferID?.toString() || 'N/A', 38, yPos);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Date:', 130, yPos);
+    doc.text('Challan No:', 75, yPos);
     doc.setFont('helvetica', 'normal');
-    doc.text(group.MoveDate ? group.MoveDate.split('T')[0] : '', 145, yPos);
+    doc.text(group.ManualChallanNo ? group.ManualChallanNo.toString() : '-', 98, yPos);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Date:', 145, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.text(group.MoveDate ? group.MoveDate.split('T')[0] : '', 158, yPos);
 
     yPos += 7;
     doc.setFont('helvetica', 'bold');
     doc.text('From Dept:', 14, yPos);
     doc.setFont('helvetica', 'normal');
-    doc.text(group.FromDeptName || '', 40, yPos);
+    doc.text(group.FromDeptName || '', 38, yPos);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('To Dept:', 130, yPos);
+    doc.text('To Dept:', 145, yPos);
     doc.setFont('helvetica', 'normal');
-    doc.text(group.ToDeptName || '', 145, yPos);
+    doc.text(group.ToDeptName || '', 158, yPos);
 
     yPos += 10;
 
@@ -621,15 +662,47 @@ const StockTransfer = ({ user }) => {
       groupedTransfers[transfer.TransferID] = {
         TransferID: transfer.TransferID,
         MoveDate: transfer.MoveDate,
-        FromDeptName: transfer.FromDeptName,
-        ToDeptName: transfer.ToDeptName,
+        FromDeptName: transfer.FromDeptName || 'Unknown',
+        ToDeptName: transfer.ToDeptName || 'Unknown',
+        FromDeptID: transfer.FromDeptID,
+        ToDeptID: transfer.ToDeptID,
+        ManualChallanNo: transfer.ManualChallanNo,
+        Remarks: transfer.Remarks,
         details: []
       };
     }
     groupedTransfers[transfer.TransferID].details.push(transfer);
   });
   const groupedArray = Object.values(groupedTransfers);
-  const paginatedGroups = groupedArray.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  // Sort groupedArray so From & To departments are separated and grouped
+  groupedArray.sort((a, b) => {
+    const fromCompare = (a.FromDeptName || '').localeCompare(b.FromDeptName || '');
+    if (fromCompare !== 0) return fromCompare;
+    const toCompare = (a.ToDeptName || '').localeCompare(b.ToDeptName || '');
+    if (toCompare !== 0) return toCompare;
+
+    // Within same From and To department, sort by ManualChallanNo DESC (or MoveDate DESC)
+    const numA = parseInt(a.ManualChallanNo, 10);
+    const numB = parseInt(b.ManualChallanNo, 10);
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numB - numA;
+    }
+    const dateCompare = (b.MoveDate || '').localeCompare(a.MoveDate || '');
+    if (dateCompare !== 0) return dateCompare;
+    return (parseInt(b.TransferID, 10) || 0) - (parseInt(a.TransferID, 10) || 0);
+  });
+
+  // Calculate total counts per route
+  const routeCounts = {};
+  groupedArray.forEach(g => {
+    const key = `${g.FromDeptID || 0}->${g.ToDeptID || 0}`;
+    routeCounts[key] = (routeCounts[key] || 0) + 1;
+  });
+
+  const paginatedGroups = rowsPerPage > 0 
+    ? groupedArray.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+    : groupedArray;
 
   return (
     <Box>
@@ -640,16 +713,44 @@ const StockTransfer = ({ user }) => {
       </Box>
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2 }}>
+        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2, flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
               size="small"
-              placeholder="Search transfers..."
+              placeholder="Search transfers or challan..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
-              sx={{ width: '220px' }}
+              sx={{ width: '210px' }}
             />
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel id="from-dept-filter-label">From Department</InputLabel>
+              <Select
+                labelId="from-dept-filter-label"
+                value={fromDeptFilter}
+                label="From Department"
+                onChange={(e) => { setFromDeptFilter(e.target.value); setPage(0); }}
+              >
+                <MenuItem value=""><em>All From Departments</em></MenuItem>
+                {departments.map(d => (
+                  <MenuItem key={d.DeptID} value={d.DeptID}>{d.DeptName}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel id="to-dept-filter-label">To Department</InputLabel>
+              <Select
+                labelId="to-dept-filter-label"
+                value={toDeptFilter}
+                label="To Department"
+                onChange={(e) => { setToDeptFilter(e.target.value); setPage(0); }}
+              >
+                <MenuItem value=""><em>All To Departments</em></MenuItem>
+                {departments.map(d => (
+                  <MenuItem key={d.DeptID} value={d.DeptID}>{d.DeptName}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               label="From Date"
               type="date"
@@ -657,7 +758,7 @@ const StockTransfer = ({ user }) => {
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '150px' }}
+              sx={{ width: '145px' }}
             />
             <TextField
               label="To Date"
@@ -666,9 +767,11 @@ const StockTransfer = ({ user }) => {
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '150px' }}
+              sx={{ width: '145px' }}
             />
-            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); }}>Clear Dates</Button>
+            {(fromDate || toDate || fromDeptFilter || toDeptFilter || searchTerm) && (
+              <Button size="small" onClick={() => { setFromDate(''); setToDate(''); setFromDeptFilter(''); setToDeptFilter(''); setSearchTerm(''); setPage(0); }}>Reset Filters</Button>
+            )}
           </Box>
           <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
             Add Transfer
@@ -689,23 +792,73 @@ const StockTransfer = ({ user }) => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {paginatedGroups.map((group) => {
+              {paginatedGroups.map((group, groupIdx) => {
+                const currentRouteKey = `${group.FromDeptID || 0}->${group.ToDeptID || 0}`;
+                const prevGroup = groupIdx > 0 ? paginatedGroups[groupIdx - 1] : null;
+                const prevRouteKey = prevGroup ? `${prevGroup.FromDeptID || 0}->${prevGroup.ToDeptID || 0}` : null;
+                const isNewRoute = currentRouteKey !== prevRouteKey;
+
                 const batchLoss = group.details.reduce((sum, d) => sum + (parseFloat(d.LossWeight) || 0), 0);
                 const firstDetail = group.details && group.details.length > 0 ? group.details[0] : group;
                 const batchLossRt = parseFloat(firstDetail.LossRate) || 0;
                 const batchLossAmt = parseFloat(firstDetail.LossAmount) || 0;
                 return (
                 <React.Fragment key={group.TransferID}>
-                  <TableRow sx={{ backgroundColor: '#e0f2fe' }}>
-                    <TableCell colSpan={7} sx={{ py: 1.5 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box sx={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0369a1' }}>Transfer ID: {group.TransferID}</Typography>
-                          <Typography variant="body2" sx={{ color: '#0369a1' }}><strong>Date:</strong> {group.MoveDate ? group.MoveDate.split('T')[0] : ''}</Typography>
-                          <Typography variant="body2" sx={{ color: '#0369a1' }}><strong>From:</strong> {group.FromDeptName}</Typography>
-                          <Typography variant="body2" sx={{ color: '#0369a1' }}><strong>To:</strong> {group.ToDeptName}</Typography>
+                  {isNewRoute && (
+                    <TableRow sx={{ backgroundColor: '#0f3b66' }}>
+                      <TableCell colSpan={7} sx={{ py: 1.2, px: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                            <Chip label="FROM" size="small" sx={{ bgcolor: '#38bdf8', color: '#0f172a', fontWeight: 800, fontSize: '0.72rem', height: 22 }} />
+                            <Typography sx={{ color: '#ffffff', fontWeight: 700, fontSize: '0.95rem' }}>{group.FromDeptName}</Typography>
+                            <ArrowForwardIcon sx={{ color: '#94a3b8', fontSize: 18 }} />
+                            <Chip label="TO" size="small" sx={{ bgcolor: '#4ade80', color: '#0f172a', fontWeight: 800, fontSize: '0.72rem', height: 22 }} />
+                            <Typography sx={{ color: '#ffffff', fontWeight: 700, fontSize: '0.95rem' }}>{group.ToDeptName}</Typography>
+                          </Box>
+                          <Chip 
+                            label={`${routeCounts[currentRouteKey] || 0} Transfers`} 
+                            size="small" 
+                            sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: '#ffffff', fontWeight: 700, fontSize: '0.75rem' }} 
+                          />
                         </Box>
-                        <Box>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  <TableRow sx={{ backgroundColor: '#e0f2fe' }}>
+                    <TableCell colSpan={7} sx={{ py: 1.2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Chip 
+                            label={`Challan: ${group.ManualChallanNo || '-'}`} 
+                            size="small" 
+                            sx={{ 
+                              fontWeight: 800, 
+                              bgcolor: '#0284c7', 
+                              color: '#ffffff', 
+                              fontSize: '0.8rem',
+                              letterSpacing: '0.3px',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                            }} 
+                          />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0369a1' }}>
+                            Transfer ID: {group.TransferID}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#0369a1' }}>
+                            <strong>Date:</strong> {group.MoveDate ? group.MoveDate.split('T')[0] : ''}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#0369a1' }}>
+                            <strong>From Dept:</strong> <span style={{ fontWeight: 600 }}>{group.FromDeptName}</span>
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#0369a1' }}>
+                            <strong>To Dept:</strong> <span style={{ fontWeight: 600 }}>{group.ToDeptName}</span>
+                          </Typography>
+                          {group.Remarks && (
+                            <Typography variant="body2" sx={{ color: '#475569', fontStyle: 'italic' }}>
+                              <strong>Remarks:</strong> {group.Remarks}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
                           <IconButton color="secondary" size="small" onClick={() => printVoucher(group)} title="Print Voucher">
                             <PrintIcon fontSize="small" />
                           </IconButton>
@@ -775,7 +928,7 @@ const StockTransfer = ({ user }) => {
         </TableContainer>
         
         <TablePagination
-          rowsPerPageOptions={[25, 50, 100]}
+          rowsPerPageOptions={[25, 50, 100, 200, { label: 'All', value: -1 }]}
           component="div"
           count={groupedArray.length}
           rowsPerPage={rowsPerPage}
@@ -796,28 +949,80 @@ const StockTransfer = ({ user }) => {
           {/* Header Section */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={3}>
+                <TextField
+                  fullWidth
+                  label="Manual Challan No"
+                  placeholder="e.g. 2301"
+                  size="small"
+                  value={manualChallanNo}
+                  onChange={(e) => setManualChallanNo(e.target.value)}
+                  helperText={fromDeptId ? "Dept Wise Challan No (Editable)" : "Auto / Manual"}
+                />
+              </Grid>
+              <Grid item xs={12} sm={3}>
                 <TextField fullWidth label="Transfer Date" type="date" size="small" value={moveDate} onChange={(e) => setMoveDate(e.target.value)} InputLabelProps={{ shrink: true }} required />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={3}>
                 <Autocomplete
                   options={departments.filter(d => d.DeptID !== toDeptId)}
+                  disabled={dialogMode === 'edit'}
                   getOptionLabel={(option) => option.DeptName || ''}
                   value={departments.find(d => d.DeptID === fromDeptId) || null}
-                  onChange={(e, newValue) => setFromDeptId(newValue ? newValue.DeptID : null)}
-                  renderInput={(params) => <TextField {...params} label="From Department" size="small" required fullWidth />}
+                  onChange={(e, newValue) => {
+                    const newId = newValue ? newValue.DeptID : null;
+                    if (newId !== fromDeptId) {
+                      setFromDeptId(newId);
+                      if (dialogMode === 'add') {
+                        if (newId) fetchNextChallanNo(newId);
+                        // Clean/reset form data when department changes before save
+                        setOutItems([{ ...emptyItemRow }]);
+                        setInItems([{ ...emptyItemRow }]);
+                        setScrapItems([]);
+                        setRemarks('');
+                      }
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="From Department" 
+                      size="small" 
+                      required 
+                      fullWidth 
+                      helperText={dialogMode === 'edit' ? "Cannot change dept in edit mode" : ""}
+                    />
+                  )}
                   fullWidth
                   sx={{ minWidth: `${Math.max(20, maxDeptLength) + 6}ch` }}
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
                 />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={3}>
                 <Autocomplete
                   options={departments.filter(d => d.DeptID !== fromDeptId)}
+                  disabled={dialogMode === 'edit'}
                   getOptionLabel={(option) => option.DeptName || ''}
                   value={departments.find(d => d.DeptID === toDeptId) || null}
-                  onChange={(e, newValue) => setToDeptId(newValue ? newValue.DeptID : null)}
-                  renderInput={(params) => <TextField {...params} label="To Department" size="small" required fullWidth />}
+                  onChange={(e, newValue) => {
+                    const newId = newValue ? newValue.DeptID : null;
+                    if (newId !== toDeptId) {
+                      setToDeptId(newId);
+                      if (dialogMode === 'add') {
+                        setInItems([{ ...emptyItemRow }]);
+                      }
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="To Department" 
+                      size="small" 
+                      required 
+                      fullWidth 
+                      helperText={dialogMode === 'edit' ? "Cannot change dept in edit mode" : ""}
+                    />
+                  )}
                   fullWidth
                   sx={{ minWidth: `${Math.max(20, maxDeptLength) + 6}ch` }}
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}

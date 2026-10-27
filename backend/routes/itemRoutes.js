@@ -14,6 +14,9 @@ router.post('/bulk', itemController.bulkCreateItems);
 // GET item stock ledger statement
 router.get('/stock-ledger', itemController.getItemStockLedger);
 
+// GET combined stock report (main stock + department stock + jobwork stock)
+router.get('/combined-stock', itemController.getCombinedStockReport);
+
 // PUT update an item (using ItemCode)
 router.put('/:id', itemController.updateItem);
 

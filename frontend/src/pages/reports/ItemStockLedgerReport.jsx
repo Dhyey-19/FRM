@@ -696,8 +696,9 @@ const ItemStockLedgerReport = () => {
       <Paper sx={{ p: 2, mb: 2.5, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
         <Grid container spacing={2} alignItems="center">
           {/* Item Selector (Expanded for Full Readability) */}
-          <Grid item xs={12} md={5} lg={5}>
+          <Grid item xs={12} md={7} lg={6}>
             <Autocomplete
+              fullWidth
               options={items}
               loading={itemsLoading}
               getOptionLabel={(option) => {
@@ -711,7 +712,7 @@ const ItemStockLedgerReport = () => {
               slotProps={{
                 popper: {
                   sx: {
-                    minWidth: { xs: '100%', sm: 480, md: 540 },
+                    minWidth: { xs: '100%', sm: 550, md: 650 },
                     maxWidth: '95vw',
                     width: 'fit-content',
                     boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
@@ -784,6 +785,7 @@ const ItemStockLedgerReport = () => {
               renderInput={(params) => (
                 <TextField 
                   {...params} 
+                  fullWidth
                   label="Select Item *" 
                   size="small" 
                   placeholder="Type item code or item name to search..."
@@ -802,7 +804,7 @@ const ItemStockLedgerReport = () => {
           </Grid>
 
           {/* Date Range Picker */}
-          <Grid item xs={12} sm={6} md={3} lg={3}>
+          <Grid item xs={12} sm={6} md={5} lg={2}>
             <DatePicker
               portalId="root"
               selectsRange={true}
@@ -831,7 +833,7 @@ const ItemStockLedgerReport = () => {
           </Grid>
 
           {/* Scope Selector */}
-          <Grid item xs={6} sm={3} md={2}>
+          <Grid item xs={6} sm={3} md={6} lg={2}>
             <FormControl fullWidth size="small">
               <InputLabel shrink>Movement Scope</InputLabel>
               <Select
@@ -846,7 +848,7 @@ const ItemStockLedgerReport = () => {
           </Grid>
 
           {/* Type Filter */}
-          <Grid item xs={6} sm={3} md={2} lg={2}>
+          <Grid item xs={6} sm={3} md={6} lg={2}>
             <FormControl fullWidth size="small">
               <InputLabel shrink>Transaction Filter</InputLabel>
               <Select
@@ -1056,18 +1058,6 @@ const ItemStockLedgerReport = () => {
                   Live breakdown of stock available in Central Godown vs Work-In-Progress across factory shop floors
                 </Typography>
               </Box>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Chip 
-                label={`Enterprise Total: ${ledgerData.stockBifurcation.totalCompanyStock} ${selectedItem.Unit || ''}`}
-                sx={{
-                  fontWeight: 900,
-                  fontSize: '0.82rem',
-                  py: 0.5,
-                  bgcolor: (ledgerData.stockBifurcation.totalCompanyStock >= 0) ? '#0F3B66' : '#dc2626',
-                  color: '#ffffff'
-                }}
-              />
             </Box>
           </Box>
 
@@ -1306,8 +1296,15 @@ const ItemStockLedgerReport = () => {
                         transition: 'background-color 0.15s ease'
                       }}
                     >
-                      <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 500 }}>
-                        {row.date ? new Date(row.date).toLocaleDateString('en-GB') : '-'}
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.85rem' }}>
+                          {row.date ? new Date(row.date).toLocaleDateString('en-GB') : '-'}
+                        </Typography>
+                        {row.entryTime && (
+                          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.72rem', display: 'block', fontWeight: 500 }}>
+                            {row.entryTime}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 700, color: '#0F3B66' }}>
                         {row.docNo || '-'}
@@ -1467,11 +1464,6 @@ const ItemStockLedgerReport = () => {
                           label={`Total in Depts: ${ledgerData.stockBifurcation.totalDepartmentStock} ${selectedItem?.Unit || ''}`}
                           size="small"
                           sx={{ fontWeight: 800, fontSize: '0.78rem', bgcolor: '#ffedd5', color: '#c2410c' }}
-                        />
-                        <Chip 
-                          label={`Enterprise Total: ${ledgerData.stockBifurcation.totalCompanyStock} ${selectedItem?.Unit || ''}`}
-                          size="small"
-                          sx={{ fontWeight: 900, fontSize: '0.8rem', bgcolor: '#0F3B66', color: '#ffffff' }}
                         />
                       </Box>
                     </TableCell>

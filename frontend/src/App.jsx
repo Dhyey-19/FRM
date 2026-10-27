@@ -45,7 +45,7 @@ import InvoiceWisePayableReport from './pages/reports/InvoiceWisePayableReport';
 import InvoiceWiseReceivableReport from './pages/reports/InvoiceWiseReceivableReport';
 import JobworkOutReport from './pages/reports/JobworkOutReport';
 import JobworkInReport from './pages/reports/JobworkInReport';
-import JobworkStockReport from './pages/reports/JobworkStockReport';
+import JobworkMovementReport from './pages/reports/JobworkMovementReport';
 import ItemStockLedgerReport from './pages/reports/ItemStockLedgerReport';
 function AuthApp() {
   const [currentPage, setCurrentPage] = useState('login');
@@ -169,7 +169,8 @@ function App() {
           <Route path="reports/invoice-receivable" element={<InvoiceWiseReceivableReport />} />
           <Route path="reports/jobwork-out" element={<JobworkOutReport />} />
           <Route path="reports/jobwork-in" element={<JobworkInReport />} />
-          <Route path="reports/jobwork-stock" element={<JobworkStockReport />} />
+          <Route path="reports/jobwork-movement" element={<JobworkMovementReport />} />
+          <Route path="reports/jobwork-stock" element={<Navigate to="/dashboard/reports/jobwork-movement" replace />} />
         </Route>
       </Routes>
     </Router>

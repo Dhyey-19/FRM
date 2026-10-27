@@ -631,3 +631,357 @@ exports.getJobworkStockReport = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Helper to parse entry timestamp from CreatedBy signature
+const parseEntryTimestamp = (sig) => {
+  if (!sig || typeof sig !== 'string') return 0;
+  const dmyMatch = sig.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
+    const min = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
+    const sec = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hour, min, sec);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  const ymdMatch = sig.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const hour = ymdMatch[4] ? parseInt(ymdMatch[4], 10) : 0;
+    const min = ymdMatch[5] ? parseInt(ymdMatch[5], 10) : 0;
+    const sec = ymdMatch[6] ? parseInt(ymdMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hour, min, sec);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return 0;
+};
+
+const extractEntryTime = (sig) => {
+  if (!sig || typeof sig !== 'string') return '';
+  const match = sig.match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
+  return match ? match[1] : '';
+};
+
+// GET /api/jobwork-ins/movement-report
+exports.getJobworkMovementReport = async (req, res) => {
+  try {
+    const { partyId, ledgerId, itemCode, startDate, endDate, status = 'all' } = req.query;
+    const targetLedgerId = partyId || ledgerId ? Number(partyId || ledgerId) : null;
+    const targetItemCode = itemCode && itemCode !== 'all' ? String(itemCode).trim() : null;
+
+    const pool = await connectDB();
+
+    // Query all relevant Jobwork Out and Jobwork In transactions
+    const query = `
+      SELECT 
+        'OUT' as Direction,
+        'Jobwork Out' as MovementType,
+        h.ID as HeaderId,
+        d.ID as DetailId,
+        h.JWOUTWARDNO as DocNo,
+        NULL as RefDocNo,
+        CONVERT(VARCHAR(10), h.JWOUTWARDDATE, 120) as TxDate,
+        h.LEDGERID as LedgerId,
+        l.LedgerName as PartyName,
+        d.ITEMCODE as ItemCode,
+        i.ItemName,
+        ISNULL(i.Unit, d.UNIT) as Unit,
+        d.PROCESS as Process,
+        ISNULL(d.QUANTITY, 0) as OutQty,
+        ISNULL(d.NETWT, 0) as OutWt,
+        0 as InQty,
+        0 as InWt,
+        0 as ScrapPcs,
+        0 as ScrapWt,
+        ISNULL(d.RATE, 0) as Rate,
+        h.Bill,
+        h.REMARK as Remark,
+        h.CREATEDBY as CreatedBy
+      FROM JobworkOutDetail d
+      INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      WHERE 1=1
+        ${targetLedgerId ? 'AND h.LEDGERID = @TargetLedgerId' : ''}
+        ${targetItemCode ? 'AND d.ITEMCODE = @TargetItemCode' : ''}
+
+      UNION ALL
+
+      SELECT 
+        'IN' as Direction,
+        'Jobwork In' as MovementType,
+        h.ID as HeaderId,
+        d.ID as DetailId,
+        h.JWINWARDNO as DocNo,
+        h.JWOUTWARDNO as RefDocNo,
+        CONVERT(VARCHAR(10), h.JWINWARDDATE, 120) as TxDate,
+        h.LEDGERID as LedgerId,
+        l.LedgerName as PartyName,
+        d.OUTITEMCODE as ItemCode,
+        i.ItemName,
+        ISNULL(i.Unit, d.UNIT) as Unit,
+        d.PROCESS as Process,
+        0 as OutQty,
+        0 as OutWt,
+        ISNULL(d.QUANTITY, 0) as InQty,
+        ISNULL(d.NETWT, 0) as InWt,
+        ISNULL(d.SCRAPPCS, 0) as ScrapPcs,
+        ISNULL(d.SCRAPWT, 0) as ScrapWt,
+        ISNULL(d.RATE, 0) as Rate,
+        h.Bill,
+        h.REMARK as Remark,
+        h.CREATEDBY as CreatedBy
+      FROM JobworkInDetail d
+      INNER JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      LEFT JOIN ItemMaster i ON d.OUTITEMCODE = i.ItemCode
+      WHERE 1=1
+        ${targetLedgerId ? 'AND h.LEDGERID = @TargetLedgerId' : ''}
+        ${targetItemCode ? 'AND d.OUTITEMCODE = @TargetItemCode' : ''}
+    `;
+
+    const request = pool.request();
+    if (targetLedgerId) request.input('TargetLedgerId', sql.Numeric(10, 0), targetLedgerId);
+    if (targetItemCode) request.input('TargetItemCode', sql.VarChar(10), targetItemCode);
+
+    const result = await request.query(query);
+    const allRecords = result.recordset || [];
+
+    // Distinct list of parties and items across all jobwork movements (for dropdown filters)
+    const partiesMap = new Map();
+    const itemsMap = new Map();
+
+    // Also fetch all jobwork parties from LedgerMaster if not populated
+    allRecords.forEach(r => {
+      if (r.LedgerId && !partiesMap.has(r.LedgerId)) {
+        partiesMap.set(r.LedgerId, { id: r.LedgerId, name: r.PartyName || `Party #${r.LedgerId}` });
+      }
+      if (r.ItemCode && !itemsMap.has(r.ItemCode)) {
+        itemsMap.set(r.ItemCode, { itemCode: r.ItemCode, itemName: r.ItemName || r.ItemCode, unit: r.Unit || 'PCS' });
+      }
+    });
+
+    // If query was filtered, also fetch all available jobwork parties and items for dropdowns
+    if (targetLedgerId || targetItemCode) {
+      const pRes = await pool.request().query(`
+        SELECT DISTINCT l.Id as id, l.LedgerName as name
+        FROM JobworkOutHeader h
+        INNER JOIN LedgerMaster l ON h.LEDGERID = l.Id
+        UNION
+        SELECT DISTINCT l.Id as id, l.LedgerName as name
+        FROM JobworkInHeader h
+        INNER JOIN LedgerMaster l ON h.LEDGERID = l.Id
+        ORDER BY name ASC
+      `);
+      pRes.recordset.forEach(p => {
+        if (!partiesMap.has(p.id)) partiesMap.set(p.id, p);
+      });
+
+      const iRes = await pool.request().query(`
+        SELECT DISTINCT i.ItemCode as itemCode, i.ItemName as itemName, i.Unit as unit
+        FROM JobworkOutDetail d
+        INNER JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+        UNION
+        SELECT DISTINCT i.ItemCode as itemCode, i.ItemName as itemName, i.Unit as unit
+        FROM JobworkInDetail d
+        INNER JOIN ItemMaster i ON d.OUTITEMCODE = i.ItemCode
+        ORDER BY itemCode ASC
+      `);
+      iRes.recordset.forEach(i => {
+        if (!itemsMap.has(i.itemCode)) itemsMap.set(i.itemCode, i);
+      });
+    }
+
+    const startFilter = startDate ? new Date(startDate) : null;
+    const endFilter = endDate ? new Date(endDate) : null;
+    if (startFilter) startFilter.setHours(0, 0, 0, 0);
+    if (endFilter) endFilter.setHours(23, 59, 59, 999);
+
+    // Group into Party + Item summary
+    const summaryMap = new Map();
+
+    for (const tx of allRecords) {
+      const key = `${tx.LedgerId}_${tx.ItemCode}`;
+      if (!summaryMap.has(key)) {
+        summaryMap.set(key, {
+          ledgerId: tx.LedgerId,
+          partyName: tx.PartyName || 'Unknown Party',
+          itemCode: tx.ItemCode,
+          itemName: tx.ItemName || tx.ItemCode,
+          unit: tx.Unit || 'PCS',
+          openingQty: 0,
+          openingWt: 0,
+          outQty: 0,
+          outWt: 0,
+          inQty: 0,
+          inWt: 0,
+          scrapQty: 0,
+          scrapWt: 0,
+          balQty: 0,
+          balWt: 0,
+          lastDate: tx.TxDate,
+          movementsCount: 0
+        });
+      }
+
+      const item = summaryMap.get(key);
+      const txDate = tx.TxDate ? new Date(tx.TxDate) : new Date('1970-01-01');
+
+      if (startFilter && txDate < startFilter) {
+        // Transactions before startDate form Opening Balance for the period
+        item.openingQty += (tx.OutQty - tx.InQty);
+        item.openingWt += (tx.OutWt - tx.InWt);
+      } else if (!endFilter || txDate <= endFilter) {
+        // Within date range
+        item.outQty += tx.OutQty;
+        item.outWt += tx.OutWt;
+        item.inQty += tx.InQty;
+        item.inWt += tx.InWt;
+        item.scrapQty += tx.ScrapPcs;
+        item.scrapWt += tx.ScrapWt;
+        item.movementsCount += 1;
+        if (tx.TxDate > item.lastDate) item.lastDate = tx.TxDate;
+      }
+    }
+
+    // Finalize balances
+    let totalOutQty = 0;
+    let totalOutWt = 0;
+    let totalInQty = 0;
+    let totalInWt = 0;
+    let totalScrapQty = 0;
+    let totalScrapWt = 0;
+    let totalBalQty = 0;
+    let totalBalWt = 0;
+
+    let partyItemSummary = [];
+    summaryMap.forEach(item => {
+      item.balQty = Number((item.openingQty + item.outQty - item.inQty).toFixed(2));
+      item.balWt = Number((item.openingWt + item.outWt - item.inWt).toFixed(3));
+      item.openingQty = Number(item.openingQty.toFixed(2));
+      item.openingWt = Number(item.openingWt.toFixed(3));
+      item.outQty = Number(item.outQty.toFixed(2));
+      item.outWt = Number(item.outWt.toFixed(3));
+      item.inQty = Number(item.inQty.toFixed(2));
+      item.inWt = Number(item.inWt.toFixed(3));
+      item.scrapQty = Number(item.scrapQty.toFixed(2));
+      item.scrapWt = Number(item.scrapWt.toFixed(3));
+
+      // Filter by status if specified
+      if (status === 'pending' && item.balQty <= 0 && item.balWt <= 0) return;
+      if (status === 'settled' && (item.balQty > 0 || item.balWt > 0)) return;
+
+      totalOutQty += item.outQty;
+      totalOutWt += item.outWt;
+      totalInQty += item.inQty;
+      totalInWt += item.inWt;
+      totalScrapQty += item.scrapQty;
+      totalScrapWt += item.scrapWt;
+      totalBalQty += item.balQty;
+      totalBalWt += item.balWt;
+
+      partyItemSummary.push(item);
+    });
+
+    // Sort summary: highest pending balance first, then Party, then Item
+    partyItemSummary.sort((a, b) => {
+      if (b.balQty !== a.balQty) return b.balQty - a.balQty;
+      return (a.partyName || '').localeCompare(b.partyName || '');
+    });
+
+    // Detailed chronological movement register
+    // Sort all records chronologically: ascending date, then ascending entry timestamp
+    allRecords.sort((a, b) => {
+      const dateA = new Date(a.TxDate || '1970-01-01').getTime();
+      const dateB = new Date(b.TxDate || '1970-01-01').getTime();
+      if (dateA !== dateB) return dateA - dateB;
+
+      const timeA = parseEntryTimestamp(a.CreatedBy);
+      const timeB = parseEntryTimestamp(b.CreatedBy);
+      if (timeA !== timeB) return timeA - timeB;
+
+      return (Number(a.HeaderId) || 0) - (Number(b.HeaderId) || 0);
+    });
+
+    // Calculate running balance for each party + item line-by-line
+    const runningBalTracker = new Map();
+    const movementTransactions = [];
+
+    allRecords.forEach((tx, idx) => {
+      const txDate = tx.TxDate ? new Date(tx.TxDate) : new Date('1970-01-01');
+      const key = `${tx.LedgerId}_${tx.ItemCode}`;
+
+      if (!runningBalTracker.has(key)) {
+        runningBalTracker.set(key, { qty: 0, wt: 0 });
+      }
+      const tracker = runningBalTracker.get(key);
+      tracker.qty += (tx.OutQty - tx.InQty);
+      tracker.wt += (tx.OutWt - tx.InWt);
+
+      // Filter by date range for output table
+      if (startFilter && txDate < startFilter) return;
+      if (endFilter && txDate > endFilter) return;
+
+      // Status filter
+      const summaryItem = summaryMap.get(key);
+      if (status === 'pending' && summaryItem && summaryItem.balQty <= 0 && summaryItem.balWt <= 0) return;
+      if (status === 'settled' && summaryItem && (summaryItem.balQty > 0 || summaryItem.balWt > 0)) return;
+
+      movementTransactions.push({
+        id: `jw-${tx.Direction}-${tx.HeaderId}-${tx.DetailId || idx}`,
+        headerId: tx.HeaderId,
+        date: tx.TxDate,
+        entryTime: extractEntryTime(tx.CreatedBy),
+        type: tx.MovementType,
+        direction: tx.Direction,
+        docNo: tx.DocNo,
+        refDocNo: tx.RefDocNo,
+        ledgerId: tx.LedgerId,
+        partyName: tx.PartyName || '',
+        itemCode: tx.ItemCode,
+        itemName: tx.ItemName || '',
+        unit: tx.Unit || 'PCS',
+        process: tx.Process || '',
+        outQty: Number(tx.OutQty || 0),
+        outWt: Number(Number(tx.OutWt || 0).toFixed(3)),
+        inQty: Number(tx.InQty || 0),
+        inWt: Number(Number(tx.InWt || 0).toFixed(3)),
+        scrapQty: Number(tx.ScrapPcs || 0),
+        scrapWt: Number(Number(tx.ScrapWt || 0).toFixed(3)),
+        runningBalQty: Number(tracker.qty.toFixed(2)),
+        runningBalWt: Number(tracker.wt.toFixed(3)),
+        rate: Number(tx.Rate || 0),
+        bill: Boolean(tx.Bill),
+        remark: tx.Remark || '',
+        createdBy: tx.CreatedBy || ''
+      });
+    });
+
+    res.status(200).json({
+      parties: Array.from(partiesMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      items: Array.from(itemsMap.values()).sort((a, b) => a.itemCode.localeCompare(b.itemCode)),
+      summary: {
+        totalOutQty: Number(totalOutQty.toFixed(2)),
+        totalOutWt: Number(totalOutWt.toFixed(3)),
+        totalInQty: Number(totalInQty.toFixed(2)),
+        totalInWt: Number(totalInWt.toFixed(3)),
+        totalScrapQty: Number(totalScrapQty.toFixed(2)),
+        totalScrapWt: Number(totalScrapWt.toFixed(3)),
+        balanceQty: Number(totalBalQty.toFixed(2)),
+        balanceWt: Number(totalBalWt.toFixed(3)),
+        totalRecords: partyItemSummary.length,
+        totalTransactions: movementTransactions.length
+      },
+      partyItemSummary,
+      movementTransactions
+    });
+  } catch (error) {
+    console.error('Error fetching jobwork movement report:', error);
+    res.status(500).json({ message: 'Server error generating jobwork movement report' });
+  }
+};
+

@@ -40,6 +40,7 @@ const JobworkOutEntry = () => {
   const [departments, setDepartments] = useState([]);
   const [deptId, setDeptId] = useState(1);
   const [availableStockMap, setAvailableStockMap] = useState({});
+  const [departmentItems, setDepartmentItems] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [items, setItems] = useState([]);
   const [dbUnits, setDbUnits] = useState([]);
@@ -152,9 +153,13 @@ const JobworkOutEntry = () => {
 
   useEffect(() => {
     const fetchStockForDept = async () => {
-      if (!deptId) return;
+      if (!deptId) {
+        setDepartmentItems([]);
+        setAvailableStockMap({});
+        return;
+      }
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/stock-transfers/available-stock/${deptId}`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/jobwork-outs/department-items/${deptId}`);
         const data = await response.json();
         if (response.ok && Array.isArray(data)) {
           const map = {};
@@ -162,15 +167,34 @@ const JobworkOutEntry = () => {
             map[item.ItemCode] = { Pcs: item.Pcs || 0, Weight: item.Weight || 0 };
           });
           setAvailableStockMap(map);
+          setDepartmentItems(data);
         } else {
           setAvailableStockMap({});
+          setDepartmentItems([]);
         }
       } catch (err) {
-        console.error('Error fetching available stock for department:', err);
+        console.error('Error fetching department items for Jobwork Out:', err);
+        setAvailableStockMap({});
+        setDepartmentItems([]);
       }
     };
     fetchStockForDept();
   }, [deptId]);
+
+  const getRowItemOptions = (rowItemCode) => {
+    if (!rowItemCode) return departmentItems;
+    const exists = departmentItems.some(i => i.ItemCode === rowItemCode);
+    if (!exists) {
+      const fallback = items.find(i => i.ItemCode === rowItemCode);
+      if (fallback) return [fallback, ...departmentItems];
+    }
+    return departmentItems;
+  };
+
+  const getRowItemValue = (rowItemCode) => {
+    if (!rowItemCode) return null;
+    return departmentItems.find(i => i.ItemCode === rowItemCode) || items.find(i => i.ItemCode === rowItemCode) || null;
+  };
 
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
@@ -806,10 +830,31 @@ const JobworkOutEntry = () => {
               <Grid item xs={12} sm={6} md={3.5}>
                 <Autocomplete
                   options={departments}
+                  disabled={Boolean(editingId)}
                   getOptionLabel={(option) => option.DeptName || ''}
                   value={departments.find(d => d.DeptID === deptId) || null}
-                  onChange={(e, newValue) => setDeptId(newValue ? newValue.DeptID : 1)}
-                  renderInput={(params) => <TextField {...params} label="From Department *" size="small" required fullWidth />}
+                  onChange={(e, newValue) => {
+                    const newDeptId = newValue ? newValue.DeptID : 1;
+                    if (newDeptId !== deptId) {
+                      setDeptId(newDeptId);
+                      if (!editingId) {
+                        // At add time: clean / reset form data when department changes before save
+                        setGridRows([{ ...emptyRow }]);
+                        setLedgerId(null);
+                        setRemark('');
+                      }
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="From Department *" 
+                      size="small" 
+                      required 
+                      fullWidth 
+                      helperText={editingId ? "Department cannot be changed in edit mode" : ""}
+                    />
+                  )}
                   fullWidth
                   sx={{ minWidth: 280 }}
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
@@ -852,20 +897,26 @@ const JobworkOutEntry = () => {
                   <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
                     <TableCell>
                       <Autocomplete
-                        options={items}
+                        options={getRowItemOptions(row.ITEMCODE)}
+                        isOptionEqualToValue={(option, value) => option?.ItemCode === value?.ItemCode}
                         getOptionLabel={(option) => {
                           if (!option) return '';
-                          const avail = availableStockMap[option.ItemCode];
-                          if (avail !== undefined) {
-                            return `${option.ItemCode} - ${option.ItemName} [Avail: ${avail.Pcs || 0} ${option.Unit || 'PCS'}${avail.Weight > 0 ? ` / ${avail.Weight}kg` : ''}]`;
-                          }
-                          return `${option.ItemCode} - ${option.ItemName}`;
+                          const avail = availableStockMap[option.ItemCode] || { Pcs: option.Pcs || 0, Weight: option.Weight || 0 };
+                          const pcs = avail.Pcs !== undefined ? avail.Pcs : (option.Pcs || 0);
+                          const wt = avail.Weight !== undefined ? avail.Weight : (option.Weight || 0);
+                          return `${option.ItemCode} - ${option.ItemName} [Avail: ${pcs} ${option.Unit || 'PCS'}${wt > 0 ? ` / ${wt}kg` : ''}]`;
                         }}
-                        value={items.find(i => i.ItemCode === row.ITEMCODE) || null}
+                        value={getRowItemValue(row.ITEMCODE)}
                         onChange={(e, newValue) => handleItemSelect(index, newValue)}
-                        renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
+                        renderInput={(params) => (
+                          <TextField 
+                            {...params} 
+                            placeholder={departmentItems.length > 0 ? "Select Item" : "No Dept Items"} 
+                            size="small" 
+                          />
+                        )}
                         fullWidth
-                        slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                        slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%', maxWidth: 450 } } }}
                       />
                     </TableCell>
                     <TableCell><TextField size="small" placeholder="Process" value={row.PROCESS || ''} onChange={(e) => handleRowChange(index, 'PROCESS', e.target.value)} fullWidth /></TableCell>
