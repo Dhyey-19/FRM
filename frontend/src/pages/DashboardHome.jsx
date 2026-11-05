@@ -30,31 +30,20 @@ import {
   CallReceived as ReceivableIcon,
   CallMade as PayableIcon,
   Inventory as AssetIcon,
-  Receipt as TransactionIcon,
-  List as ListIcon,
-  Build as AssemblyIcon,
-  Assessment as ReportsIcon,
   Storefront as StockIcon,
   CalendarMonth as CalendarMonthIcon,
-  Refresh as RefreshIcon,
-  QrCode2 as QrCodeIcon
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { hasMenuAccess } from '../utils/auth';
 
 const DashboardHome = () => {
   const navigate = useNavigate();
   const [kpis, setKpis] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [receivables, setReceivables] = useState([]);
-  const [payables, setPayables] = useState([]);
-  const [reportsLoading, setReportsLoading] = useState(true);
   
   const [cashBankDialogOpen, setCashBankDialogOpen] = useState(false);
   const [cashBankLedgers, setCashBankLedgers] = useState([]);
   const [cashBankLoading, setCashBankLoading] = useState(false);
-
-  const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
 
   const fetchCashBankLedgers = async () => {
     setCashBankDialogOpen(true);
@@ -87,87 +76,8 @@ const DashboardHome = () => {
     }
   };
 
-  const fetchDueReports = async () => {
-    try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      
-      // Fetch Receivables
-      const recRes = await fetch(`${baseUrl}/ledgers/invoice-wise-receivable`);
-      if (recRes.ok) {
-        const recData = await recRes.json();
-        const sortedRec = recData
-          .filter(inv => inv.outstandingAmount > 0)
-          .sort((a, b) => a.dueDays - b.dueDays)
-          .slice(0, 10);
-        setReceivables(sortedRec);
-      }
-
-      // Fetch Payables
-      const payRes = await fetch(`${baseUrl}/ledgers/invoice-wise-payable`);
-      if (payRes.ok) {
-        const payData = await payRes.json();
-        const sortedPay = payData
-          .filter(inv => inv.outstandingAmount > 0)
-          .sort((a, b) => a.dueDays - b.dueDays)
-          .slice(0, 10);
-        setPayables(sortedPay);
-      }
-    } catch (error) {
-      console.error('Error fetching due reports for dashboard:', error);
-    } finally {
-      setReportsLoading(false);
-    }
-  };
-
-  const renderDueStatus = (dueDays) => {
-    if (dueDays < 0) {
-      return (
-        <Chip 
-          label={`Overdue by ${Math.abs(dueDays)} days`} 
-          size="small" 
-          sx={{ 
-            bgcolor: '#fef2f2', 
-            color: '#ef4444', 
-            fontWeight: 700, 
-            fontSize: '0.75rem',
-            border: '1px solid #fee2e2'
-          }} 
-        />
-      );
-    } else if (dueDays === 0) {
-      return (
-        <Chip 
-          label="Due Today" 
-          size="small" 
-          sx={{ 
-            bgcolor: '#fff7ed', 
-            color: '#ea580c', 
-            fontWeight: 700, 
-            fontSize: '0.75rem',
-            border: '1px solid #ffedd5'
-          }} 
-        />
-      );
-    } else {
-      return (
-        <Chip 
-          label={`${dueDays} days left`} 
-          size="small" 
-          sx={{ 
-            bgcolor: '#eff6ff', 
-            color: '#3b82f6', 
-            fontWeight: 700, 
-            fontSize: '0.75rem',
-            border: '1px solid #dbeafe'
-          }} 
-        />
-      );
-    }
-  };
-
   useEffect(() => {
     fetchKPIs();
-    fetchDueReports();
   }, []);
 
   const formatCurrency = (value) => {
@@ -179,12 +89,12 @@ const DashboardHome = () => {
     }).format(Math.round(value || 0));
   };
 
-  const kpiCards = [
+  const topKpis = [
     {
       title: 'Total Stock Valuation',
       subtitle: 'Closing Stock * Costing',
       value: formatCurrency(kpis?.totalValue || 0),
-      icon: <StockIcon sx={{ fontSize: 40 }} />,
+      icon: <StockIcon sx={{ fontSize: 26 }} />,
       color: '#10b981', // Emerald
       bgColor: '#d1fae5',
       link: '/dashboard/reports/stock'
@@ -193,43 +103,17 @@ const DashboardHome = () => {
       title: 'Total Turnover',
       subtitle: 'Total Outward Value',
       value: formatCurrency(kpis?.totalTurnover || 0),
-      icon: <ValueIcon sx={{ fontSize: 40 }} />,
+      icon: <ValueIcon sx={{ fontSize: 26 }} />,
       color: '#f59e0b', // Amber
       bgColor: '#fef3c7',
       link: '/dashboard/reports/outward'
-    },
-    {
-      title: 'Total Receivable',
-      subtitle: 'Combined Net',
-      value: formatCurrency(kpis?.totalReceivable || 0),
-      breakdown: {
-        withBill: kpis?.totalReceivableWithBill || 0,
-        withoutBill: kpis?.totalReceivableWithoutBill || 0
-      },
-      icon: <ReceivableIcon sx={{ fontSize: 40 }} />,
-      color: '#3b82f6', // Blue
-      bgColor: '#eff6ff',
-      link: '/dashboard/reports/receivable'
-    },
-    {
-      title: 'Total Payable',
-      subtitle: 'Combined Net',
-      value: formatCurrency(kpis?.totalPayable || 0),
-      breakdown: {
-        withBill: kpis?.totalPayableWithBill || 0,
-        withoutBill: kpis?.totalPayableWithoutBill || 0
-      },
-      icon: <PayableIcon sx={{ fontSize: 40 }} />,
-      color: '#ef4444', // Red
-      bgColor: '#fef2f2',
-      link: '/dashboard/reports/payable'
     },
     {
       title: 'Cash & Bank',
       subtitle: (kpis?.cashBankBalance || 0) < 0 ? 'Overdrawn / Negative' : 'Liquid Assets',
       value: formatCurrency(kpis?.cashBankBalance || 0),
       valueColor: (kpis?.cashBankBalance || 0) < 0 ? '#dc2626' : '#1e293b',
-      icon: <ValueIcon sx={{ fontSize: 40 }} />,
+      icon: <ValueIcon sx={{ fontSize: 26 }} />,
       color: (kpis?.cashBankBalance || 0) < 0 ? '#ef4444' : '#8b5cf6',
       bgColor: (kpis?.cashBankBalance || 0) < 0 ? '#fef2f2' : '#f3e8ff',
       onClick: fetchCashBankLedgers
@@ -238,7 +122,7 @@ const DashboardHome = () => {
       title: 'Total Asset Value',
       subtitle: 'Sum of Total Value of Assets',
       value: formatCurrency(kpis?.totalAssetValue || 0),
-      icon: <AssetIcon sx={{ fontSize: 40 }} />,
+      icon: <AssetIcon sx={{ fontSize: 26 }} />,
       color: '#0d9488', // Teal
       bgColor: '#ccfbf1',
       link: '/dashboard/assets'
@@ -251,7 +135,7 @@ const DashboardHome = () => {
 
   return (
     <Box>
-      {/* Sleek Operations Header Bar */}
+      {/* Operations Header Bar */}
       <Box sx={{ mb: 3.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5 }}>
@@ -278,7 +162,7 @@ const DashboardHome = () => {
           />
           <Tooltip title="Refresh Dashboard Data">
             <IconButton 
-              onClick={() => { setLoading(true); fetchKPIs(); fetchDueReports(); }}
+              onClick={() => { setLoading(true); fetchKPIs(); }}
               sx={{ 
                 bgcolor: '#ffffff', 
                 color: '#0F3B66', 
@@ -290,139 +174,61 @@ const DashboardHome = () => {
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Button
-            variant="outlined"
-            startIcon={<QrCodeIcon />}
-            onClick={() => navigate('/dashboard/payment-qr')}
-            sx={{
-              color: '#0F3B66',
-              borderColor: '#cbd5e1',
-              bgcolor: '#ffffff',
-              fontWeight: 600,
-              textTransform: 'none',
-              borderRadius: 2,
-              px: 2,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-              '&:hover': { borderColor: '#F88A01', color: '#F88A01', bgcolor: 'rgba(248, 138, 1, 0.05)' }
-            }}
-          >
-            Payment QRs
-          </Button>
         </Box>
       </Box>
 
-      {/* Quick Action Navigation Buttons */}
-      <Box sx={{ display: 'flex', gap: 1.5, mb: 3.5, overflowX: 'auto', pb: 0.5 }}>
-        {[
-          { label: 'New Inward', path: '/dashboard/inwards', icon: <TransactionIcon fontSize="small" /> },
-          { label: 'New Outward', path: '/dashboard/outwards', icon: <TransactionIcon fontSize="small" /> },
-          { label: 'Job Work In', path: '/dashboard/jobwork-ins', icon: <ListIcon fontSize="small" /> },
-          { label: 'Job Work Out', path: '/dashboard/jobwork-outs', icon: <ListIcon fontSize="small" /> },
-          { label: 'Assembly', path: '/dashboard/assembly', icon: <AssemblyIcon fontSize="small" /> },
-          { label: 'Stock Journal', path: '/dashboard/stock-journal', icon: <ReportsIcon fontSize="small" /> }
-        ].filter(action => hasMenuAccess(action.path))
-        .map((action, index) => (
-          <Button
-            key={index}
-            variant="contained"
-            startIcon={action.icon}
-            onClick={() => navigate(action.path)}
-            sx={{
-              bgcolor: '#ffffff',
-              color: '#0F3B66',
-              border: '1px solid #e2e8f0',
-              fontWeight: 600,
-              fontSize: '0.84rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-              borderRadius: 2,
-              px: 2.2,
-              py: 0.85,
-              whiteSpace: 'nowrap',
-              textTransform: 'none',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                bgcolor: '#0F3B66',
-                color: '#ffffff',
-                borderColor: '#0F3B66',
-                boxShadow: '0 4px 12px rgba(15, 59, 102, 0.2)'
-              }
-            }}
-          >
-            {action.label}
-          </Button>
-        ))}
-      </Box>
-
-      {/* KPI Grid */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {kpiCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={4} key={index}>
+      {/* Row 1: Core KPI Metrics (4 Cards) */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        {topKpis.map((card, index) => (
+          <Grid item xs={12} sm={6} md={3} key={index}>
             <Card sx={{ 
               borderRadius: 3, 
               boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
               border: '1px solid #e2e8f0',
               borderTop: `4px solid ${card.color}`,
               height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
               transition: 'transform 0.2s, box-shadow 0.2s',
               '&:hover': { 
                 transform: 'translateY(-3px)',
                 boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
               }
             }}>
-              <CardActionArea onClick={() => card.onClick ? card.onClick() : navigate(card.link)} sx={{ height: '100%', p: 0 }}>
-                <CardContent sx={{ p: 3, '&:last-child': { pb: 3 }, height: '100%' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box sx={{ flexGrow: 1 }}>
-                      <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        {card.title}
-                      </Typography>
-                      {loading ? (
-                        <Skeleton variant="text" width={120} height={50} />
-                      ) : (
-                        <>
-                          <Typography variant="h4" sx={{ fontWeight: 700, color: card.valueColor || '#1e293b' }}>
-                            {card.value}
-                          </Typography>
-                          {card.subtitle && (
-                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5, fontStyle: 'italic', textTransform: 'none' }}>
-                              {card.subtitle}
-                            </Typography>
-                          )}
-                          {card.breakdown && (
-                            <Box sx={{ mt: 1.5, pt: 1, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
-                                  🧾 With Bill:
-                                </Typography>
-                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66', fontSize: '0.85rem' }}>
-                                  {formatCurrency(card.breakdown.withBill || 0)}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
-                                  📋 Without Bill:
-                                </Typography>
-                                <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706', fontSize: '0.85rem' }}>
-                                  {formatCurrency(card.breakdown.withoutBill || 0)}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          )}
-                        </>
-                      )}
-                    </Box>
+              <CardActionArea 
+                onClick={() => card.onClick ? card.onClick() : navigate(card.link)} 
+                sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: 0 }}
+              >
+                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 }, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {card.title}
+                    </Typography>
                     <Avatar sx={{ 
                       bgcolor: card.bgColor, 
                       color: card.color, 
-                      width: 56, 
-                      height: 56, 
-                      borderRadius: 2,
-                      ml: 1.5,
-                      flexShrink: 0
+                      width: 44, 
+                      height: 44, 
+                      borderRadius: 2
                     }}>
                       {card.icon}
                     </Avatar>
                   </Box>
+
+                  {loading ? (
+                    <Skeleton variant="text" width={110} height={40} />
+                  ) : (
+                    <Box sx={{ mt: 'auto' }}>
+                      <Typography variant="h5" sx={{ fontWeight: 800, color: card.valueColor || '#1e293b' }}>
+                        {card.value}
+                      </Typography>
+                      {card.subtitle && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                          {card.subtitle}
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
                 </CardContent>
               </CardActionArea>
             </Card>
@@ -430,7 +236,230 @@ const DashboardHome = () => {
         ))}
       </Grid>
 
-      {/* Analytics Section */}
+      {/* Row 2: Financial Analysis - Receivables & Payables with Bill / Without Bill & Overdue */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Receivables Card */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ 
+            borderRadius: 3, 
+            boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+            border: '1px solid #e2e8f0',
+            borderTop: '4px solid #3b82f6',
+            height: '100%',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            '&:hover': { 
+              transform: 'translateY(-3px)',
+              boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
+            }
+          }}>
+            <CardActionArea onClick={() => navigate('/dashboard/reports/receivable')} sx={{ height: '100%', p: 0 }}>
+              <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Chip label="Receivables" size="small" sx={{ bgcolor: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
+                      <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Debtors</Typography>
+                    </Box>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                      {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalReceivable || 0)}
+                    </Typography>
+                  </Box>
+                  <Avatar sx={{ bgcolor: '#eff6ff', color: '#3b82f6', width: 48, height: 48, borderRadius: 2 }}>
+                    <ReceivableIcon sx={{ fontSize: 28 }} />
+                  </Avatar>
+                </Box>
+
+                {/* Split Box: Outstanding vs Overdue */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 1 }}>
+                  {/* Current Outstanding */}
+                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.5 }}>
+                      Outstanding Net
+                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66', mb: 1 }}>
+                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalReceivable || 0)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #e2e8f0' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithBill || 0)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithoutBill || 0)}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Overdue */}
+                  <Box sx={{ 
+                    p: 1.75, 
+                    borderRadius: 2, 
+                    bgcolor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fff7ed' : '#f8fafc', 
+                    border: '1px solid',
+                    borderColor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fed7aa' : '#e2e8f0'
+                  }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ 
+                        fontWeight: 700, 
+                        color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#c2410c' : '#475569', 
+                        textTransform: 'uppercase', 
+                        letterSpacing: 0.4 
+                      }}>
+                        Total Overdue
+                      </Typography>
+                      <Chip 
+                        label={(kpis?.totalReceivableOverdue || 0) > 0 ? 'Due Past Terms' : 'No Overdue'} 
+                        size="small" 
+                        sx={{ 
+                          height: 18, 
+                          fontSize: '0.65rem', 
+                          fontWeight: 700, 
+                          bgcolor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fee2e2' : '#f1f5f9', 
+                          color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#ef4444' : '#64748b' 
+                        }} 
+                      />
+                    </Box>
+                    <Typography variant="subtitle1" sx={{ 
+                      fontWeight: 800, 
+                      color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#ef4444' : '#1e293b', 
+                      mb: 1 
+                    }}>
+                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalReceivableOverdue || 0)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #fed7aa' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill Overdue:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalReceivableOverdueWithBill || 0) > 0 ? '#ef4444' : '#64748b' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableOverdueWithBill || 0)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill Overdue:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalReceivableOverdueWithoutBill || 0) > 0 ? '#ea580c' : '#64748b' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithoutBill || 0)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        </Grid>
+
+        {/* Payables Card */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ 
+            borderRadius: 3, 
+            boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+            border: '1px solid #e2e8f0',
+            borderTop: '4px solid #ef4444',
+            height: '100%',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            '&:hover': { 
+              transform: 'translateY(-3px)',
+              boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
+            }
+          }}>
+            <CardActionArea onClick={() => navigate('/dashboard/reports/payable')} sx={{ height: '100%', p: 0 }}>
+              <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Chip label="Payables" size="small" sx={{ bgcolor: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
+                      <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Creditors & Vendors</Typography>
+                    </Box>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                      {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalPayable || 0)}
+                    </Typography>
+                  </Box>
+                  <Avatar sx={{ bgcolor: '#fef2f2', color: '#ef4444', width: 48, height: 48, borderRadius: 2 }}>
+                    <PayableIcon sx={{ fontSize: 28 }} />
+                  </Avatar>
+                </Box>
+
+                {/* Split Box: Outstanding vs Overdue */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 1 }}>
+                  {/* Current Outstanding */}
+                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.5 }}>
+                      Outstanding Net
+                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66', mb: 1 }}>
+                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalPayable || 0)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #e2e8f0' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithBill || 0)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithoutBill || 0)}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Overdue */}
+                  <Box sx={{ 
+                    p: 1.75, 
+                    borderRadius: 2, 
+                    bgcolor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fff7ed' : '#f8fafc', 
+                    border: '1px solid',
+                    borderColor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fed7aa' : '#e2e8f0'
+                  }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ 
+                        fontWeight: 700, 
+                        color: (kpis?.totalPayableOverdue || 0) > 0 ? '#c2410c' : '#475569', 
+                        textTransform: 'uppercase', 
+                        letterSpacing: 0.4 
+                      }}>
+                        Total Overdue
+                      </Typography>
+                      <Chip 
+                        label={(kpis?.totalPayableOverdue || 0) > 0 ? 'Due Past Terms' : 'No Overdue'} 
+                        size="small" 
+                        sx={{ 
+                          height: 18, 
+                          fontSize: '0.65rem', 
+                          fontWeight: 700, 
+                          bgcolor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fee2e2' : '#f1f5f9', 
+                          color: (kpis?.totalPayableOverdue || 0) > 0 ? '#ef4444' : '#64748b' 
+                        }} 
+                      />
+                    </Box>
+                    <Typography variant="subtitle1" sx={{ 
+                      fontWeight: 800, 
+                      color: (kpis?.totalPayableOverdue || 0) > 0 ? '#ef4444' : '#1e293b', 
+                      mb: 1 
+                    }}>
+                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalPayableOverdue || 0)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #fed7aa' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill Overdue:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalPayableOverdueWithBill || 0) > 0 ? '#ef4444' : '#64748b' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableOverdueWithBill || 0)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill Overdue:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalPayableOverdueWithoutBill || 0) > 0 ? '#ea580c' : '#64748b' }}>
+                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithoutBill || 0)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Row 3: Analytics Section - Trends & Top Parties */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Monthly Outward Chart Area */}
         <Grid item xs={12} md={8}>
@@ -444,7 +473,7 @@ const DashboardHome = () => {
             ) : monthlyData.length > 0 ? (
               <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: 250, pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0' }}>
                 {monthlyData.map((data, idx) => {
-                  const heightPercent = Math.max((data.totalAmount / maxMonthlyAmount) * 100, 2); // min 2% height for visibility
+                  const heightPercent = Math.max((data.totalAmount / maxMonthlyAmount) * 100, 2);
                   return (
                     <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '12%', height: '100%', justifyContent: 'flex-end' }}>
                       <Typography variant="caption" sx={{ fontWeight: 600, color: '#3b82f6', mb: 1 }}>
@@ -516,120 +545,7 @@ const DashboardHome = () => {
         </Grid>
       </Grid>
 
-      {/* Overdue / Due Reports */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Receivables */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 4, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
-              Outward Receivables (Top 10 Overdue / Due Soonest)
-            </Typography>
-            <TableContainer sx={{ maxHeight: 400, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 2 }}>
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1 }}>Party</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1 }}>Invoice Details</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1, textAlign: 'right' }}>Amount</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1, textAlign: 'center' }}>Due Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {reportsLoading ? (
-                    [1, 2, 3].map((n) => (
-                      <TableRow key={n}>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : receivables.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                        No outstanding receivables found.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    receivables.map((row) => (
-                      <TableRow key={row.RowId} hover>
-                        <TableCell sx={{ fontWeight: 600, fontSize: '0.825rem' }}>{row.partyName}</TableCell>
-                        <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                          <div style={{ fontWeight: 500 }}>No: {row.outwardNo}</div>
-                          <div>Date: {row.outwardDate ? new Date(row.outwardDate).toLocaleDateString() : ''}</div>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.825rem', textAlign: 'right', color: '#10b981' }}>
-                          {formatCurrency(row.outstandingAmount).split('.')[0]}
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>
-                          {renderDueStatus(row.dueDays)}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Grid>
-
-        {/* Payables */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 4, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
-              Inward Payables (Top 10 Overdue / Due Soonest)
-            </Typography>
-            <TableContainer sx={{ maxHeight: 400, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 2 }}>
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1 }}>Vendor</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1 }}>Invoice Details</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1, textAlign: 'right' }}>Amount</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', bgcolor: '#0f3b66', color: '#fff', fontSize: '0.8rem', py: 1, textAlign: 'center' }}>Due Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {reportsLoading ? (
-                    [1, 2, 3].map((n) => (
-                      <TableRow key={n}>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                        <TableCell><Skeleton variant="text" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : payables.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                        No outstanding payables found.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    payables.map((row) => (
-                      <TableRow key={row.RowId} hover>
-                        <TableCell sx={{ fontWeight: 600, fontSize: '0.825rem' }}>{row.vendorName}</TableCell>
-                        <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                          <div style={{ fontWeight: 500 }}>No: {row.inwardNo}</div>
-                          <div>Date: {row.inwardDate ? new Date(row.inwardDate).toLocaleDateString() : ''}</div>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.825rem', textAlign: 'right', color: '#ef4444' }}>
-                          {formatCurrency(row.outstandingAmount).split('.')[0]}
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>
-                          {renderDueStatus(row.dueDays)}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Department-wise Stock */}
+      {/* Row 4: Department-wise Stock */}
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Paper sx={{ p: 4, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
@@ -657,8 +573,8 @@ const DashboardHome = () => {
                         justifyContent: 'space-between', 
                         alignItems: 'center',
                         transition: 'all 0.2s',
-                        '&:hover': {
-                          borderColor: '#3b82f6',
+                        '&:hover': { 
+                          borderColor: '#3b82f6', 
                           boxShadow: '0 4px 12px rgba(59, 130, 246, 0.08)',
                           transform: 'translateY(-2px)'
                         }
@@ -691,6 +607,7 @@ const DashboardHome = () => {
         </Grid>
       </Grid>
 
+      {/* Cash & Bank Balances Modal Dialog */}
       <Dialog open={cashBankDialogOpen} onClose={() => setCashBankDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 2 }}>
           Cash & Bank Balances
