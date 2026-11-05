@@ -19,6 +19,24 @@ dist-ssr/
 out/
 *.zip
 dist.zip
+publish/
+
+# SQLite database and temporary files (local data not stored in git)
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# SSL Certificates, Keys, and Secrets
+backend/certs/
+certs/
+*.pem
+*.key
+*.pfx
+*.cer
+*.crt
+registration.json
 
 # Environment variables / Secrets
 .env

@@ -55,7 +55,7 @@ const LoginPage = ({ onNavigate }) => {
   return (
     <div className="auth-card">
       <div className="logo-container">
-        <img src={logo} alt="Factory Flow Logo" />
+        <img src={logo} alt="FRM Logo" />
       </div>
       <h2 className="auth-title">Welcome Back</h2>
       

@@ -80,7 +80,7 @@ const TrialBalanceReport = () => {
     
     doc.setFontSize(20);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 22);
+    doc.text(localUser.companyName || 'FRM', 14, 22);
     
     doc.setFontSize(14);
     doc.setTextColor(100);

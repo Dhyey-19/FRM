@@ -402,7 +402,7 @@ const StockReportContent = () => {
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow Enterprise', 14, 18);
+    doc.text(localUser.companyName || 'FRM Enterprise', 14, 18);
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');

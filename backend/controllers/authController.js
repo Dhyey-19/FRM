@@ -62,7 +62,7 @@ const path = require('path');
 
 const getRegistrationFilePath = () => {
   const appDataDir = process.env.APPDATA || (process.platform === 'darwin' ? `${process.env.HOME}/Library/Application Support` : `${process.env.HOME}/.config`);
-  const folderPath = path.join(appDataDir, 'FactoryFlow');
+  const folderPath = path.join(appDataDir, 'FRM');
   if (!fs.existsSync(folderPath)) {
     fs.mkdirSync(folderPath, { recursive: true });
   }
@@ -136,9 +136,9 @@ exports.sharePDF = async (req, res) => {
   try {
     const cleanReportName = (reportName || 'report').replace(/[^a-zA-Z0-9]/g, '_');
     
-    // Save to user's Documents/FactoryFlow_Reports folder
+    // Save to user's Documents/FRM_Reports folder
     const userHome = os.homedir();
-    const targetDir = path.join(userHome, 'Documents', 'FactoryFlow_Reports');
+    const targetDir = path.join(userHome, 'Documents', 'FRM_Reports');
     
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -203,20 +203,20 @@ exports.requestActivation = async (req, res) => {
     const mailOptions = {
       from: emailUser,
       to: 'softechit@gmail.com',
-      subject: `Activation - App: ${appName || 'FactoryFlow'}, Device Verification: ${randomNumber}, Activation Key: ${activationKey}`,
+      subject: `Activation - App: ${appName || 'FRM'}, Device Verification: ${randomNumber}, Activation Key: ${activationKey}`,
       text: `Hello,
 
 A request for application activation has been made.
 
 Application Details:
-- Application Name: ${appName || 'FactoryFlow'}
+- Application Name: ${appName || 'FRM'}
 - Device Verification Number: ${randomNumber}
 - Generated Activation Key: ${activationKey}
 
 Please use the Activation Key above to register the application on the user's device.
 
 Best regards,
-FactoryFlow System`
+FRM System`
     };
 
     await transporter.sendMail(mailOptions);
@@ -279,7 +279,7 @@ exports.backupDatabase = async (req, res) => {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-    const filename = `Factory Flow Backup ${dateStr} ${timeStr}.xlsx`;
+    const filename = `FRM Backup ${dateStr} ${timeStr}.xlsx`;
 
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

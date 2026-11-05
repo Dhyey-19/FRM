@@ -511,7 +511,7 @@ const JobworkInEntry = () => {
     const dividerY = Math.max(headerY + 2, 33);
     doc.line(14, dividerY, 196, dividerY);
 
-    // Receiver Details (Factory Flow/Company details)
+    // Receiver Details (FRM/Company details)
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
@@ -520,7 +520,7 @@ const JobworkInEntry = () => {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0);
-    const compName = companyProfile ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
+    const compName = companyProfile ? companyProfile.CompanyName : 'FRM ERP';
     doc.text(compName, 14, dividerY + 12);
 
     doc.setFont('helvetica', 'normal');

@@ -443,7 +443,7 @@ const InwardEntry = () => {
     const dividerY = Math.max(headerY + 2, 33);
     doc.line(14, dividerY, 196, dividerY);
 
-    // Buyer Details (Factory Flow/Company details)
+    // Buyer Details (FRM/Company details)
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
@@ -452,7 +452,7 @@ const InwardEntry = () => {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0);
-    const compName = companyProfile ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
+    const compName = companyProfile ? companyProfile.CompanyName : 'FRM ERP';
     doc.text(compName, 14, dividerY + 12);
 
     doc.setFont('helvetica', 'normal');

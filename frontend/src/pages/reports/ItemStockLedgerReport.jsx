@@ -421,7 +421,7 @@ const ItemStockLedgerReport = () => {
     }
 
     const doc = new jsPDF('landscape');
-    const compName = compProfile?.CompanyName || localUser?.companyName || 'FACTORY FLOW ERP';
+    const compName = compProfile?.CompanyName || localUser?.companyName || 'FRM ERP';
     const address = [compProfile?.Address1, compProfile?.Address2, compProfile?.City, compProfile?.StateName].filter(Boolean).join(', ');
     const gstNo = compProfile?.GSTIN ? `GSTIN: ${compProfile.GSTIN}` : '';
 

@@ -469,7 +469,7 @@ const BankReconciliation = () => {
           { content: '#', rowSpan: 2, styles: { valign: 'middle' } },
           { content: 'Status', rowSpan: 2, styles: { valign: 'middle' } },
           { content: 'Bank Statement', colSpan: 4, styles: { halign: 'center', fillColor: [15, 59, 102] } },
-          { content: 'Books (FactoryFlow Vouchers)', colSpan: 4, styles: { halign: 'center', fillColor: [248, 138, 1] } }
+          { content: 'Books (FRM Vouchers)', colSpan: 4, styles: { halign: 'center', fillColor: [248, 138, 1] } }
         ],
         [
           'Date / Particulars', 'Ref/Chq No', 'Withdrawal (Dr)', 'Deposit (Cr)',
@@ -754,7 +754,7 @@ const BankReconciliation = () => {
           <Card sx={{ borderRadius: 2, borderLeft: '4px solid #F88A01', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
             <CardContent sx={{ p: '14px !important' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase' }}>
-                FactoryFlow Vouchers (Books)
+                FRM Vouchers (Books)
               </Typography>
               <Typography variant="h5" sx={{ fontWeight: 700, color: '#F88A01', mt: 0.5 }}>
                 {reconciliationData.summary.totalBookCount}
@@ -939,7 +939,7 @@ const BankReconciliation = () => {
                   BANK STATEMENT ENTRY
                 </TableCell>
                 <TableCell colSpan={4} sx={{ backgroundColor: '#fed7aa', color: '#9a3412', fontWeight: 700, textAlign: 'center', borderRight: '1px solid #e2e8f0' }}>
-                  FACTORYFLOW BOOKS (VOUCHER)
+                  FRM BOOKS (VOUCHER)
                 </TableCell>
                 <TableCell sx={{ width: 80 }} align="center">Action</TableCell>
               </TableRow>
@@ -1004,7 +1004,7 @@ const BankReconciliation = () => {
                           </Tooltip>
                         )}
                         {isStmtOnly && (
-                          <Tooltip title="Recorded in Bank Statement, but missing in FactoryFlow books.">
+                          <Tooltip title="Recorded in Bank Statement, but Missing in FRM books.">
                             <Chip
                               size="small"
                               icon={<MismatchedIcon sx={{ fontSize: '14px !important' }} />}
@@ -1065,7 +1065,7 @@ const BankReconciliation = () => {
                         </>
                       )}
 
-                      {/* FACTORYFLOW BOOKS (VOUCHER) SIDE */}
+                      {/* FRM BOOKS (VOUCHER) SIDE */}
                       {book ? (
                         <>
                           <TableCell sx={{ fontSize: '0.8rem' }}>
@@ -1118,7 +1118,7 @@ const BankReconciliation = () => {
                       ) : (
                         <>
                           <TableCell colSpan={4} align="center" sx={{ borderRight: '1px solid #e2e8f0', color: 'text.disabled', fontStyle: 'italic', bgcolor: '#f8fafc' }}>
-                            — Missing in FactoryFlow Books —
+                            — Missing in FRM books —
                           </TableCell>
                         </>
                       )}

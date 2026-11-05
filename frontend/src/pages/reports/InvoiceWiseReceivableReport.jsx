@@ -393,7 +393,7 @@ const InvoiceWiseReceivableReport = () => {
     
     doc.setFontSize(18);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 18);
+    doc.text(localUser.companyName || 'FRM', 14, 18);
     
     doc.setFontSize(13);
     doc.setTextColor(60);

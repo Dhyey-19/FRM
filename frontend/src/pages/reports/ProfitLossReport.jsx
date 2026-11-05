@@ -127,7 +127,7 @@ const ProfitLossReport = () => {
 
     // Sheet 1: Profit & Loss Statement
     const rows = [
-      [`${localUser.companyName || 'FactoryFlow'} - Profit & Loss Statement`],
+      [`${localUser.companyName || 'FRM'} - Profit & Loss Statement`],
       [`Report Date: ${new Date().toLocaleDateString()}`],
       [],
       ['SUMMARY OF INVENTORY VALUATION'],
@@ -179,7 +179,7 @@ const ProfitLossReport = () => {
     // Sheet 2: Stock in Process by Department (Goods Costing & Valuation)
     if (reportData.departmentStockBreakdown && reportData.departmentStockBreakdown.length > 0) {
       const wipRows = [
-        [`${localUser.companyName || 'FactoryFlow'} - Stock in Process by Department (Goods Costing & Valuation)`],
+        [`${localUser.companyName || 'FRM'} - Stock in Process by Department (Goods Costing & Valuation)`],
         [`Report Date: ${new Date().toLocaleDateString()}`],
         [],
         ['Department', 'Item Code', 'Item Name', 'Unit', 'Transfer Rate (INR)', 'Pcs', 'Weight (KG)', 'Valuation (INR)']
@@ -218,7 +218,7 @@ const ProfitLossReport = () => {
     
     doc.setFontSize(18);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 18);
+    doc.text(localUser.companyName || 'FRM', 14, 18);
     
     doc.setFontSize(13);
     doc.setTextColor(100);

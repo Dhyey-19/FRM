@@ -235,7 +235,7 @@ const AccountLedgerReport = () => {
     
     doc.setFontSize(18);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 18);
+    doc.text(localUser.companyName || 'FRM', 14, 18);
     
     const modeLabel = viewMode === 'with_bill' ? ' (With Bill / Official)' : 
                       viewMode === 'without_bill' ? ' (Without Bill / Cash)' : 
@@ -506,7 +506,7 @@ const AccountLedgerReport = () => {
         `;
       }).join('');
 
-      const compName = companyProfile?.CompanyName || localUser?.companyName || 'FACTORY FLOW ERP';
+      const compName = companyProfile?.CompanyName || localUser?.companyName || 'FRM ERP';
       let addressParts = '';
       let phonePart = '';
       let gstPart = '';

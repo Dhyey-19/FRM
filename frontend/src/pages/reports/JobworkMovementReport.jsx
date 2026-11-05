@@ -282,7 +282,7 @@ const JobworkMovementReportContent = () => {
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    doc.text((compProfile?.CompanyName || localUser.companyName || 'FACTORYFLOW ENTERPRISE').toUpperCase(), 14, 15);
+    doc.text((compProfile?.CompanyName || localUser.companyName || 'FRM Enterprise').toUpperCase(), 14, 15);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');

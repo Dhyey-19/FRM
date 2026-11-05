@@ -1,40 +1,379 @@
-const sql = require('mssql');
+const path = require('path');
+const fs = require('fs');
+const initSqlJs = require('sql.js');
 require('dotenv').config();
 
-const config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_DATABASE,
-  options: {
-    encrypt: true, // For Azure SQL
-    trustServerCertificate: false
+let dbInstance = null;
+let poolInstance = null;
+let currentDbPath = null;
+let inTransaction = false;
+
+// Resolve SQLite database path robustly regardless of process.cwd()
+function resolveDatabasePath() {
+  const defaultDbPath = path.resolve(__dirname, '../database/factoryflow.db');
+  
+  if (process.env.SQLITE_DB_PATH) {
+    if (path.isAbsolute(process.env.SQLITE_DB_PATH)) {
+      return process.env.SQLITE_DB_PATH;
+    }
+    // Check relative to project root (e.g. backend/database/factoryflow.db)
+    const fromRoot = path.resolve(__dirname, '../../', process.env.SQLITE_DB_PATH);
+    if (fs.existsSync(fromRoot)) return fromRoot;
+
+    // Check relative to backend/ (e.g. database/factoryflow.db)
+    const fromBackend = path.resolve(__dirname, '../', process.env.SQLITE_DB_PATH);
+    if (fs.existsSync(fromBackend)) return fromBackend;
+
+    // Check relative to process.cwd()
+    const fromCwd = path.resolve(process.cwd(), process.env.SQLITE_DB_PATH);
+    if (fs.existsSync(fromCwd)) return fromCwd;
+  }
+
+  return defaultDbPath;
+}
+
+function saveToDisk() {
+  if (dbInstance && currentDbPath && !inTransaction) {
+    try {
+      const data = dbInstance.export();
+      fs.writeFileSync(currentDbPath, Buffer.from(data));
+    } catch (err) {
+      console.error('[LocalDB] Error saving to disk:', err.message);
+    }
+  }
+}
+
+async function getDatabase() {
+  if (!dbInstance) {
+    currentDbPath = resolveDatabasePath();
+    let wasmBinary = null;
+    const candidates = [
+      () => require.resolve('sql.js/dist/sql-wasm.wasm'),
+      () => path.join(__dirname, '../../node_modules/sql.js/dist/sql-wasm.wasm'),
+      () => path.join(__dirname, '../node_modules/sql.js/dist/sql-wasm.wasm')
+    ];
+    for (const getCand of candidates) {
+      try {
+        const cand = getCand();
+        if (cand && fs.existsSync(cand)) {
+          wasmBinary = fs.readFileSync(cand);
+          if (wasmBinary && wasmBinary.length > 0) break;
+        }
+      } catch (e) {}
+    }
+    const SQL = await initSqlJs(wasmBinary ? { wasmBinary } : undefined);
+
+    if (fs.existsSync(currentDbPath)) {
+      const filebuffer = fs.readFileSync(currentDbPath);
+      dbInstance = new SQL.Database(filebuffer);
+    } else {
+      const dir = path.dirname(currentDbPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      dbInstance = new SQL.Database();
+      // Initialize tables from schema.sql if exists
+      const schemaPath = path.resolve(__dirname, '../database/schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        dbInstance.exec(fs.readFileSync(schemaPath, 'utf8'));
+      }
+      saveToDisk();
+    }
+
+    // 1. Register GETDATE()
+    dbInstance.create_function('GETDATE', () => {
+      const now = new Date();
+      return now.toISOString().slice(0, 19).replace('T', ' ');
+    });
+
+    // 2. Register TRY_INT(val)
+    dbInstance.create_function('TRY_INT', (val) => {
+      if (val === null || val === undefined) return null;
+      const str = String(val).trim();
+      if (/^-?\d+$/.test(str)) {
+        return parseInt(str, 10);
+      }
+      return null;
+    });
+
+    // 3. Register DATEADD(part, num, dateStr)
+    dbInstance.create_function('DATEADD', (part, num, dateStr) => {
+      const d = dateStr ? new Date(dateStr) : new Date();
+      const n = parseInt(num, 10);
+      const p = String(part || '').toLowerCase();
+      if (p === 'month' || p === 'm' || p === 'mm') {
+        d.setMonth(d.getMonth() + n);
+      } else if (p === 'day' || p === 'd' || p === 'dd') {
+        d.setDate(d.getDate() + n);
+      } else if (p === 'year' || p === 'y' || p === 'yy' || p === 'yyyy') {
+        d.setFullYear(d.getFullYear() + n);
+      }
+      return d.toISOString().slice(0, 10);
+    });
+
+    // 4. Register FORMAT(val, format)
+    dbInstance.create_function('FORMAT', (val, fmt) => {
+      if (!val) return null;
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return String(val);
+      if (fmt === 'yyyy-MM') {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        return `${y}-${m}`;
+      }
+      if (fmt === 'yyyy-MM-dd') {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+      return String(val);
+    });
+
+    // 5. Automatically execute any pending database migrations
+    try {
+      const { runMigrations } = require('../database/migrator');
+      await runMigrations(dbInstance, saveToDisk);
+    } catch (migErr) {
+      console.warn('[LocalDB] Migration execution warning:', migErr.message);
+    }
+  }
+
+  return dbInstance;
+}
+
+// Balanced parentheses subquery TOP replacement
+function replaceTopInSubqueries(sqlText) {
+  let result = '';
+  let i = 0;
+  while (i < sqlText.length) {
+    const slice = sqlText.slice(i);
+    const topMatch = slice.match(/^\(\s*SELECT\s+TOP\s+(\d+)\s+/i);
+    if (topMatch) {
+      const topN = topMatch[1];
+      const startContent = i + topMatch[0].length;
+      let depth = 1;
+      let j = startContent;
+      while (j < sqlText.length && depth > 0) {
+        if (sqlText[j] === '(') depth++;
+        else if (sqlText[j] === ')') depth--;
+        j++;
+      }
+      let inner = sqlText.slice(startContent, j - 1);
+      inner = replaceTopInSubqueries(inner);
+      if (!/\bLIMIT\b/i.test(inner)) {
+        inner = inner.trim() + ` LIMIT ${topN}`;
+      }
+      result += `(SELECT ${inner})`;
+      i = j;
+    } else {
+      result += sqlText[i];
+      i++;
+    }
+  }
+  return result;
+}
+
+// Transform T-SQL query into standard SQLite query
+function transformQuery(sqlText) {
+  let q = sqlText;
+
+  // 1. ISNULL(x, y) -> IFNULL(x, y)
+  q = q.replace(/\bISNULL\s*\(/gi, 'IFNULL(');
+
+  // 2. TRY_CAST(x AS INT) -> TRY_INT(x)
+  q = q.replace(/\bTRY_CAST\s*\(\s*(.+?)\s+AS\s+(?:INT|BIGINT|INTEGER)\s*\)/gi, 'TRY_INT($1)');
+
+  // 3. CAST(x AS DATE) -> DATE(x)
+  q = q.replace(/\bCAST\s*\(\s*(.+?)\s+AS\s+DATE\s*\)/gi, 'DATE($1)');
+
+  // 4. CONVERT(VARCHAR(10), x, 120) -> SUBSTR(x, 1, 10)
+  q = q.replace(/\bCONVERT\s*\(\s*VARCHAR\s*\(\s*\d+\s*\)\s*,\s*([^,]+?)\s*,\s*120\s*\)/gi, 'SUBSTR($1, 1, 10)');
+
+  // 5. DATEADD(month, -6, GETDATE()) -> DATEADD('month', -6, GETDATE())
+  q = q.replace(/\bDATEADD\s*\(\s*([a-zA-Z]+)\s*,/gi, "DATEADD('$1',");
+
+  // 6. OUTPUT INSERTED.col1, INSERTED.col2 -> RETURNING col1, col2
+  const outputMatch = q.match(/INSERT\s+INTO\s+([^\s(]+)\s*(\([^)]+\))\s*OUTPUT\s+INSERTED\.([^\s(]+(?:\s*,\s*INSERTED\.[^\s(]+)*)\s*VALUES\s*(\([^)]+\))/i);
+  if (outputMatch) {
+    const fullMatch = outputMatch[0];
+    const table = outputMatch[1];
+    const cols = outputMatch[2];
+    const outCols = outputMatch[3].replace(/INSERTED\./gi, '');
+    const vals = outputMatch[4];
+    const returningQuery = `INSERT INTO ${table} ${cols} VALUES ${vals} RETURNING ${outCols}`;
+    q = q.replace(fullMatch, returningQuery);
+  }
+  q = q.replace(/\s*OUTPUT\s+INSERTED\.([a-zA-Z0-9_]+)\s*VALUES/gi, ' VALUES');
+
+  // 7. Subqueries with SELECT TOP <n>
+  q = replaceTopInSubqueries(q);
+
+  // 8. Top-level SELECT TOP <n>
+  if (/^\s*SELECT\s+TOP\s+(\d+)\s+/i.test(q)) {
+    const topMatch = q.match(/^\s*SELECT\s+TOP\s+(\d+)\s+/i);
+    const topN = topMatch[1];
+    q = q.replace(/^\s*SELECT\s+TOP\s+\d+\s+/i, 'SELECT ');
+    if (!/\bLIMIT\b/i.test(q)) {
+      q = q.trim() + ` LIMIT ${topN}`;
+    }
+  }
+
+  // 9. String concatenation '+' with string literals into '||'
+  q = q.replace(/('(?:\\[\s\S]|[^'\\])*')\s*\+\s*(IFNULL|COALESCE|[a-zA-Z0-9_.]+)/gi, '$1 || $2');
+  q = q.replace(/(IFNULL\([^)]+\)|COALESCE\([^)]+\)|[a-zA-Z0-9_.]+)\s*\+\s*('(?:\\[\s\S]|[^'\\])*')/gi, '$1 || $2');
+
+  return q;
+}
+
+class Request {
+  constructor(parent) {
+    this.parent = parent;
+    this.parameters = {};
+  }
+
+  input(name, typeOrVal, val) {
+    const value = val !== undefined ? val : typeOrVal;
+    this.parameters[name] = value;
+    return this;
+  }
+
+  async query(sqlText) {
+    const db = await getDatabase();
+    const transformed = transformQuery(sqlText);
+
+    // Prepare parameters: sql.js supports ':key', '@key', '$key'
+    const params = {};
+    for (const [k, v] of Object.entries(this.parameters)) {
+      const cleanKey = k.startsWith('@') ? k.slice(1) : k;
+      params['@' + cleanKey] = v;
+      params[':' + cleanKey] = v;
+      params['$' + cleanKey] = v;
+    }
+
+    const isReturning = /\bRETURNING\b/i.test(transformed);
+    const isSelect = /^\s*(SELECT|WITH|PRAGMA)\b/i.test(transformed);
+
+    try {
+      const stmt = db.prepare(transformed);
+      stmt.bind(params);
+
+      if (isSelect || isReturning) {
+        const rows = [];
+        while (stmt.step()) {
+          rows.push(stmt.getAsObject());
+        }
+        stmt.free();
+
+        if (isReturning) {
+          saveToDisk();
+        }
+
+        return {
+          recordset: rows,
+          recordsets: [rows],
+          rowsAffected: [rows.length]
+        };
+      } else {
+        stmt.step();
+        stmt.free();
+        const changes = db.getRowsModified();
+        saveToDisk();
+        return {
+          recordset: [],
+          recordsets: [[]],
+          rowsAffected: [changes]
+        };
+      }
+    } catch (err) {
+      console.error('[SQLite Adapter Error] Query Failed:', err.message);
+      console.error('Original SQL:', sqlText);
+      console.error('Transformed SQL:', transformed);
+      console.error('Parameters:', params);
+      throw err;
+    }
+  }
+}
+
+class Transaction {
+  constructor(pool) {
+    this.pool = pool;
+  }
+
+  async begin() {
+    const db = await getDatabase();
+    inTransaction = true;
+    db.exec('BEGIN TRANSACTION;');
+  }
+
+  async commit() {
+    const db = await getDatabase();
+    db.exec('COMMIT;');
+    inTransaction = false;
+    saveToDisk();
+  }
+
+  async rollback() {
+    const db = await getDatabase();
+    try {
+      db.exec('ROLLBACK;');
+    } catch (e) {
+      // Ignore if transaction already ended
+    }
+    inTransaction = false;
+  }
+}
+
+const pool = {
+  request: () => new Request(pool),
+  close: async () => {
+    if (dbInstance) {
+      saveToDisk();
+      dbInstance.close();
+      dbInstance = null;
+      poolInstance = null;
+    }
   }
 };
 
-let poolPromise = null;
+const sql = {
+  VarChar: () => sql.VarChar,
+  NVarChar: () => sql.NVarChar,
+  Text: 'Text',
+  Int: 'Int',
+  BigInt: 'BigInt',
+  SmallInt: 'SmallInt',
+  TinyInt: 'TinyInt',
+  Numeric: () => sql.Numeric,
+  Decimal: () => sql.Decimal,
+  Float: 'Float',
+  Bit: 'Bit',
+  Date: 'Date',
+  DateTime: 'DateTime',
+  Time: 'Time',
+  MAX: -1,
+  Request,
+  Transaction,
+  connect: async () => pool
+};
 
 const connectDB = async () => {
-  try {
-    if (!poolPromise) {
-      poolPromise = sql.connect(config).then(pool => {
-        console.log('Connected to Azure SQL Database');
-        return pool;
-      }).catch(err => {
-        console.error('Database Connection Failed!', err);
-        poolPromise = null;
-        throw err;
-      });
-    }
-    return await poolPromise;
-  } catch (err) {
-    console.error('Error getting DB connection:', err);
-    throw err;
+  if (!poolInstance) {
+    const dbPath = resolveDatabasePath();
+    await getDatabase();
+    console.log(`[Database] Connected to local SQLite database via sql.js (${dbPath})`);
+    poolInstance = pool;
   }
+  return poolInstance;
+};
+
+const config = {
+  database: 'factoryflow.db',
+  type: 'sqlite',
+  getPath: resolveDatabasePath
 };
 
 module.exports = {
   sql,
   connectDB,
-  config
+  config,
+  getDatabase
 };

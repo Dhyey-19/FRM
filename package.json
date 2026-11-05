@@ -1,22 +1,24 @@
 {
-  "name": "factory-flow-desktop",
-  "version": "20261014.0.0",
-  "description": "FactoryFlow Desktop Application",
-  "author": "FactoryFlow",
-  "main": "electron/main.js",
+  "name": "frm",
+  "version": "20261104.0.0",
+  "description": "FRM - Factory Resource Manager",
+  "author": "FRM",
   "workspaces": [
     "frontend",
     "backend"
   ],
   "scripts": {
+    "start": "npm run dev",
+    "server": "node backend/server.js",
+    "publish": "node scripts/publish.js",
+    "tunnel": "npx localtunnel --port 5000",
+    "cert": "node scripts/generate-cert.js",
     "update-version": "node scripts/update-version.js",
-    "dev": "concurrently -k \"npm run dev -w frontend\" \"npm run dev -w backend\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "dev": "concurrently -k \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "db:init": "node backend/database/init-db.js",
+    "postinstall": "node backend/database/init-db.js",
     "build:frontend": "npm run build --prefix frontend",
-    "build": "npm run build:frontend",
-    "predist": "npm run update-version",
-    "dist": "npm run build && electron-builder",
-    "prebuild:exe": "npm run update-version",
-    "build:exe": "npm run update-version && cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dist"
+    "build": "npm run build:frontend"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -24,43 +26,10 @@
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "mssql": "^12.5.5",
-    "nodemailer": "^8.0.11"
+    "nodemailer": "^8.0.11",
+    "sql.js": "^1.15.2"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
-    "electron": "^30.5.1",
-    "electron-builder": "^24.13.3",
-    "wait-on": "^7.2.0"
-  },
-  "build": {
-    "appId": "com.factoryflow.desktop",
-    "productName": "FactoryFlow",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "electron/**/*",
-      "frontend/dist/**/*",
-      "backend/**/*",
-      "package.json",
-      ".env"
-    ],
-    "win": {
-      "target": "nsis",
-      "publisherName": "DTech",
-      "icon": "build/icon.png",
-      "artifactName": "${productName}-20261022.${ext}",
-      "certificateFile": "certs/DTech.pfx",
-      "certificatePassword": "factoryflow"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "FactoryFlow"
-    }
+    "concurrently": "^8.2.2"
   }
 }

@@ -378,7 +378,7 @@ const JobworkOutEntry = () => {
     });
 
     // Company Header (top-left)
-    const compName = companyProfile ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
+    const compName = companyProfile ? companyProfile.CompanyName : 'FRM ERP';
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);

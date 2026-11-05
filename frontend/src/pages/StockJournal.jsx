@@ -12,7 +12,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const VoucherPreview = ({ row, companyProfile, copyType }) => {
-    const compName = companyProfile && companyProfile.CompanyName ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
+    const compName = companyProfile && companyProfile.CompanyName ? companyProfile.CompanyName : 'FRM ERP';
     let addressParts = '';
     let phonePart = '';
     
@@ -329,7 +329,7 @@ const StockJournal = ({ user }) => {
 
     const printVoucher = (row) => {
         const doc = new jsPDF();
-        const compName = companyProfile && companyProfile.CompanyName ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
+        const compName = companyProfile && companyProfile.CompanyName ? companyProfile.CompanyName : 'FRM ERP';
         
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');

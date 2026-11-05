@@ -53,13 +53,40 @@ import { MENU_STRUCTURE } from '../../config/menuConfig';
 const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [currentUser, setCurrentUser] = useState(user);
   const [openMenu, setOpenMenu] = useState('');
   const [openSurrenderDialog, setOpenSurrenderDialog] = useState(false);
   const [surrenderInput, setSurrenderInput] = useState('');
   const [surrenderError, setSurrenderError] = useState('');
   const [surrendering, setSurrendering] = useState(false);
 
-  const userRole = String(user?.role || user?.UserRole || '').toUpperCase();
+  useEffect(() => {
+    setCurrentUser(user);
+  }, [user]);
+
+  // Listen for user access permissions update to refresh drawer dynamically
+  useEffect(() => {
+    const handleAccessUpdate = () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+        if (stored && stored.UserId) {
+          setCurrentUser(stored);
+        }
+      } catch (e) {
+        console.error('Error syncing user state:', e);
+      }
+    };
+
+    window.addEventListener('user_access_updated', handleAccessUpdate);
+    window.addEventListener('storage', handleAccessUpdate);
+    return () => {
+      window.removeEventListener('user_access_updated', handleAccessUpdate);
+      window.removeEventListener('storage', handleAccessUpdate);
+    };
+  }, []);
+
+  const activeUser = currentUser || user || {};
+  const userRole = String(activeUser?.role || activeUser?.UserRole || '').toUpperCase();
   const isAdmin = userRole === 'ADMIN' || userRole === 'ADMINISTRATOR';
 
   useEffect(() => {
@@ -89,7 +116,7 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
         a.href = url;
         
         const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = 'Factory Flow Backup.xlsx';
+        let filename = 'FRM Backup.xlsx';
         if (contentDisposition && contentDisposition.includes('filename=')) {
           const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
           if (filenameMatch && filenameMatch.length > 1) {
@@ -177,22 +204,22 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
       <Box sx={{ py: 0.5, overflow: 'auto', flex: 1 }}>
         
         {/* Company Branding */}
-        <Box sx={{ p: isCollapsed ? 1 : 3, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <Box sx={{ p: isCollapsed ? 1 : 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           {isCollapsed ? (
             <img 
-              src={user.companyLogo || appLogo} 
-              alt="Logo" 
+              src={activeUser.companyLogo || user.companyLogo || appLogo} 
+              alt="FRM" 
               style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
             />
           ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', px: 0.5 }}>
               <img 
-                src={user.companyLogo || appLogo} 
-                alt="Logo" 
-                style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
+                src={activeUser.companyLogo || user.companyLogo || appLogo} 
+                alt="FRM" 
+                style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid white', flexShrink: 0 }} 
               />
-              <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
-                {user.companyName ? user.companyName.replace(' ERP', '') : 'FactoryFlow'}
+              <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap', color: '#ffffff' }}>
+                FRM
               </Typography>
             </Box>
           )}
@@ -238,19 +265,28 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
         <List sx={{ py: 0.5, px: 2, pt: 1 }}>
           {(() => {
             const hasMenuAccess = (path) => {
-              if (isAdmin) return true;
               if (!path || path === '/dashboard') return true;
-              
-              const menus = (user?.AllowedMenus !== undefined && user?.AllowedMenus !== null)
-                ? user.AllowedMenus
-                : (JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {}).AllowedMenus;
 
-              if (!menus) return false;
-              
-              const allowed = Array.isArray(menus)
-                ? menus
-                : String(menus).split(',').map(p => p.trim());
-                
+              // Always ensure Admin has access to critical management routes
+              if (isAdmin && (path === '/dashboard/user-access' || path === '/dashboard/users' || path === '/dashboard/company-profile')) {
+                return true;
+              }
+
+              const storedUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+              const current = activeUser || storedUser || {};
+              const rawMenus = (current?.AllowedMenus !== undefined && current?.AllowedMenus !== null)
+                ? current.AllowedMenus
+                : storedUser.AllowedMenus;
+
+              // Wildcard or unconfigured Admin default
+              if (rawMenus === '*') return true;
+              if (isAdmin && (!rawMenus || String(rawMenus).trim() === '')) return true;
+              if (!rawMenus || String(rawMenus).trim() === '') return false;
+
+              const allowed = Array.isArray(rawMenus)
+                ? rawMenus
+                : String(rawMenus).split(',').map(p => p.trim());
+
               return allowed.includes(path);
             };
 
@@ -307,7 +343,7 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
                 });
               }
 
-              if (!isAdmin && !section.path && visibleChildren.length === 0 && section.id !== 'admin') {
+              if (!section.path && visibleChildren.length === 0 && section.id !== 'admin') {
                 return null;
               }
 
@@ -349,7 +385,7 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
                       )}
 
                       {section.groups && section.groups.map(group => {
-                        const visibleGroupChildren = group.children.filter(child => isAdmin || hasMenuAccess(child.path));
+                        const visibleGroupChildren = group.children.filter(child => hasMenuAccess(child.path));
                         if (visibleGroupChildren.length === 0) return null;
                         return (
                           <React.Fragment key={group.groupTitle}>

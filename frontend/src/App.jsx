@@ -15,6 +15,8 @@ import BOMMaster from './pages/BOMMaster';
 import ItemTypeMaster from './pages/ItemTypeMaster';
 import AccountGroupMaster from './pages/AccountGroupMaster';
 import CompanyProfile from './pages/CompanyProfile';
+import PaymentQR from './pages/PaymentQR';
+import UserAccess from './pages/UserAccess';
 import LedgerMaster from './pages/LedgerMaster';
 import VoucherEntry from './pages/VoucherEntry';
 import BankReconciliation from './pages/BankReconciliation';
@@ -129,7 +131,9 @@ function App() {
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardHome />} />
           <Route path="company-profile" element={<CompanyProfile />} />
+          <Route path="payment-qr" element={<PaymentQR />} />
           <Route path="users" element={<UserMaster />} />
+          <Route path="user-access" element={<UserAccess />} />
           <Route path="assets" element={<AssetMaster />} />
           <Route path="brands" element={<BrandMaster />} />
           <Route path="units" element={<UnitMaster />} />

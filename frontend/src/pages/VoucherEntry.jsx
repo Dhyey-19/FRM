@@ -368,7 +368,7 @@ const VoucherEntry = ({ user }) => {
       `;
     }).join('');
 
-    const compName = companyProfile?.CompanyName || 'FACTORY FLOW ERP';
+    const compName = companyProfile?.CompanyName || 'FRM ERP';
     let addressParts = '';
     let phonePart = '';
     let gstPart = '';

@@ -22,7 +22,7 @@ const getQRBase64 = async (upiUrl) => {
  * @param {'outward' | 'inward' | 'sales' | 'purchase'} type 
  * @param {Object} invoice - Inward or Outward record with Details
  * @param {Object} ledgerObj - Customer or Vendor Ledger object
- * @param {Object} companyProfile - FactoryFlow Company Profile
+ * @param {Object} companyProfile - FRM Company Profile
  * @param {Array} items - Items array from ItemMaster
  * @returns {Promise<{ blobUrl: string, fileName: string }>}
  */
@@ -34,7 +34,7 @@ export const generateInvoicePDF = async (type, invoice, ledgerObj = {}, companyP
     format: 'a4'
   });
 
-  const compName = companyProfile ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
+  const compName = companyProfile ? companyProfile.CompanyName : 'FRM ERP';
 
   if (isSales) {
     // --- SALES INVOICE ---

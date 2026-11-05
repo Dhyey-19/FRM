@@ -21,7 +21,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress
+  CircularProgress,
+  Tooltip,
+  IconButton
 } from '@mui/material';
 import {
   AccountBalanceWallet as ValueIcon,
@@ -32,12 +34,13 @@ import {
   List as ListIcon,
   Build as AssemblyIcon,
   Assessment as ReportsIcon,
-  Storefront as StockIcon
+  Storefront as StockIcon,
+  CalendarMonth as CalendarMonthIcon,
+  Refresh as RefreshIcon,
+  QrCode2 as QrCodeIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { hasAddPermission, hasEditPermission, hasDeletePermission, hasMenuAccess } from '../utils/auth';
-import appLogo from '../assets/app_logo.jpeg';
-import { APP_VERSION } from '../config/version';
+import { hasMenuAccess } from '../utils/auth';
 
 const DashboardHome = () => {
   const navigate = useNavigate();
@@ -248,98 +251,75 @@ const DashboardHome = () => {
 
   return (
     <Box>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-          Dashboard Overview
-        </Typography>
+      {/* Sleek Operations Header Bar */}
+      <Box sx={{ mb: 3.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5 }}>
+            Operations Dashboard
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+            Real-time overview of manufacturing workflows, stock valuation, and finances.
+          </Typography>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Chip 
+            icon={<CalendarMonthIcon sx={{ fontSize: '16px !important', color: '#0F3B66 !important' }} />}
+            label={new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            sx={{ 
+              bgcolor: '#ffffff', 
+              color: '#0F3B66', 
+              fontWeight: 600, 
+              border: '1px solid #cbd5e1', 
+              px: 0.5,
+              py: 0.5,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            }}
+          />
+          <Tooltip title="Refresh Dashboard Data">
+            <IconButton 
+              onClick={() => { setLoading(true); fetchKPIs(); fetchDueReports(); }}
+              sx={{ 
+                bgcolor: '#ffffff', 
+                color: '#0F3B66', 
+                border: '1px solid #cbd5e1', 
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                '&:hover': { bgcolor: '#f1f5f9', color: '#F88A01', borderColor: '#F88A01' } 
+              }}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant="outlined"
+            startIcon={<QrCodeIcon />}
+            onClick={() => navigate('/dashboard/payment-qr')}
+            sx={{
+              color: '#0F3B66',
+              borderColor: '#cbd5e1',
+              bgcolor: '#ffffff',
+              fontWeight: 600,
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 2,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              '&:hover': { borderColor: '#F88A01', color: '#F88A01', bgcolor: 'rgba(248, 138, 1, 0.05)' }
+            }}
+          >
+            Payment QRs
+          </Button>
+        </Box>
       </Box>
 
-      {/* Welcome & Rights Banner */}
-      <Paper 
-        sx={{ 
-          p: 3, 
-          mb: 4, 
-          borderRadius: 3, 
-          background: 'linear-gradient(135deg, #0F3B66 0%, #175087 100%)', 
-          color: 'white', 
-          boxShadow: '0 4px 20px rgba(15, 59, 102, 0.15)' 
-        }}
-      >
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={8} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <img 
-              src={localUser.companyLogo || appLogo} 
-              alt="Logo" 
-              style={{ width: 64, height: 64, borderRadius: '50%', border: '2px solid white', backgroundColor: 'white' }} 
-            />
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
-                <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                  Welcome, {localUser.Username || 'User'}!
-                </Typography>
-                <Chip 
-                  label={`v${APP_VERSION}`} 
-                  size="small" 
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.18)', 
-                    color: '#ffffff', 
-                    fontWeight: 700, 
-                    fontSize: '0.72rem', 
-                    height: 22,
-                    borderRadius: 1,
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    letterSpacing: 0.5
-                  }} 
-                />
-              </Box>
-              <Typography variant="body2" sx={{ opacity: 0.85 }}>
-                You are logged in as a <strong>{(localUser.role || localUser.UserRole || 'Operator').toUpperCase()}</strong>.
-              </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={12} sm={4} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
-            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.15)', px: 2, py: 0.75, borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>Add Permission</Typography>
-                <Chip 
-                  label={hasAddPermission() ? 'Enabled' : 'Disabled'} 
-                  size="small" 
-                  color={hasAddPermission() ? 'success' : 'error'} 
-                  sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem', color: '#fff', bgcolor: hasAddPermission() ? '#10b981' : '#ef4444' }} 
-                />
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.15)', px: 2, py: 0.75, borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>Edit Permission</Typography>
-                <Chip 
-                  label={hasEditPermission() ? 'Enabled' : 'Disabled'} 
-                  size="small" 
-                  color={hasEditPermission() ? 'success' : 'error'} 
-                  sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem', color: '#fff', bgcolor: hasEditPermission() ? '#10b981' : '#ef4444' }} 
-                />
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255,255,255,0.15)', px: 2, py: 0.75, borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>Delete Permission</Typography>
-                <Chip 
-                  label={hasDeletePermission() ? 'Enabled' : 'Disabled'} 
-                  size="small" 
-                  color={hasDeletePermission() ? 'success' : 'error'} 
-                  sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem', color: '#fff', bgcolor: hasDeletePermission() ? '#10b981' : '#ef4444' }} 
-                />
-              </Box>
-            </Box>
-          </Grid>
-        </Grid>
-      </Paper>
-
       {/* Quick Action Navigation Buttons */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 4, overflowX: 'auto', pb: 1 }}>
+      <Box sx={{ display: 'flex', gap: 1.5, mb: 3.5, overflowX: 'auto', pb: 0.5 }}>
         {[
-          { label: 'New Inward', path: '/dashboard/inwards', icon: <TransactionIcon /> },
-          { label: 'New Outward', path: '/dashboard/outwards', icon: <TransactionIcon /> },
-          { label: 'Job Work In', path: '/dashboard/jobwork-ins', icon: <ListIcon /> },
-          { label: 'Job Work Out', path: '/dashboard/jobwork-outs', icon: <ListIcon /> },
-          { label: 'Assembly', path: '/dashboard/assembly', icon: <AssemblyIcon /> },
-          { label: 'Stock Journal', path: '/dashboard/stock-journal', icon: <ReportsIcon /> }
+          { label: 'New Inward', path: '/dashboard/inwards', icon: <TransactionIcon fontSize="small" /> },
+          { label: 'New Outward', path: '/dashboard/outwards', icon: <TransactionIcon fontSize="small" /> },
+          { label: 'Job Work In', path: '/dashboard/jobwork-ins', icon: <ListIcon fontSize="small" /> },
+          { label: 'Job Work Out', path: '/dashboard/jobwork-outs', icon: <ListIcon fontSize="small" /> },
+          { label: 'Assembly', path: '/dashboard/assembly', icon: <AssemblyIcon fontSize="small" /> },
+          { label: 'Stock Journal', path: '/dashboard/stock-journal', icon: <ReportsIcon fontSize="small" /> }
         ].filter(action => hasMenuAccess(action.path))
         .map((action, index) => (
           <Button
@@ -348,17 +328,23 @@ const DashboardHome = () => {
             startIcon={action.icon}
             onClick={() => navigate(action.path)}
             sx={{
-              bgcolor: 'white',
+              bgcolor: '#ffffff',
               color: '#0F3B66',
+              border: '1px solid #e2e8f0',
               fontWeight: 600,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              fontSize: '0.84rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
               borderRadius: 2,
-              px: 3,
-              py: 1,
+              px: 2.2,
+              py: 0.85,
               whiteSpace: 'nowrap',
+              textTransform: 'none',
+              transition: 'all 0.2s ease',
               '&:hover': {
-                bgcolor: '#f1f5f9',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                bgcolor: '#0F3B66',
+                color: '#ffffff',
+                borderColor: '#0F3B66',
+                boxShadow: '0 4px 12px rgba(15, 59, 102, 0.2)'
               }
             }}
           >
@@ -373,10 +359,15 @@ const DashboardHome = () => {
           <Grid item xs={12} sm={6} md={4} key={index}>
             <Card sx={{ 
               borderRadius: 3, 
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+              boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+              border: '1px solid #e2e8f0',
+              borderTop: `4px solid ${card.color}`,
               height: '100%',
-              transition: 'transform 0.2s',
-              '&:hover': { transform: 'translateY(-4px)' }
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': { 
+                transform: 'translateY(-3px)',
+                boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
+              }
             }}>
               <CardActionArea onClick={() => card.onClick ? card.onClick() : navigate(card.link)} sx={{ height: '100%', p: 0 }}>
                 <CardContent sx={{ p: 3, '&:last-child': { pb: 3 }, height: '100%' }}>

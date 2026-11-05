@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import appLogo from '../../assets/app_logo.jpeg';
-import { Box, CssBaseline, ThemeProvider, createTheme, Paper, Tooltip, IconButton, Breadcrumbs, Typography } from '@mui/material';
+import { Box, CssBaseline, ThemeProvider, createTheme, Paper, Tooltip, IconButton, Breadcrumbs, Typography, Button } from '@mui/material';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowBack, ArrowForward, Home } from '@mui/icons-material';
+import { ArrowBack, ArrowForward, Home, GetApp as InstallIcon } from '@mui/icons-material';
 import Sidebar from './Sidebar';
 
 // Create a custom MUI theme matching the requested colors
@@ -187,12 +187,46 @@ const DashboardLayout = () => {
     };
   }, []);
 
+  // PWA Installation prompt listener
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    window.addEventListener('appinstalled', () => {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+      console.log('[PWA] App installed successfully');
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+    }
+  };
+
   const user = {
     ...localUser,
     username: localUser.Username || localUser.username || 'Dhyey Shah',
     role: localUser.UserRole || localUser.role || 'Administrator',
     AllowedMenus: localUser.AllowedMenus,
-    companyName: localUser.companyName || 'FactoryFlow',
+    companyName: localUser.companyName || 'FRM',
     companyLogo: localUser.companyLogo || appLogo
   };
 
@@ -230,67 +264,96 @@ const DashboardLayout = () => {
               boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Tooltip title="Back">
-                <span>
-                  <IconButton 
-                    size="small" 
-                    onClick={() => navigate(-1)}
-                    sx={{ 
-                      color: '#0F3B66', 
-                      bgcolor: '#f1f5f9', 
-                      border: '1px solid #cbd5e1',
-                      borderRadius: 1.5,
-                      p: 0.7,
-                      '&:hover': { bgcolor: '#e2e8f0', color: '#0F3B66' } 
-                    }}
-                  >
-                    <ArrowBack fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Tooltip title="Back">
+                  <span>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => navigate(-1)}
+                      sx={{ 
+                        color: '#0F3B66', 
+                        bgcolor: '#f1f5f9', 
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 1.5,
+                        p: 0.7,
+                        '&:hover': { bgcolor: '#e2e8f0', color: '#0F3B66' } 
+                      }}
+                    >
+                      <ArrowBack fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
 
-              <Tooltip title="Forward">
-                <span>
-                  <IconButton 
-                    size="small" 
-                    onClick={() => navigate(1)}
-                    sx={{ 
-                      color: '#0F3B66', 
-                      bgcolor: '#f1f5f9', 
-                      border: '1px solid #cbd5e1',
-                      borderRadius: 1.5,
-                      p: 0.7,
-                      '&:hover': { bgcolor: '#e2e8f0', color: '#0F3B66' } 
-                    }}
-                  >
-                    <ArrowForward fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
+                <Tooltip title="Forward">
+                  <span>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => navigate(1)}
+                      sx={{ 
+                        color: '#0F3B66', 
+                        bgcolor: '#f1f5f9', 
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 1.5,
+                        p: 0.7,
+                        '&:hover': { bgcolor: '#e2e8f0', color: '#0F3B66' } 
+                      }}
+                    >
+                      <ArrowForward fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Box>
+
+              {/* Breadcrumb Navigation */}
+              <Breadcrumbs separator="›" aria-label="breadcrumb" sx={{ fontSize: '0.85rem' }}>
+                <Box 
+                  onClick={() => navigate('/dashboard')} 
+                  sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 0.5, color: '#64748b', '&:hover': { color: '#0F3B66' } }}
+                >
+                  <Home sx={{ fontSize: 16 }} /> Dashboard
+                </Box>
+                {pathParts.map((part, index) => {
+                  const isLast = index === pathParts.length - 1;
+                  return isLast ? (
+                    <Typography key={part} sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F3B66' }}>
+                      {formatSegment(part)}
+                    </Typography>
+                  ) : (
+                    <Typography key={part} sx={{ fontSize: '0.85rem', color: '#64748b' }}>
+                      {formatSegment(part)}
+                    </Typography>
+                  );
+                })}
+              </Breadcrumbs>
             </Box>
 
-            {/* Breadcrumb Navigation */}
-            <Breadcrumbs separator="›" aria-label="breadcrumb" sx={{ fontSize: '0.85rem' }}>
-              <Box 
-                onClick={() => navigate('/dashboard')} 
-                sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 0.5, color: '#64748b', '&:hover': { color: '#0F3B66' } }}
+            {/* PWA Install Button when browser supports install prompt */}
+            {isInstallable && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<InstallIcon />}
+                onClick={handleInstallClick}
+                sx={{
+                  bgcolor: '#0F3B66',
+                  color: '#ffffff',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  borderRadius: 1.5,
+                  px: 1.8,
+                  py: 0.6,
+                  boxShadow: '0 2px 4px rgba(15, 59, 102, 0.2)',
+                  '&:hover': {
+                    bgcolor: '#F88A01',
+                    boxShadow: '0 3px 6px rgba(248, 138, 1, 0.3)'
+                  }
+                }}
               >
-                <Home sx={{ fontSize: 16 }} /> Dashboard
-              </Box>
-              {pathParts.map((part, index) => {
-                const isLast = index === pathParts.length - 1;
-                return isLast ? (
-                  <Typography key={part} sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F3B66' }}>
-                    {formatSegment(part)}
-                  </Typography>
-                ) : (
-                  <Typography key={part} sx={{ fontSize: '0.85rem', color: '#64748b' }}>
-                    {formatSegment(part)}
-                  </Typography>
-                );
-              })}
-            </Breadcrumbs>
+                Install App
+              </Button>
+            )}
           </Paper>
 
           <Outlet />

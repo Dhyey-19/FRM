@@ -43,17 +43,19 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
     };
   }, []);
 
-  const getCorrectKey = () => {
-    if (!randomNumber) return '';
-    const validationString = randomNumber + 'FACTORYFLOW';
-    let asciiSum = 0;
-    for (let i = 0; i < validationString.length; i++) {
-      asciiSum += validationString.charCodeAt(i);
-    }
-    return (asciiSum * 10252).toString();
+  const getCorrectKeys = () => {
+    if (!randomNumber) return [];
+    return ['FRM', 'FACTORYFLOW'].map(suffix => {
+      const validationString = randomNumber + suffix;
+      let asciiSum = 0;
+      for (let i = 0; i < validationString.length; i++) {
+        asciiSum += validationString.charCodeAt(i);
+      }
+      return (asciiSum * 10252).toString();
+    });
   };
 
-  const correctKey = getCorrectKey();
+  const correctKeys = getCorrectKeys();
 
   const handleRegister = (e) => {
     e.preventDefault();
@@ -65,9 +67,7 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
       return;
     }
 
-    // Key calculation is done at the component level
-
-    if (activationKey.trim() === correctKey) {
+    if (correctKeys.includes(activationKey.trim())) {
       setSuccessMsg('Registration successful! Redirecting...');
       
       // Save registration status to backend API
@@ -112,9 +112,9 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          appName: 'FactoryFlow',
+          appName: 'FRM',
           randomNumber: randomNumber,
-          activationKey: correctKey
+          activationKey: correctKeys[0] || ''
         })
       });
 
@@ -136,11 +136,11 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
     <div className="auth-container">
       <div className="auth-card" style={{ maxWidth: '450px' }}>
         <div className="logo-container">
-          <img src={logo} alt="Factory Flow Logo" />
+          <img src={logo} alt="FRM Logo" />
         </div>
         <h2 className="auth-title">Application Registration</h2>
         <p style={{ textAlign: 'center', color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>
-          This is the first time FactoryFlow is running on this device. Please register the application to activate it.
+          This is the first time FRM (Factory Resource Manager) is running on this device. Please register the application to activate it.
         </p>
 
         <form onSubmit={handleRegister}>
@@ -203,7 +203,7 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
               type="text"
               id="appName"
               name="appName"
-              value="FactoryFlow"
+              value="FRM - Factory Resource Manager"
               disabled
               style={{ 
                 backgroundColor: '#f8fafc', 

@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS "_SystemSettings" (
+  "Key" TEXT PRIMARY KEY,
+  "Value" TEXT,
+  "UpdatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+

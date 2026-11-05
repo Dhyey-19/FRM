@@ -1,7 +1,7 @@
 {
-  "name": "temp-app",
+  "name": "frm-frontend",
   "private": true,
-  "version": "20261014.0.0",
+  "version": "20261104.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,6 +20,7 @@
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.17.0",
     "pdfjs-dist": "^6.4.299",
+    "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-datepicker": "^9.1.0",
     "react-dom": "^19.2.6",

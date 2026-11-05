@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Format today's date as YYYYMMDD (e.g. 20260902 for 2nd September, 2026)
+// Format today's date as YYYYMMDD (e.g. 20261104)
 const now = new Date();
 const year = now.getFullYear();
 const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -17,11 +17,8 @@ const rootPkgPath = path.join(__dirname, '..', 'package.json');
 if (fs.existsSync(rootPkgPath)) {
   const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8'));
   rootPkg.version = semver;
-  if (rootPkg.build && rootPkg.build.win) {
-    rootPkg.build.win.artifactName = `\${productName}-${versionStr}.\${ext}`;
-  }
   fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + '\n');
-  console.log(`[Version Updater] Updated root package.json (version: ${semver}, artifactName: \${productName}-${versionStr}.\${ext})`);
+  console.log(`[Version Updater] Updated root package.json (version: ${semver})`);
 }
 
 // 2. Update frontend package.json

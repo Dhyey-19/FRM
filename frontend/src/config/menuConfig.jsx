@@ -15,7 +15,9 @@ import {
   Business as DepartmentIcon,
   Build as AssemblyIcon,
   Settings as SettingsIcon,
-  AccountBalance as AccountBalanceIcon
+  AccountBalance as AccountBalanceIcon,
+  QrCode2 as QrCodeIcon,
+  ManageAccounts as UserAccessIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -31,7 +33,9 @@ export const MENU_STRUCTURE = [
     adminOnly: true, // Only visible to ADMIN role
     children: [
       { title: 'Company Profile', path: '/dashboard/company-profile', icon: <SettingsIcon /> },
+      { title: 'Payment QR', path: '/dashboard/payment-qr', icon: <QrCodeIcon /> },
       { title: 'User Master', path: '/dashboard/users', icon: <PeopleIcon /> },
+      { title: 'User Access', path: '/dashboard/user-access', icon: <UserAccessIcon /> },
       { title: 'Assets', path: '/dashboard/assets', icon: <InventoryIcon /> },
     ]
   },
@@ -143,4 +147,41 @@ export const getAllMenuPaths = () => {
     }
   });
   return paths;
+};
+
+// Returns forms organized by module and section for User Access control
+export const getAllFormSections = () => {
+  const sections = [];
+  MENU_STRUCTURE.forEach(sec => {
+    if (sec.children) {
+      sections.push({
+        id: sec.id,
+        title: sec.title,
+        icon: sec.icon,
+        adminOnly: Boolean(sec.adminOnly),
+        forms: sec.children.map(c => ({
+          title: c.title,
+          path: c.path,
+          icon: c.icon,
+          adminOnly: Boolean(sec.adminOnly || c.adminOnly)
+        }))
+      });
+    } else if (sec.groups) {
+      sec.groups.forEach(g => {
+        sections.push({
+          id: `${sec.id}_${g.groupTitle.replace(/\s+/g, '_').toLowerCase()}`,
+          title: `${sec.title} - ${g.groupTitle}`,
+          icon: sec.icon,
+          adminOnly: Boolean(sec.adminOnly),
+          forms: g.children.map(c => ({
+            title: c.title,
+            path: c.path,
+            icon: c.icon,
+            adminOnly: Boolean(sec.adminOnly)
+          }))
+        });
+      });
+    }
+  });
+  return sections;
 };

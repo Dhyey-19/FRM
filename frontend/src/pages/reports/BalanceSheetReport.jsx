@@ -94,7 +94,7 @@ const BalanceSheetReport = () => {
 
     // Create custom worksheet rows
     const rows = [
-      [`${localUser.companyName || 'FactoryFlow'} - Balance Sheet`],
+      [`${localUser.companyName || 'FRM'} - Balance Sheet`],
       [`Report Date: ${new Date().toLocaleDateString()}`],
       [],
       ['SUMMARY OF ASSETS & LIABILITIES'],
@@ -163,7 +163,7 @@ const BalanceSheetReport = () => {
     
     doc.setFontSize(20);
     doc.setTextColor(15, 59, 102);
-    doc.text(localUser.companyName || 'FactoryFlow', 14, 20);
+    doc.text(localUser.companyName || 'FRM', 14, 20);
     
     doc.setFontSize(14);
     doc.setTextColor(100);

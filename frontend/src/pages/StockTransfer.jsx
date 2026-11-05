@@ -464,7 +464,7 @@ const StockTransfer = ({ user }) => {
     let yPos = 15;
 
     // Header
-    const compName = companyProfile && companyProfile.CompanyName ? companyProfile.CompanyName : 'FACTORY FLOW ERP';
+    const compName = companyProfile && companyProfile.CompanyName ? companyProfile.CompanyName : 'FRM ERP';
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
     doc.setTextColor(15, 59, 102);

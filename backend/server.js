@@ -29,6 +29,7 @@ const outwardRoutes = require('./routes/outwardRoutes');
 const companyProfileRoutes = require('./routes/companyProfileRoutes');
 const jobworkOutRoutes = require('./routes/jobworkOutRoutes');
 const jobworkInRoutes = require('./routes/jobworkInRoutes');
+const paymentQrRoutes = require('./routes/paymentQrRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -64,19 +65,91 @@ app.use('/api/outwards', outwardRoutes);
 app.use('/api/company-profile', companyProfileRoutes);
 app.use('/api/jobwork-outs', jobworkOutRoutes);
 app.use('/api/jobwork-ins', jobworkInRoutes);
+app.use('/api/payment-qr', paymentQrRoutes);
 
 // Test Route
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running normally' });
 });
 
+// Serve static frontend files (PWA build) from public or frontend/dist
+const fs = require('fs');
+const https = require('https');
+const candidateDistPaths = [
+  path.resolve(__dirname, '../public'),
+  path.resolve(__dirname, '../frontend/dist'),
+  path.resolve(__dirname, 'public')
+];
+let frontendDistPath = null;
+for (const p of candidateDistPaths) {
+  if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
+    frontendDistPath = p;
+    break;
+  }
+}
+
+if (frontendDistPath) {
+  app.use(express.static(frontendDistPath));
+  // Single-page application route fallback (Express 5 compatible)
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      return res.sendFile(path.join(frontendDistPath, 'index.html'));
+    }
+    next();
+  });
+}
+
 // Initialize Server and Database
 const startServer = async () => {
   await connectDB(); // Ensure DB connects before starting server
-  // Bind strictly to localhost to prevent Windows Firewall permission popups
-  app.listen(PORT, '127.0.0.1', () => {
-    console.log(`Server running on port ${PORT}`);
+  
+  // 1. Bind HTTP (supports TCP port and cPanel Passenger pipe/socket on GoDaddy)
+  const isPipeOrSocket = process.env.PORT && isNaN(Number(process.env.PORT));
+  let httpServer;
+  if (isPipeOrSocket) {
+    httpServer = app.listen(process.env.PORT, () => {
+      console.log(`[Server] Listening on Passenger pipe/socket: ${process.env.PORT}`);
+    });
+  } else {
+    const listenPort = Number(PORT) || 5000;
+    httpServer = app.listen(listenPort, '0.0.0.0', () => {
+      console.log(`[Server] HTTP running on http://0.0.0.0:${listenPort}`);
+    });
+  }
+  httpServer.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[Server] Warning: Port ${PORT} is already in use by another running instance.`);
+    } else {
+      console.error('[Server] HTTP error:', err.message);
+    }
   });
+
+  // 2. If SSL certificates exist, also launch HTTPS on HTTPS_PORT (5443) for PWA mobile installation
+  const certDir = path.resolve(__dirname, 'certs');
+  const keyPath = path.join(certDir, 'key.pem');
+  const certPath = path.join(certDir, 'cert.pem');
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    try {
+      const credentials = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+      };
+      const httpsPort = process.env.HTTPS_PORT || 5443;
+      const httpsServer = https.createServer(credentials, app);
+      httpsServer.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          console.warn(`[Server] Notice: HTTPS Port ${httpsPort} is already bound by another instance.`);
+        } else {
+          console.error('[Server] HTTPS error:', err.message);
+        }
+      });
+      httpsServer.listen(httpsPort, '0.0.0.0', () => {
+        console.log(`[Server] Secure HTTPS running on https://0.0.0.0:${httpsPort} (PWA Install Ready)`);
+      });
+    } catch (err) {
+      console.warn('[Server] Could not start HTTPS listener:', err.message);
+    }
+  }
 
   // Graceful shutdown
   process.on('SIGINT', async () => {
@@ -84,7 +157,7 @@ const startServer = async () => {
     try {
       const pool = await connectDB();
       await pool.close();
-      console.log('Azure SQL Database connection closed successfully.');
+      console.log('Local Database connection closed successfully.');
       process.exit(0);
     } catch (err) {
       console.error('Error closing database connection:', err);
