@@ -178,7 +178,13 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
     }
   };
 
-  const isSelected = (path) => location.pathname === path;
+  const isSelected = (path) => {
+    if (location.pathname === path) return true;
+    if (path === '/dashboard/subcontract') {
+      return location.pathname === '/dashboard/jobwork-ins' || location.pathname === '/dashboard/jobwork-outs';
+    }
+    return false;
+  };
 
   return (
     <Drawer
@@ -286,6 +292,16 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
               const allowed = Array.isArray(rawMenus)
                 ? rawMenus
                 : String(rawMenus).split(',').map(p => p.trim());
+
+              if (path === '/dashboard/subcontract') {
+                return allowed.includes('/dashboard/subcontract') || 
+                       allowed.includes('/dashboard/jobwork-ins') || 
+                       allowed.includes('/dashboard/jobwork-outs');
+              }
+
+              if (path === '/dashboard/jobwork-ins' || path === '/dashboard/jobwork-outs') {
+                return allowed.includes(path) || allowed.includes('/dashboard/subcontract');
+              }
 
               return allowed.includes(path);
             };

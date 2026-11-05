@@ -40,6 +40,16 @@ export const hasMenuAccess = (path) => {
     ? menus
     : String(menus).split(',').map(p => p.trim());
     
+  if (path === '/dashboard/subcontract') {
+    return allowed.includes('/dashboard/subcontract') || 
+           allowed.includes('/dashboard/jobwork-ins') || 
+           allowed.includes('/dashboard/jobwork-outs');
+  }
+
+  if (path === '/dashboard/jobwork-ins' || path === '/dashboard/jobwork-outs') {
+    return allowed.includes(path) || allowed.includes('/dashboard/subcontract');
+  }
+
   return allowed.includes(path);
 };
 

@@ -39,7 +39,7 @@ const emptyRow = {
   AMOUNT: ''
 };
 
-const JobworkInEntry = () => {
+const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
   const [jwInwards, setJwInwards] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [items, setItems] = useState([]);
@@ -760,18 +760,20 @@ const JobworkInEntry = () => {
 
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <JwInIcon /> Job Work In
-        </Typography>
-      </Box>
+      {!hideTitle && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <JwInIcon /> {title}
+          </Typography>
+        </Box>
+      )}
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
         <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
               size="small"
-              placeholder="Search Jobwork In..."
+              placeholder={`Search ${title}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
@@ -816,7 +818,7 @@ const JobworkInEntry = () => {
             </ToggleButtonGroup>
           </Box>
           <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
-            Add Jobwork In
+            Add {title}
           </Button>
         </Toolbar>
 
@@ -890,7 +892,7 @@ const JobworkInEntry = () => {
       {/* Add/Edit Dialog */}
       <Dialog open={openDialog} onClose={(e, reason) => { if (reason !== 'backdropClick') handleCloseDialog(); }} maxWidth="xl" fullWidth>
         <DialogTitle sx={{ backgroundColor: '#0F3B66', color: 'white', py: 2 }}>
-          <Typography variant="h6">{editingId ? `Edit Job Work In ${jwInwardNo}` : 'Add Job Work In'}</Typography>
+          <Typography variant="h6">{editingId ? `Edit ${title} ${jwInwardNo}` : `Add ${title}`}</Typography>
         </DialogTitle>
         <DialogContent sx={{ p: 2, backgroundColor: '#f8fafc' }}>
           {dialogError && <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>}

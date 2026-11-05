@@ -833,7 +833,7 @@ const OutwardEntry = () => {
       {/* Header Row */}
       <Box sx={{ mb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <InputIcon /> Outward
+          <InputIcon /> Sales
         </Typography>
         <Button 
           variant="contained" 
@@ -843,7 +843,7 @@ const OutwardEntry = () => {
           disabled={!hasAddPermission()}
           sx={{ fontWeight: 600, px: 2.5 }}
         >
-          Add Outward
+          Add Sales
         </Button>
       </Box>
 
@@ -852,7 +852,7 @@ const OutwardEntry = () => {
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
               size="small"
-              placeholder="Search outwards..."
+              placeholder="Search Sales..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
@@ -975,7 +975,7 @@ const OutwardEntry = () => {
       {/* Add/Edit Dialog */}
       <Dialog open={openDialog} onClose={(e, reason) => { if (reason !== 'backdropClick') handleCloseDialog(); }} maxWidth="xl" fullWidth>
         <DialogTitle sx={{ backgroundColor: '#0F3B66', color: 'white', py: 2 }}>
-          <Typography variant="h6">{editingId ? `Edit Outward ${outwardNo}` : 'Add Outward'}</Typography>
+          <Typography variant="h6">{editingId ? `Edit Sales ${outwardNo}` : 'Add Sales'}</Typography>
         </DialogTitle>
         <DialogContent sx={{ p: 2, backgroundColor: '#f8fafc' }}>
           {dialogError && <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>}

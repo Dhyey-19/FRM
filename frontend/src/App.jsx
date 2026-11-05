@@ -25,6 +25,7 @@ import OutwardEntry from './pages/OutwardEntry';
 import StockTransfer from './pages/StockTransfer';
 import Assembly from './pages/Assembly';
 import StockJournal from './pages/StockJournal';
+import Subcontract from './pages/Subcontract';
 import JobworkOutEntry from './pages/JobworkOutEntry';
 import JobworkInEntry from './pages/JobworkInEntry';
 import BrandReport from './pages/reports/BrandReport';
@@ -146,9 +147,13 @@ function App() {
           <Route path="vouchers" element={<VoucherEntry />} />
           <Route path="bank-reconciliation" element={<BankReconciliation />} />
           <Route path="inwards" element={<InwardEntry />} />
+          <Route path="purchase" element={<Navigate to="/dashboard/inwards" replace />} />
           <Route path="outwards" element={<OutwardEntry />} />
-          <Route path="jobwork-outs" element={<JobworkOutEntry />} />
-          <Route path="jobwork-ins" element={<JobworkInEntry />} />
+          <Route path="sales" element={<Navigate to="/dashboard/outwards" replace />} />
+          <Route path="subcontract" element={<Subcontract />} />
+          <Route path="sub-contract" element={<Navigate to="/dashboard/subcontract" replace />} />
+          <Route path="jobwork-outs" element={<Subcontract initialTab={1} />} />
+          <Route path="jobwork-ins" element={<Subcontract initialTab={0} />} />
           <Route path="stock-transfer" element={<StockTransfer />} />
           <Route path="assembly" element={<Assembly />} />
           <Route path="stock-journal" element={<StockJournal />} />

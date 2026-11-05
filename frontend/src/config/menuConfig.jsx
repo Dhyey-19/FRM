@@ -57,10 +57,9 @@ export const MENU_STRUCTURE = [
     id: 'transactions',
     icon: <TransactionIcon />,
     children: [
-      { title: 'Inward', path: '/dashboard/inwards', icon: <ListIcon /> },
-      { title: 'Outward', path: '/dashboard/outwards', icon: <ListIcon /> },
-      { title: 'Job Work Out', path: '/dashboard/jobwork-outs', icon: <ListIcon /> },
-      { title: 'Job Work In', path: '/dashboard/jobwork-ins', icon: <ListIcon /> },
+      { title: 'Purchase', path: '/dashboard/inwards', icon: <ListIcon /> },
+      { title: 'Sales', path: '/dashboard/outwards', icon: <ListIcon /> },
+      { title: 'Sub-Contract', path: '/dashboard/subcontract', icon: <ListIcon /> },
       { title: 'Stock Journal', path: '/dashboard/stock-journal', icon: <ListIcon /> },
       { title: 'Stock Transfer', path: '/dashboard/stock-transfer', icon: <ListIcon /> },
       { title: 'Assembly', path: '/dashboard/assembly', icon: <AssemblyIcon /> },

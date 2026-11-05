@@ -104,6 +104,13 @@ const UserAccess = () => {
       // Check if parts are actual paths
       const exactPaths = parts.filter(p => p.startsWith('/dashboard/'));
       
+      // If user had jobwork-ins or jobwork-outs allowed in database, map to subcontract
+      if (parts.includes('/dashboard/jobwork-ins') || parts.includes('/dashboard/jobwork-outs')) {
+        if (!exactPaths.includes('/dashboard/subcontract')) {
+          exactPaths.push('/dashboard/subcontract');
+        }
+      }
+      
       // Also handle legacy keyword mappings if present
       formSections.forEach(sec => {
         sec.forms.forEach(f => {
@@ -196,8 +203,14 @@ const UserAccess = () => {
     const isCurrentlyAllowed = allowedPaths.includes(path);
     if (isCurrentlyAllowed) {
       newPaths = allowedPaths.filter(p => p !== path);
+      if (path === '/dashboard/subcontract') {
+        newPaths = newPaths.filter(p => p !== '/dashboard/jobwork-ins' && p !== '/dashboard/jobwork-outs');
+      }
     } else {
       newPaths = [...allowedPaths, path];
+      if (path === '/dashboard/subcontract') {
+        newPaths = Array.from(new Set([...newPaths, '/dashboard/jobwork-ins', '/dashboard/jobwork-outs']));
+      }
     }
     setAllowedPaths(newPaths);
     setIsDirty(true);
