@@ -139,8 +139,8 @@ const NotificationLogs = () => {
       </Box>
 
       {/* Summary KPI Badges */}
-      <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={{ xs: 2, sm: 2.5 }} sx={{ mb: 3.5 }}>
+        <Grid item xs={12} sm={6} md={6} lg={3}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -160,7 +160,7 @@ const NotificationLogs = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={6} lg={3}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -180,7 +180,7 @@ const NotificationLogs = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={6} lg={3}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -200,7 +200,7 @@ const NotificationLogs = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={6} lg={3}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -224,18 +224,23 @@ const NotificationLogs = () => {
       {/* Main Container */}
       <Paper sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(15, 59, 102, 0.04)', overflow: 'hidden' }}>
         {/* Tabs & Search Filter Bar */}
-        <Box sx={{ px: 3, pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ px: { xs: 1.5, sm: 3 }, pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <Tabs 
             value={currentTab} 
             onChange={(e, val) => setCurrentTab(val)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{
+              maxWidth: { xs: '100%', md: 'calc(100% - 240px)' },
               '& .MuiTabs-indicator': { backgroundColor: '#F88A01', height: 3 },
               '& .MuiTab-root': {
                 fontWeight: 700,
-                fontSize: '0.9rem',
+                fontSize: { xs: '0.82rem', sm: '0.9rem' },
                 textTransform: 'none',
                 minHeight: 46,
                 color: '#64748b',
+                whiteSpace: 'nowrap',
                 '&.Mui-selected': { color: '#0F3B66' }
               }
             }}
@@ -246,14 +251,14 @@ const NotificationLogs = () => {
             <Tab label={`Overdue Payables (${summary.payables})`} value="payables" />
           </Tabs>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: { xs: '100%', sm: 'auto' } }}>
             <TextField
               size="small"
               placeholder="Search in logs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" fontSize="small" /></InputAdornment> }}
-              sx={{ width: 220 }}
+              sx={{ width: { xs: '100%', sm: 220 } }}
             />
           </Box>
         </Box>
@@ -377,6 +382,7 @@ const NotificationLogs = () => {
                             fontWeight: 600,
                             borderRadius: 2,
                             px: 2,
+                            width: { xs: '100%', sm: 'auto' },
                             '&:hover': { bgcolor: '#F88A01' }
                           }}
                         >

@@ -21,6 +21,7 @@
 
 html {
   font-size: 16px;
+  -webkit-text-size-adjust: 100%;
 }
 
 @media (max-width: 1536px) {
@@ -29,21 +30,21 @@ html {
   }
 }
 
-@media (max-width: 1366px) {
-  html {
-    font-size: 14px;
-  }
-}
-
 @media (max-width: 1200px) {
   html {
-    font-size: 13px;
+    font-size: 14.5px;
   }
 }
 
 @media (max-width: 900px) {
   html {
-    font-size: 12px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 600px) {
+  html {
+    font-size: 14px;
   }
 }
 
@@ -300,4 +301,99 @@ body {
   max-height: 34px !important;
   height: 34px !important;
   padding: 0 8px !important;
+}
+
+/* =========================================================
+   RESPONSIVE ENHANCEMENTS FOR MOBILE PWA, TABLET & DESKTOP
+   ========================================================= */
+
+/* Mobile & Touch Scroller Smoothness */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.MuiTableContainer-root {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent tables and data grids from squashing into illegible slivers on mobile */
+.MuiDataGrid-root {
+  border-radius: 8px !important;
+  font-size: 0.85rem !important;
+}
+
+@media (max-width: 900px) {
+  .MuiTable-root {
+    min-width: 650px;
+  }
+  .MuiDataGrid-root {
+    min-width: 650px !important;
+  }
+}
+
+/* Responsive Modal Dialogs across the entire application */
+@media (max-width: 600px) {
+  .MuiDialog-paper {
+    margin: 12px !important;
+    width: calc(100% - 24px) !important;
+    max-width: 100% !important;
+    max-height: calc(100% - 32px) !important;
+    border-radius: 12px !important;
+  }
+  
+  .MuiDialogContent-root {
+    padding: 14px 12px !important;
+  }
+  
+  .MuiDialogActions-root {
+    padding: 12px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .MuiDialogActions-root > button {
+    flex: 1 1 auto;
+  }
+
+  .auth-container {
+    padding: 12px;
+  }
+
+  .auth-card {
+    padding: 24px 18px !important;
+    border-radius: 12px !important;
+  }
+
+  .logo-container {
+    margin-bottom: 20px !important;
+  }
+
+  .logo-container img {
+    width: 90px !important;
+  }
+
+  .auth-title {
+    font-size: 20px !important;
+    margin-bottom: 20px !important;
+  }
+}
+
+/* Clean Custom Scrollbar for Desktop & PWA */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

@@ -513,13 +513,13 @@ const BankReconciliation = () => {
             Upload your bank statement in Excel or PDF format to cross-verify against books and instantly isolate matched and mismatched entries.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center" sx={{ width: { xs: '100%', md: 'auto' } }}>
           <Button
             variant="outlined"
             size="small"
             startIcon={<DownloadIcon />}
             onClick={downloadSampleBankStatement}
-            sx={{ borderColor: '#0F3B66', color: '#0F3B66' }}
+            sx={{ borderColor: '#0F3B66', color: '#0F3B66', width: { xs: '100%', sm: 'auto' } }}
           >
             Sample Excel Format
           </Button>
@@ -529,6 +529,7 @@ const BankReconciliation = () => {
             startIcon={<ExcelIcon />}
             disabled={displayedItems.length === 0}
             onClick={handleExportExcel}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Export Excel
           </Button>
@@ -538,7 +539,7 @@ const BankReconciliation = () => {
             startIcon={<PrintIcon />}
             disabled={displayedItems.length === 0}
             onClick={handleGeneratePdf}
-            sx={{ backgroundColor: '#0F3B66', '&:hover': { backgroundColor: '#0a2744' } }}
+            sx={{ backgroundColor: '#0F3B66', '&:hover': { backgroundColor: '#0a2744' }, width: { xs: '100%', sm: 'auto' } }}
           >
             Print BRS Report
           </Button>

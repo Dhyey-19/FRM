@@ -279,14 +279,14 @@ const UserAccess = () => {
   return (
     <Box sx={{ pb: 6 }}>
       {/* Sleek Operations Header */}
-      <Box sx={{ mb: 3.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
             <Typography variant="caption" sx={{ fontWeight: 700, color: '#F88A01', letterSpacing: 1, textTransform: 'uppercase' }}>
               Administration • Security
             </Typography>
           </Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5, fontSize: { xs: '1.4rem', sm: '1.8rem', md: '2.1rem' } }}>
             User Menu Access
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
@@ -325,6 +325,7 @@ const UserAccess = () => {
                 borderRadius: 2,
                 boxShadow: '0 2px 8px rgba(248, 138, 1, 0.25)',
                 textTransform: 'none',
+                width: { xs: '100%', sm: 'auto' },
                 '&:hover': { bgcolor: '#ea580c' }
               }}
             >
@@ -338,7 +339,7 @@ const UserAccess = () => {
       <Paper
         elevation={0}
         sx={{
-          p: 3,
+          p: { xs: 2, sm: 3 },
           mb: 3.5,
           borderRadius: 3,
           bgcolor: '#ffffff',

@@ -178,12 +178,12 @@ const AssemblyReport = () => {
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-          Assembly
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+          Assembly Report
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <Box sx={{ width: 250 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' } }}>
+          <Box sx={{ width: { xs: '100%', sm: 250 } }}>
             <DatePicker
               portalId="root"
               selectsRange={true}
@@ -199,7 +199,7 @@ const AssemblyReport = () => {
             variant="outlined" 
             startIcon={<TableView />}
             onClick={handleExportExcel}
-            sx={{ color: '#107c41', borderColor: '#107c41' }}
+            sx={{ color: '#107c41', borderColor: '#107c41', flex: { xs: 1, sm: 'none' } }}
           >
             Export Excel
           </Button>
@@ -207,7 +207,7 @@ const AssemblyReport = () => {
             variant="outlined" 
             startIcon={<Visibility />}
             onClick={() => handleExportPDF('preview')}
-            sx={{ color: '#0F3B66', borderColor: '#0F3B66' }}
+            sx={{ color: '#0F3B66', borderColor: '#0F3B66', flex: { xs: 1, sm: 'none' } }}
           >
             Preview PDF
           </Button>
@@ -215,7 +215,7 @@ const AssemblyReport = () => {
             variant="outlined" 
             startIcon={<PictureAsPdf />}
             onClick={() => handleExportPDF('download')}
-            sx={{ color: '#d32f2f', borderColor: '#d32f2f' }}
+            sx={{ color: '#d32f2f', borderColor: '#d32f2f', flex: { xs: 1, sm: 'none' } }}
           >
             Export PDF
           </Button>
@@ -223,7 +223,7 @@ const AssemblyReport = () => {
             variant="contained" 
             startIcon={<Share />}
             onClick={() => handleExportPDF('share')}
-            sx={{ bgcolor: 'secondary.main' }}
+            sx={{ bgcolor: 'secondary.main', flex: { xs: 1, sm: 'none' } }}
           >
             Share
           </Button>

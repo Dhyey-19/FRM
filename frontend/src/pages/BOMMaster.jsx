@@ -257,11 +257,11 @@ const BOMMaster = () => {
 
   return (
     <Box>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
           Bill of Materials (BOM)
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <input
             accept=".xlsx, .xls"
             style={{ display: 'none' }}
@@ -293,7 +293,7 @@ const BOMMaster = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {successMessage && <Alert severity="success" sx={{ mb: 2 }}>{successMessage}</Alert>}
 
-      <Paper sx={{ p: 3, mb: 3, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
           1. Select Finished Good
         </Typography>
@@ -303,23 +303,24 @@ const BOMMaster = () => {
           value={selectedParent}
           onChange={(event, newValue) => setSelectedParent(newValue)}
           renderInput={(params) => <TextField {...params} label="Finished Good (Items with Series)" size="small" />}
-          sx={{ maxWidth: 500 }}
+          sx={{ maxWidth: '100%', width: { xs: '100%', sm: 500 } }}
           autoHighlight
         />
       </Paper>
 
       <Paper sx={{ p: 0, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 2 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2 }}>
+        <Toolbar sx={{ pl: { xs: 1.5, sm: 2 }, pr: { xs: 1.5, sm: 2 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 2, pb: 2 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             2. Raw Materials Required
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, width: { xs: '100%', sm: 'auto' } }}>
             <Button 
               variant="outlined" 
               color="secondary" 
               startIcon={<AddIcon />}
               onClick={handleAddRow}
               disabled={!selectedParent || !hasAddPermission()}
+              sx={{ flex: { xs: 1, sm: 'none' } }}
             >
               Add Material
             </Button>
@@ -329,6 +330,7 @@ const BOMMaster = () => {
               startIcon={<SaveIcon />}
               onClick={handleSave}
               disabled={!selectedParent || loading || !hasAddPermission()}
+              sx={{ flex: { xs: 1, sm: 'none' } }}
             >
               Save
             </Button>

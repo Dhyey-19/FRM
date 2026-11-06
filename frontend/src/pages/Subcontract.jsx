@@ -61,8 +61,11 @@ const Subcontract = ({ initialTab = 0 }) => {
           value={activeTab} 
           onChange={handleTabChange}
           textColor="inherit"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{
-            px: 2,
+            px: { xs: 1, sm: 2 },
             borderBottom: '1px solid #e2e8f0',
             '& .MuiTabs-indicator': {
               backgroundColor: '#F88A01',
@@ -71,12 +74,13 @@ const Subcontract = ({ initialTab = 0 }) => {
             },
             '& .MuiTab-root': {
               fontWeight: 700,
-              fontSize: '0.92rem',
+              fontSize: { xs: '0.84rem', sm: '0.92rem' },
               textTransform: 'none',
-              py: 1.6,
-              px: 3,
+              py: { xs: 1.2, sm: 1.6 },
+              px: { xs: 2, sm: 3 },
               minHeight: 48,
               color: '#64748b',
+              whiteSpace: 'nowrap',
               transition: 'all 0.2s',
               '&.Mui-selected': {
                 color: '#0F3B66'

@@ -750,22 +750,22 @@ const InwardEntry = () => {
           startIcon={<AddIcon />} 
           onClick={handleOpenDialog} 
           disabled={!hasAddPermission()}
-          sx={{ fontWeight: 600, px: 2.5 }}
+          sx={{ fontWeight: 600, px: 2.5, width: { xs: '100%', sm: 'auto' } }}
         >
           Add Purchase
         </Button>
       </Box>
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2, flexWrap: 'wrap', gap: 2 }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Toolbar sx={{ pl: { xs: 1.5, sm: 2 }, pr: { xs: 1.5, sm: 2 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2, flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
             <TextField
               size="small"
               placeholder="Search Purchases..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
-              sx={{ width: '200px' }}
+              sx={{ width: { xs: '100%', sm: 200 } }}
             />
             <TextField
               label="From Date"
@@ -774,7 +774,7 @@ const InwardEntry = () => {
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '145px' }}
+              sx={{ width: { xs: 'calc(50% - 8px)', sm: 145 } }}
             />
             <TextField
               label="To Date"
@@ -783,24 +783,24 @@ const InwardEntry = () => {
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '145px' }}
+              sx={{ width: { xs: 'calc(50% - 8px)', sm: 145 } }}
             />
-            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); }}>Clear Dates</Button>
+            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); }} sx={{ width: { xs: '100%', sm: 'auto' } }}>Clear Dates</Button>
 
             <ToggleButtonGroup
               value={billFilter}
               exclusive
               onChange={(e, nextMode) => { if (nextMode) setBillFilter(nextMode); }}
               size="small"
-              sx={{ bgcolor: '#f8fafc' }}
+              sx={{ bgcolor: '#f8fafc', width: { xs: '100%', sm: 'auto' } }}
             >
-              <ToggleButton value="combined" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+              <ToggleButton value="combined" sx={{ flex: { xs: 1, sm: 'none' }, fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
                 <ReceiptLong fontSize="small" sx={{ mr: 0.5 }} /> Combined
               </ToggleButton>
-              <ToggleButton value="with_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+              <ToggleButton value="with_bill" sx={{ flex: { xs: 1, sm: 'none' }, fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
                 <Receipt fontSize="small" color="primary" sx={{ mr: 0.5 }} /> With Bill
               </ToggleButton>
-              <ToggleButton value="without_bill" sx={{ fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
+              <ToggleButton value="without_bill" sx={{ flex: { xs: 1, sm: 'none' }, fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
                 <MoneyOff fontSize="small" color="warning" sx={{ mr: 0.5 }} /> Without Bill
               </ToggleButton>
             </ToggleButtonGroup>
@@ -896,19 +896,19 @@ const InwardEntry = () => {
           {/* Header Section */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={1}>
+              <Grid item xs={12} sm={3} md={1.5}>
                 <FormControlLabel
                   control={<Checkbox checked={bill} onChange={(e) => setBill(e.target.checked)} />}
                   label="Bill"
                 />
               </Grid>
-              <Grid item xs={12} sm={3} md={2}>
+              <Grid item xs={12} sm={4.5} md={2.5}>
                 <TextField fullWidth label="Inward No" size="small" value={InwardNo} onChange={(e) => setInwardNo(e.target.value)} required />
               </Grid>
-              <Grid item xs={12} sm={3} md={2}>
+              <Grid item xs={12} sm={4.5} md={2.5}>
                 <TextField fullWidth label="Date" type="date" size="small" value={InwardDate} onChange={(e) => setInwardDate(e.target.value)} InputLabelProps={{ shrink: true }} required />
               </Grid>
-              <Grid item xs={12} sm={6} md={8}>
+              <Grid item xs={12} sm={12} md={5.5}>
                 <Autocomplete
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
@@ -916,7 +916,6 @@ const InwardEntry = () => {
                   onChange={(e, newValue) => setLedgerId(newValue ? newValue.Id : null)}
                   renderInput={(params) => <TextField {...params} label="Ledger" size="small" required fullWidth />}
                   fullWidth
-                  sx={{ minWidth: `${Math.max(20, maxLedgerLength) + 6}ch` }}
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
                 />
               </Grid>
@@ -925,7 +924,7 @@ const InwardEntry = () => {
 
           {/* Grid Section */}
           <TableContainer component={Paper} sx={{ mb: 2, maxHeight: '40vh', border: '1px solid #e0e0e0', boxShadow: 'none' }}>
-            <Table stickyHeader size="small">
+            <Table stickyHeader size="small" sx={{ minWidth: 850 }}>
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
@@ -1030,10 +1029,10 @@ const InwardEntry = () => {
           </Paper>
 
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2, backgroundColor: '#fff', borderTop: '1px solid #e0e0e0' }}>
-          <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-          <Button onClick={() => handleSave(false)} disabled={editingId ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="primary" size="large" sx={{ px: 3 }}>Save</Button>
-          <Button onClick={() => handleSave(true)} disabled={editingId ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="secondary" size="large" startIcon={<PrintIcon />} sx={{ px: 3 }}>Save & Print</Button>
+        <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2, backgroundColor: '#fff', borderTop: '1px solid #e0e0e0', flexWrap: 'wrap', gap: 1 }}>
+          <Button onClick={handleCloseDialog} color="inherit" sx={{ order: { xs: 3, sm: 1 }, width: { xs: '100%', sm: 'auto' } }}>Cancel</Button>
+          <Button onClick={() => handleSave(false)} disabled={editingId ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="primary" size="medium" sx={{ px: 3, order: { xs: 1, sm: 2 }, flex: { xs: 1, sm: 'none' } }}>Save</Button>
+          <Button onClick={() => handleSave(true)} disabled={editingId ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="secondary" size="medium" startIcon={<PrintIcon />} sx={{ px: 3, order: { xs: 2, sm: 3 }, flex: { xs: 1, sm: 'none' } }}>Save & Print</Button>
         </DialogActions>
       </Dialog>
 

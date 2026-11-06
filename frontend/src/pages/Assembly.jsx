@@ -279,7 +279,6 @@ const Assembly = ({ user }) => {
                             value={selectedItem}
                             onChange={(e, newValue) => setSelectedItem(newValue)}
                             renderInput={(params) => <TextField {...params} label="Select Parent Item" size="small" required />}
-                            sx={{ minWidth: `${Math.max(20, maxItemLength) + 6}ch` }}
                             slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
                         />
                     </Grid>

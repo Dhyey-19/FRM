@@ -421,8 +421,8 @@ const ItemMaster = () => {
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
         
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', pt: 2, pb: 2 }}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+        <Toolbar sx={{ px: { xs: 1.5, sm: 2 }, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', pt: 2, pb: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, width: { xs: '100%', md: 'auto' } }}>
             <TextField
               size="small"
               placeholder="Search items..."
@@ -435,7 +435,7 @@ const ItemMaster = () => {
                   </InputAdornment>
                 ),
               }}
-              sx={{ width: '250px' }}
+              sx={{ width: { xs: '100%', sm: 220, md: 250 } }}
             />
             <TextField
               select
@@ -443,7 +443,7 @@ const ItemMaster = () => {
               label="Item Type"
               value={filterItemType}
               onChange={(e) => setFilterItemType(e.target.value)}
-              sx={{ minWidth: 150 }}
+              sx={{ width: { xs: '100%', sm: 150 }, minWidth: { sm: 150 } }}
             >
               <MenuItem value="All">All Types</MenuItem>
               {itemTypes.map(t => (
@@ -456,14 +456,14 @@ const ItemMaster = () => {
               label="Series"
               value={filterSeries}
               onChange={(e) => setFilterSeries(e.target.value)}
-              sx={{ minWidth: 150 }}
+              sx={{ width: { xs: '100%', sm: 150 }, minWidth: { sm: 150 } }}
             >
               {uniqueSeries.map(s => (
                 <MenuItem key={s} value={s}>{s}</MenuItem>
               ))}
             </TextField>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
             <input
               accept=".xlsx, .xls"
               style={{ display: 'none' }}
@@ -700,7 +700,7 @@ const ItemMaster = () => {
             <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>
           )}
           <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField 
                 label="Code" 
                 name="ItemCode" 
@@ -711,7 +711,7 @@ const ItemMaster = () => {
               <TextField label="Item Name" name="ItemName" value={formData.ItemName} onChange={handleInputChange} fullWidth size="small" />
             </Box>
             
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <Autocomplete
                 autoHighlight
                 autoSelect
@@ -752,18 +752,18 @@ const ItemMaster = () => {
               />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Std Weight" name="StdWeight" type="number" inputProps={{ step: "0.001" }} value={formData.StdWeight} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="MRP" name="MRP" type="number" value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Costing" name="Costing" type="number" value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Opening Stock" name="OpeningStock" type="number" value={formData.OpeningStock} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Closing Stock" name="ClosingStock" type="number" value={formData.ClosingStock} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField 
                 label="HSN Code" 
                 name="HSNCode" 

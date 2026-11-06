@@ -281,7 +281,7 @@ const UserMaster = () => {
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
         
         {/* Toolbar */}
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2 }}>
+        <Toolbar sx={{ pl: { xs: 1.5, sm: 2 }, pr: { xs: 1.5, sm: 2 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 2, pb: 2 }}>
           <TextField
             size="small"
             placeholder="Search users..."
@@ -294,14 +294,14 @@ const UserMaster = () => {
                 </InputAdornment>
               ),
             }}
-            sx={{ width: '300px' }}
+            sx={{ width: { xs: '100%', sm: 300 } }}
           />
           <Button 
             variant="contained" 
             color="secondary" 
             startIcon={<AddIcon />}
             onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
-            sx={{ boxShadow: 0 }}
+            sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
           >
             Add User
           </Button>

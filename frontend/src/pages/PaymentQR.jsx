@@ -486,12 +486,16 @@ const PaymentQR = () => {
         <Tabs
           value={activeTab}
           onChange={(e, val) => setActiveTab(val)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{
             '& .MuiTab-root': {
               textTransform: 'none',
               fontWeight: 600,
-              fontSize: '0.9rem',
+              fontSize: { xs: '0.84rem', sm: '0.9rem' },
               minHeight: 44,
+              whiteSpace: 'nowrap',
               color: '#64748b',
               '&.Mui-selected': { color: '#0F3B66' }
             },

@@ -233,8 +233,8 @@ const LedgerMaster = () => {
       </Box>
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 2, pb: 2 }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Toolbar sx={{ pl: { xs: 1.5, sm: 2 }, pr: { xs: 1.5, sm: 2 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 2, pb: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
             <TextField
               size="small"
               placeholder="Search ledgers..."
@@ -244,9 +244,9 @@ const LedgerMaster = () => {
                 setPage(0);
               }}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
-              sx={{ width: '260px' }}
+              sx={{ width: { xs: '100%', sm: 260 } }}
             />
-            <FormControl size="small" sx={{ minWidth: 220 }}>
+            <FormControl size="small" sx={{ width: { xs: '100%', sm: 220 } }}>
               <InputLabel>Account Group</InputLabel>
               <Select
                 label="Account Group"
@@ -273,12 +273,20 @@ const LedgerMaster = () => {
                   setSelectedAccountGroup('All');
                   setPage(0);
                 }}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
                 Clear
               </Button>
             )}
           </Box>
-          <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}>
+          <Button 
+            variant="contained" 
+            color="secondary" 
+            startIcon={<AddIcon />} 
+            onClick={() => handleOpenDialog('add')} 
+            disabled={!hasAddPermission()}
+            sx={{ width: { xs: '100%', md: 'auto' } }}
+          >
             Add Ledger
           </Button>
         </Toolbar>
@@ -393,7 +401,7 @@ const LedgerMaster = () => {
           }}>
             
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.5, mt: 1 }}>General Details</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Ledger Name" name="LedgerName" value={formData.LedgerName} onChange={handleInputChange} fullWidth size="small" required />
               
               <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
@@ -416,11 +424,11 @@ const LedgerMaster = () => {
             </Box>
 
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.5, mt: 2 }}>Contact & Location</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Address" name="Address" value={formData.Address || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="City" name="City" value={formData.City || ''} onChange={handleInputChange} fullWidth size="small" />
               <Autocomplete
                 options={indianStates}
@@ -434,14 +442,14 @@ const LedgerMaster = () => {
               />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Mobile No" name="MobileNo" value={formData.MobileNo || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Email" name="Email" value={formData.Email || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="GSTIN" name="GSTIN" value={formData.GSTIN || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.5, mt: 2 }}>Financial & Banking</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Opening Balance" name="OpeningBalance" type="number" value={formData.OpeningBalance || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField 
                 label="Closing Balance" 
@@ -456,13 +464,13 @@ const LedgerMaster = () => {
               <TextField label="Account No" name="AccountNo" value={formData.AccountNo || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="IFSC Code" name="IFSC" value={formData.IFSC || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="UPI" name="UPI" value={formData.UPI || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.5, mt: 2 }}>Business & Terms</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <Autocomplete
                 options={brands.map(b => b.BrandName)}
                 value={formData.OwnBrand || ''}
@@ -474,13 +482,13 @@ const LedgerMaster = () => {
               <TextField label="Discount (%)" name="Discount" type="number" value={formData.Discount || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Cash Discount (CD) %" name="CD" type="number" value={formData.CD || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Bill (%)" name="Bill" type="number" value={formData.Bill || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Payment Term" name="PaymentTerm" type="number" value={formData.PaymentTerm || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Transport" name="Transport" value={formData.Transport || ''} onChange={handleInputChange} fullWidth size="small" />
               <TextField 
                 label="Delivery Days" 

@@ -45,12 +45,21 @@ import {
   Menu as MenuIcon,
   MenuOpen as MenuOpenIcon,
   AccountCircle as AccountCircleIcon,
-  OpenInNew as OpenInNewIcon
+  OpenInNew as OpenInNewIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MENU_STRUCTURE } from '../../config/menuConfig';
 
-const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
+const Sidebar = ({ 
+  user, 
+  isCollapsed, 
+  toggleSidebar, 
+  drawerWidth = 300,
+  isMobile = false,
+  mobileOpen = false,
+  onMobileClose 
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentUser, setCurrentUser] = useState(user);
@@ -186,86 +195,82 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
     return false;
   };
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        transition: 'width 0.3s ease',
-        whiteSpace: 'nowrap',
-        [`& .MuiDrawer-paper`]: { 
-          width: drawerWidth, 
-          transition: 'width 0.3s ease',
-          boxSizing: 'border-box', 
-          backgroundColor: '#051322', // Deep Navy Dark Theme
-          color: '#ffffff', // White text
-          borderRight: 'none', 
-          display: 'flex', 
-          flexDirection: 'column',
-          overflowX: 'hidden'
-        },
-      }}
-    >
-      <Box sx={{ py: 0.5, overflow: 'auto', flex: 1 }}>
-        
-        {/* Company Branding */}
-        <Box sx={{ p: isCollapsed ? 1 : 2.5, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          {isCollapsed ? (
-            <img 
-              src={activeUser.companyLogo || user.companyLogo || appLogo} 
-              alt="FRM" 
-              style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
-            />
-          ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', px: 0.5 }}>
+  const drawerContent = (
+    <Box sx={{ py: 0.5, overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
+      
+      {/* Company Branding */}
+      <Box sx={{ 
+        p: isCollapsed && !isMobile ? 1 : 2.2, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: isCollapsed && !isMobile ? 'center' : 'space-between', 
+        borderBottom: '1px solid rgba(255,255,255,0.1)' 
+      }}>
+        {isCollapsed && !isMobile ? (
+          <img 
+            src={activeUser.companyLogo || user.companyLogo || appLogo} 
+            alt="FRM" 
+            style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
+          />
+        ) : (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 0.5 }}>
               <img 
                 src={activeUser.companyLogo || user.companyLogo || appLogo} 
                 alt="FRM" 
-                style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid white', flexShrink: 0 }} 
+                style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid white', flexShrink: 0 }} 
               />
               <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap', color: '#ffffff' }}>
                 FRM
               </Typography>
             </Box>
-          )}
-        </Box>
+            {isMobile && (
+              <IconButton onClick={onMobileClose} sx={{ color: 'rgba(255,255,255,0.7)', '&:hover': { color: '#ffffff' } }}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            )}
+          </>
+        )}
+      </Box>
 
-        {/* User Card */}
-        <Box sx={{ p: isCollapsed ? 1 : 2, display: 'flex', flexDirection: isCollapsed ? 'column' : 'row', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start', gap: 1, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          <AccountCircleIcon sx={{ fontSize: isCollapsed ? 32 : 40, color: '#F88A01' }} />
-          {!isCollapsed ? (
-            <>
-              <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {user.username || 'Dhyey Shah'}
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
-                  {user.role || 'Administrator'}
-                </Typography>
-              </Box>
+      {/* User Card */}
+      <Box sx={{ p: isCollapsed && !isMobile ? 1 : 2, display: 'flex', flexDirection: isCollapsed && !isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: isCollapsed && !isMobile ? 'center' : 'flex-start', gap: 1, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <AccountCircleIcon sx={{ fontSize: isCollapsed && !isMobile ? 32 : 40, color: '#F88A01' }} />
+        {(!isCollapsed || isMobile) ? (
+          <>
+            <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.username || 'Dhyey Shah'}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
+                {user.role || 'Administrator'}
+              </Typography>
+            </Box>
+            {!isMobile && (
               <IconButton onClick={toggleSidebar} sx={{ color: 'white', p: 0.5 }}>
                 <MenuOpenIcon fontSize="small" />
               </IconButton>
-              <IconButton 
-                size="small" 
-                onClick={() => {
-                  localStorage.removeItem('user');
-                  sessionStorage.removeItem('user');
-                  navigate('/');
-                }}
-                sx={{ color: '#ff8a8a', p: 0.5, '&:hover': { bgcolor: 'rgba(255,138,138,0.1)' } }}
-                title="Logout"
-              >
-                <Logout fontSize="small" />
-              </IconButton>
-            </>
-          ) : (
-            <IconButton onClick={toggleSidebar} sx={{ color: 'white', p: 0.5 }}>
-              <MenuIcon />
+            )}
+            <IconButton 
+              size="small" 
+              onClick={() => {
+                localStorage.removeItem('user');
+                sessionStorage.removeItem('user');
+                navigate('/');
+                if (isMobile && onMobileClose) onMobileClose();
+              }}
+              sx={{ color: '#ff8a8a', p: 0.5, '&:hover': { bgcolor: 'rgba(255,138,138,0.1)' } }}
+              title="Logout"
+            >
+              <Logout fontSize="small" />
             </IconButton>
-          )}
-        </Box>
+          </>
+        ) : (
+          <IconButton onClick={toggleSidebar} sx={{ color: 'white', p: 0.5 }}>
+            <MenuIcon />
+          </IconButton>
+        )}
+      </Box>
 
         {/* Navigation Menu */}
         <List sx={{ py: 0.5, px: 2, pt: 1 }}>
@@ -316,7 +321,12 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
                 <ListItemButton 
                   key={item.path || item.title}
                   selected={isSel} 
-                  onClick={() => item.path ? navigate(item.path) : null}
+                  onClick={() => {
+                    if (item.path) {
+                      navigate(item.path);
+                      if (isMobile && onMobileClose) onMobileClose();
+                    }
+                  }}
                   sx={{ 
                     py: level > 0 ? 0.3 : 0.5, 
                     pl: level > 0 ? 4 : 0, 
@@ -336,7 +346,7 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
                       fontWeight: isSel ? 600 : 400 
                     }} 
                   />
-                  {!isCollapsed && item.path && (
+                  {!isCollapsed && !isMobile && item.path && (
                     <IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + item.path, '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window">
                       <OpenInNewIcon fontSize="small" />
                     </IconButton>
@@ -424,72 +434,125 @@ const Sidebar = ({ user, isCollapsed, toggleSidebar, drawerWidth = 300 }) => {
           })()}
         </List>
       </Box>
+  );
 
-      {/* Surrender License Confirmation Dialog */}
-      <Dialog 
-        open={openSurrenderDialog} 
-        onClose={(e, reason) => { if (reason !== 'backdropClick') handleCloseSurrenderDialog(); }} 
-        maxWidth="xs" 
-        fullWidth
-      >
-        <DialogTitle sx={{ backgroundColor: '#fee2e2', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
-          <KeyOffIcon /> Surrender Software License
-        </DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
-          <DialogContentText sx={{ mb: 2, color: '#334155' }}>
-            Warning: You are surrendering the software license from this device. Once surrendered, you will not be able to use the application without registering it again.
-          </DialogContentText>
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: '#0F3B66' }}>
-            Please type <strong style={{ color: '#dc2626' }}>surrender</strong> to confirm:
-          </Typography>
-          <TextField
-            autoFocus
-            fullWidth
-            size="small"
-            variant="outlined"
-            placeholder="Type 'surrender'"
-            value={surrenderInput}
-            onChange={(e) => setSurrenderInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && surrenderInput.toLowerCase() === 'surrender' && !surrendering) {
-                handleConfirmSurrender();
+  const surrenderDialog = (
+    <Dialog 
+      open={openSurrenderDialog} 
+      onClose={(e, reason) => { if (reason !== 'backdropClick') handleCloseSurrenderDialog(); }} 
+      maxWidth="xs" 
+      fullWidth
+    >
+      <DialogTitle sx={{ backgroundColor: '#fee2e2', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
+        <KeyOffIcon /> Surrender Software License
+      </DialogTitle>
+      <DialogContent sx={{ mt: 2 }}>
+        <DialogContentText sx={{ mb: 2, color: '#334155' }}>
+          Warning: You are surrendering the software license from this device. Once surrendered, you will not be able to use the application without registering it again.
+        </DialogContentText>
+        <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: '#0F3B66' }}>
+          Please type <strong style={{ color: '#dc2626' }}>surrender</strong> to confirm:
+        </Typography>
+        <TextField
+          autoFocus
+          fullWidth
+          size="small"
+          variant="outlined"
+          placeholder="Type 'surrender'"
+          value={surrenderInput}
+          onChange={(e) => setSurrenderInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && surrenderInput.toLowerCase() === 'surrender' && !surrendering) {
+              handleConfirmSurrender();
+            }
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              '&.Mui-focused fieldset': {
+                borderColor: surrenderInput.toLowerCase() === 'surrender' ? '#10b981' : '#dc2626',
               }
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                '&.Mui-focused fieldset': {
-                  borderColor: surrenderInput.toLowerCase() === 'surrender' ? '#10b981' : '#dc2626',
-                }
-              }
-            }}
-          />
-          {surrenderError && (
-            <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '8px', fontWeight: '500' }}>
-              {surrenderError}
-            </div>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2, backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-          <Button 
-            onClick={handleCloseSurrenderDialog} 
-            color="inherit" 
-            sx={{ fontWeight: 600 }}
-            disabled={surrendering}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmSurrender} 
-            variant="contained" 
-            color="error" 
-            disabled={surrenderInput.toLowerCase() !== 'surrender' || surrendering}
-            sx={{ fontWeight: 600 }}
-          >
-            {surrendering ? 'Surrendering...' : 'Surrender'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Drawer>
+            }
+          }}
+        />
+        {surrenderError && (
+          <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '8px', fontWeight: '500' }}>
+            {surrenderError}
+          </div>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2, backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+        <Button 
+          onClick={handleCloseSurrenderDialog} 
+          color="inherit" 
+          sx={{ fontWeight: 600 }}
+          disabled={surrendering}
+        >
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleConfirmSurrender} 
+          variant="contained" 
+          color="error" 
+          disabled={surrenderInput.toLowerCase() !== 'surrender' || surrendering}
+          sx={{ fontWeight: 600 }}
+        >
+          {surrendering ? 'Surrendering...' : 'Surrender'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  return (
+    <>
+      {isMobile ? (
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={onMobileClose}
+          ModalProps={{ keepMounted: true }}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: 280,
+              backgroundColor: '#051322',
+              color: '#ffffff',
+              borderRight: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              overflowX: 'hidden'
+            }
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      ) : (
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            width: isCollapsed ? 68 : drawerWidth,
+            flexShrink: 0,
+            transition: 'width 0.3s ease',
+            whiteSpace: 'nowrap',
+            [`& .MuiDrawer-paper`]: { 
+              width: isCollapsed ? 68 : drawerWidth, 
+              transition: 'width 0.3s ease',
+              boxSizing: 'border-box', 
+              backgroundColor: '#051322',
+              color: '#ffffff',
+              borderRight: 'none', 
+              display: 'flex', 
+              flexDirection: 'column',
+              overflowX: 'hidden'
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      )}
+      {surrenderDialog}
+    </>
   );
 };
 

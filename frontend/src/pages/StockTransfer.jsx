@@ -713,17 +713,17 @@ const StockTransfer = ({ user }) => {
       </Box>
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, display: 'flex', justifyContent: 'space-between', pt: 2, pb: 2, flexWrap: 'wrap', gap: 2 }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Toolbar sx={{ pl: { xs: 1.5, sm: 2 }, pr: { xs: 1.5, sm: 2 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 2, pb: 2, flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' } }}>
             <TextField
               size="small"
               placeholder="Search transfers or challan..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
-              sx={{ width: '210px' }}
+              sx={{ width: { xs: '100%', sm: 210 } }}
             />
-            <FormControl size="small" sx={{ minWidth: 170 }}>
+            <FormControl size="small" sx={{ width: { xs: '100%', sm: 170 } }}>
               <InputLabel id="from-dept-filter-label">From Department</InputLabel>
               <Select
                 labelId="from-dept-filter-label"
@@ -737,7 +737,7 @@ const StockTransfer = ({ user }) => {
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 170 }}>
+            <FormControl size="small" sx={{ width: { xs: '100%', sm: 170 } }}>
               <InputLabel id="to-dept-filter-label">To Department</InputLabel>
               <Select
                 labelId="to-dept-filter-label"
@@ -758,7 +758,7 @@ const StockTransfer = ({ user }) => {
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '145px' }}
+              sx={{ width: { xs: 'calc(50% - 8px)', sm: 145 } }}
             />
             <TextField
               label="To Date"
@@ -767,13 +767,13 @@ const StockTransfer = ({ user }) => {
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: '145px' }}
+              sx={{ width: { xs: 'calc(50% - 8px)', sm: 145 } }}
             />
             {(fromDate || toDate || fromDeptFilter || toDeptFilter || searchTerm) && (
-              <Button size="small" onClick={() => { setFromDate(''); setToDate(''); setFromDeptFilter(''); setToDeptFilter(''); setSearchTerm(''); setPage(0); }}>Reset Filters</Button>
+              <Button size="small" onClick={() => { setFromDate(''); setToDate(''); setFromDeptFilter(''); setToDeptFilter(''); setSearchTerm(''); setPage(0); }} sx={{ width: { xs: '100%', sm: 'auto' } }}>Reset Filters</Button>
             )}
           </Box>
-          <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()}>
+          <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleOpenDialog} disabled={!hasAddPermission()} sx={{ width: { xs: '100%', lg: 'auto' } }}>
             Add Transfer
           </Button>
         </Toolbar>
@@ -994,7 +994,6 @@ const StockTransfer = ({ user }) => {
                     />
                   )}
                   fullWidth
-                  sx={{ minWidth: `${Math.max(20, maxDeptLength) + 6}ch` }}
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
                 />
               </Grid>
@@ -1219,10 +1218,10 @@ const StockTransfer = ({ user }) => {
           </Paper>
 
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2, backgroundColor: '#fff', borderTop: '1px solid #e0e0e0' }}>
-          <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-          <Button onClick={() => handleSave(true)} disabled={dialogMode === 'edit' ? !hasEditPermission() : !hasAddPermission()} variant="outlined" color="primary" sx={{ px: 2 }} startIcon={<PrintIcon />}>Save & Print</Button>
-          <Button onClick={() => handleSave(false)} disabled={dialogMode === 'edit' ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="primary" size="large" sx={{ px: 3 }}>Save</Button>
+        <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2, backgroundColor: '#fff', borderTop: '1px solid #e0e0e0', flexWrap: 'wrap', gap: 1 }}>
+          <Button onClick={handleCloseDialog} color="inherit" sx={{ order: { xs: 3, sm: 1 }, width: { xs: '100%', sm: 'auto' } }}>Cancel</Button>
+          <Button onClick={() => handleSave(true)} disabled={dialogMode === 'edit' ? !hasEditPermission() : !hasAddPermission()} variant="outlined" color="primary" sx={{ px: 2, order: { xs: 2, sm: 2 }, flex: { xs: 1, sm: 'none' } }} startIcon={<PrintIcon />}>Save & Print</Button>
+          <Button onClick={() => handleSave(false)} disabled={dialogMode === 'edit' ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="primary" size="medium" sx={{ px: 3, order: { xs: 1, sm: 3 }, flex: { xs: 1, sm: 'none' } }}>Save</Button>
         </DialogActions>
       </Dialog>
 

@@ -269,17 +269,36 @@ const DashboardHome = () => {
   return (
     <Box>
       {/* Operations Header Bar */}
-      <Box sx={{ mb: 3.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ 
+        mb: 3.5, 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', sm: 'center' }, 
+        flexDirection: { xs: 'column', sm: 'row' }, 
+        gap: 2 
+      }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5 }}>
+          <Typography variant="h4" sx={{ 
+            fontWeight: 800, 
+            color: '#0F3B66', 
+            letterSpacing: -0.5,
+            fontSize: { xs: '1.45rem', sm: '1.75rem', md: '2.125rem' } 
+          }}>
             Operations Dashboard
           </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
             Real-time overview of manufacturing workflows, stock valuation, and finances.
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1, 
+          flexWrap: 'wrap', 
+          width: { xs: '100%', sm: 'auto' }, 
+          justifyContent: { xs: 'flex-start', sm: 'flex-end' } 
+        }}>
           <Chip 
             icon={<CalendarMonthIcon sx={{ fontSize: '16px !important', color: '#0F3B66 !important' }} />}
             label={new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
@@ -358,7 +377,14 @@ const DashboardHome = () => {
             bgcolor: '#fffbeb',
             color: '#92400e',
             alignItems: 'center',
-            '& .MuiAlert-message': { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }
+            '& .MuiAlert-message': { 
+              width: '100%', 
+              display: 'flex', 
+              flexDirection: { xs: 'column', sm: 'row' }, 
+              justifyContent: 'space-between', 
+              alignItems: { xs: 'flex-start', sm: 'center' }, 
+              gap: 1.5 
+            }
           }}
         >
           <Box>
@@ -369,7 +395,7 @@ const DashboardHome = () => {
               Inventory stock has fallen under safety threshold. Prompt procurement or subcontract replenishment is recommended.
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
             <Button 
               size="small" 
               variant="contained" 
@@ -382,6 +408,7 @@ const DashboardHome = () => {
                 fontSize: '0.75rem',
                 borderRadius: 1.5,
                 boxShadow: 'none',
+                flex: { xs: 1, sm: 'none' },
                 '&:hover': { bgcolor: '#b45309', boxShadow: 'none' } 
               }}
             >
@@ -398,6 +425,7 @@ const DashboardHome = () => {
                 fontWeight: 700, 
                 fontSize: '0.75rem',
                 borderRadius: 1.5,
+                flex: { xs: 1, sm: 'none' },
                 '&:hover': { borderColor: '#b45309', bgcolor: '#fef3c7' } 
               }}
             >
@@ -408,9 +436,9 @@ const DashboardHome = () => {
       )}
 
       {/* Row 1: Core KPI Metrics (4 Cards) */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 3 }}>
         {topKpis.map((card, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
+          <Grid item xs={12} sm={6} md={6} lg={3} key={index}>
             <Card sx={{ 
               borderRadius: 3, 
               boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
@@ -471,9 +499,9 @@ const DashboardHome = () => {
       </Grid>
 
       {/* Row 2: Financial Analysis - Receivables & Payables with Bill / Without Bill & Overdue */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
         {/* Receivables Card */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} lg={6}>
           <Card sx={{ 
             borderRadius: 3, 
             boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
@@ -487,14 +515,14 @@ const DashboardHome = () => {
             }
           }}>
             <CardActionArea onClick={() => navigate('/dashboard/reports/receivable')} sx={{ height: '100%', p: 0 }}>
-              <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                       <Chip label="Receivables" size="small" sx={{ bgcolor: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
                       <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Debtors</Typography>
                     </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
                       {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalReceivable || 0)}
                     </Typography>
                   </Box>
@@ -583,7 +611,7 @@ const DashboardHome = () => {
         </Grid>
 
         {/* Payables Card */}
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} lg={6}>
           <Card sx={{ 
             borderRadius: 3, 
             boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
@@ -597,14 +625,14 @@ const DashboardHome = () => {
             }
           }}>
             <CardActionArea onClick={() => navigate('/dashboard/reports/payable')} sx={{ height: '100%', p: 0 }}>
-              <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                       <Chip label="Payables" size="small" sx={{ bgcolor: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
                       <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Creditors & Vendors</Typography>
                     </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
                       {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalPayable || 0)}
                     </Typography>
                   </Box>
@@ -694,10 +722,10 @@ const DashboardHome = () => {
       </Grid>
 
       {/* Row 3: Analytics Section - Trends & Top Parties */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
         {/* Monthly Outward Chart Area */}
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 4, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
+        <Grid item xs={12} lg={8}>
+          <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
               Monthly Outward Trends (Last 6 Months)
             </Typography>
@@ -705,31 +733,33 @@ const DashboardHome = () => {
             {loading ? (
               <Skeleton variant="rectangular" height={250} sx={{ borderRadius: 2 }} />
             ) : monthlyData.length > 0 ? (
-              <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: 250, pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0' }}>
-                {monthlyData.map((data, idx) => {
-                  const heightPercent = Math.max((data.totalAmount / maxMonthlyAmount) * 100, 2);
-                  return (
-                    <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '12%', height: '100%', justifyContent: 'flex-end' }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: '#3b82f6', mb: 1 }}>
-                        {data.totalAmount > 0 ? formatCurrency(data.totalAmount).split('.')[0] : ''}
-                      </Typography>
-                      <Box 
-                        sx={{ 
-                          width: '100%', 
-                          height: `${heightPercent}%`, 
-                          bgcolor: '#3b82f6', 
-                          borderRadius: '4px 4px 0 0',
-                          transition: 'height 1s ease-out',
-                          opacity: 0.9,
-                          '&:hover': { opacity: 1, bgcolor: '#2563eb' }
-                        }} 
-                      />
-                      <Typography variant="caption" sx={{ mt: 1, fontWeight: 600, color: 'text.secondary' }}>
-                        {data.monthLabel}
-                      </Typography>
-                    </Box>
-                  );
-                })}
+              <Box sx={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: 250, pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0', minWidth: { xs: 460, sm: 'auto' } }}>
+                  {monthlyData.map((data, idx) => {
+                    const heightPercent = Math.max((data.totalAmount / maxMonthlyAmount) * 100, 2);
+                    return (
+                      <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '12%', height: '100%', justifyContent: 'flex-end' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: '#3b82f6', mb: 1, fontSize: '0.72rem' }}>
+                          {data.totalAmount > 0 ? formatCurrency(data.totalAmount).split('.')[0] : ''}
+                        </Typography>
+                        <Box 
+                          sx={{ 
+                            width: '100%', 
+                            height: `${heightPercent}%`, 
+                            bgcolor: '#3b82f6', 
+                            borderRadius: '4px 4px 0 0',
+                            transition: 'height 1s ease-out',
+                            opacity: 0.9,
+                            '&:hover': { opacity: 1, bgcolor: '#2563eb' }
+                          }} 
+                        />
+                        <Typography variant="caption" sx={{ mt: 1, fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                          {data.monthLabel}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
               </Box>
             ) : (
               <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 8 }}>
@@ -740,8 +770,8 @@ const DashboardHome = () => {
         </Grid>
 
         {/* Top 5 Party Area */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 4, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
+        <Grid item xs={12} lg={4}>
+          <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
               Top 5 Parties by Outward
             </Typography>
@@ -756,15 +786,15 @@ const DashboardHome = () => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {topParties.map((party, idx) => (
                   <Box key={idx} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #f1f5f9' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Avatar sx={{ width: 28, height: 28, bgcolor: '#10b981', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, pr: 1 }}>
+                      <Avatar sx={{ width: 28, height: 28, bgcolor: '#10b981', fontSize: '0.8rem', fontWeight: 'bold', flexShrink: 0 }}>
                         {idx + 1}
                       </Avatar>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {party.partyName}
                       </Typography>
                     </Box>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#10b981' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#10b981', flexShrink: 0 }}>
                       {formatCurrency(party.totalAmount).split('.')[0]}
                     </Typography>
                   </Box>
@@ -780,9 +810,9 @@ const DashboardHome = () => {
       </Grid>
 
       {/* Row 4: Department-wise Stock */}
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
         <Grid item xs={12}>
-          <Paper sx={{ p: 4, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+          <Paper sx={{ p: { xs: 2.5, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
               Department-wise Stock
             </Typography>
