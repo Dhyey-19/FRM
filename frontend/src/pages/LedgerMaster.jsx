@@ -13,7 +13,7 @@ const initialFormState = {
   LedgerName: '', AccountGroupID: '', Address: '', City: '', State: '', GSTIN: '',
   MobileNo: '', Email: '', OpeningBalance: '', ClosingBalance: '', BankName: '', AccountNo: '',
   IFSC: '', UPI: '', OwnBrand: '', OtherBrand: '', Discount: '', CD: '', Bill: '',
-  PaymentTerm: '', Transport: '', Remark: ''
+  PaymentTerm: '', Transport: '', DeliveryDays: '', Remark: ''
 };
 
 const indianStates = [
@@ -162,7 +162,7 @@ const LedgerMaster = () => {
       const method = dialogMode === 'add' ? 'POST' : 'PUT';
       
       const payload = { ...formData };
-      ['OpeningBalance', 'Discount', 'CD', 'Bill'].forEach(field => {
+      ['OpeningBalance', 'Discount', 'CD', 'Bill', 'DeliveryDays'].forEach(field => {
         if (payload[field] === '') payload[field] = null;
       });
 
@@ -297,6 +297,7 @@ const LedgerMaster = () => {
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger Name</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Account Group</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Transport / Delivery</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Opening Bal.</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Closing Bal.</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Edit</TableCell>
@@ -308,6 +309,22 @@ const LedgerMaster = () => {
                 <TableRow hover tabIndex={-1} key={row.Id}>
                   <TableCell sx={{ fontWeight: 500 }}>{row.LedgerName}</TableCell>
                   <TableCell>{row.AccountGroupName}</TableCell>
+                  <TableCell>
+                    {row.Transport || row.DeliveryDays ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <span>{row.Transport || '-'}</span>
+                        {row.DeliveryDays ? (
+                          <Chip 
+                            label={`${row.DeliveryDays}d`} 
+                            size="small" 
+                            variant="outlined" 
+                            sx={{ height: 20, fontSize: '0.72rem', fontWeight: 600, color: '#0F3B66', borderColor: '#cbd5e1' }} 
+                            title={`Expected delivery: ${row.DeliveryDays} days`}
+                          />
+                        ) : null}
+                      </Box>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell>{row.OpeningBalance || '0.00'}</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: row.ClosingBalance < 0 ? 'error.main' : 'success.main' }}>
                     {row.ClosingBalance || '0.00'}
@@ -340,7 +357,7 @@ const LedgerMaster = () => {
               ))}
               {filteredLedgers.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>No ledgers found.</TableCell>
+                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>No ledgers found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -465,6 +482,17 @@ const LedgerMaster = () => {
 
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField label="Transport" name="Transport" value={formData.Transport || ''} onChange={handleInputChange} fullWidth size="small" />
+              <TextField 
+                label="Delivery Days" 
+                name="DeliveryDays" 
+                type="number" 
+                inputProps={{ min: 0 }} 
+                value={formData.DeliveryDays || ''} 
+                onChange={handleInputChange} 
+                helperText="Expected days of delivery" 
+                fullWidth 
+                size="small" 
+              />
               <TextField label="Remark" name="Remark" value={formData.Remark || ''} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 

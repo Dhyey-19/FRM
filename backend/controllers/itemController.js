@@ -6,7 +6,7 @@ exports.getItems = async (req, res) => {
     const pool = await connectDB();
     const result = await pool.request()
       .query(`
-        SELECT ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock 
+        SELECT ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ISNULL(ReorderLevel, 0) AS ReorderLevel 
         FROM ItemMaster 
         ORDER BY ItemCode ASC
       `);
@@ -19,11 +19,14 @@ exports.getItems = async (req, res) => {
 
 // POST /api/items
 exports.createItem = async (req, res) => {
-  const { ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock } = req.body;
+  const { ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel } = req.body;
 
   if (!ItemCode || !ItemName || !Unit) {
     return res.status(400).json({ message: 'ItemCode, ItemName, and Unit are required' });
   }
+
+  const formattedHSN = HSNCode ? String(HSNCode).trim().slice(0, 8).toUpperCase() : null;
+  const numReorderLevel = ReorderLevel !== undefined && ReorderLevel !== null && ReorderLevel !== '' ? parseFloat(ReorderLevel) : 0;
 
   try {
     const pool = await connectDB();
@@ -48,9 +51,11 @@ exports.createItem = async (req, res) => {
       .input('Costing', sql.Numeric(10, 0), Costing || 0)
       .input('OpeningStock', sql.Numeric(12, 3), OpeningStock || 0)
       .input('ClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
+      .input('HSNCode', sql.VarChar(8), formattedHSN)
+      .input('ReorderLevel', sql.Numeric(12, 3), numReorderLevel)
       .query(`
-        INSERT INTO ItemMaster (ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock)
-        VALUES (@ItemCode, @ItemName, @ItemType, @Series, @StdWeight, @Unit, @MRP, @Costing, @OpeningStock, @ClosingStock)
+        INSERT INTO ItemMaster (ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel)
+        VALUES (@ItemCode, @ItemName, @ItemType, @Series, @StdWeight, @Unit, @MRP, @Costing, @OpeningStock, @ClosingStock, @HSNCode, @ReorderLevel)
       `);
 
     res.status(201).json({ message: 'Item created successfully' });
@@ -64,11 +69,14 @@ exports.createItem = async (req, res) => {
 exports.updateItem = async (req, res) => {
   // Using original ItemCode as the ID parameter
   const { id } = req.params;
-  const { ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock } = req.body;
+  const { ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel } = req.body;
 
   if (!ItemCode || !ItemName || !Unit) {
     return res.status(400).json({ message: 'ItemCode, ItemName, and Unit are required' });
   }
+
+  const formattedHSN = HSNCode ? String(HSNCode).trim().slice(0, 8).toUpperCase() : null;
+  const numReorderLevel = ReorderLevel !== undefined && ReorderLevel !== null && ReorderLevel !== '' ? parseFloat(ReorderLevel) : 0;
 
   try {
     const pool = await connectDB();
@@ -96,6 +104,8 @@ exports.updateItem = async (req, res) => {
       .input('Costing', sql.Numeric(10, 0), Costing || 0)
       .input('OpeningStock', sql.Numeric(12, 3), OpeningStock || 0)
       .input('ClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
+      .input('HSNCode', sql.VarChar(8), formattedHSN)
+      .input('ReorderLevel', sql.Numeric(12, 3), numReorderLevel)
       .query(`
         UPDATE ItemMaster 
         SET ItemCode = @NewItemCode,
@@ -107,7 +117,9 @@ exports.updateItem = async (req, res) => {
             MRP = @MRP,
             Costing = @Costing,
             OpeningStock = @OpeningStock,
-            ClosingStock = @ClosingStock
+            ClosingStock = @ClosingStock,
+            HSNCode = @HSNCode,
+            ReorderLevel = @ReorderLevel
         WHERE ItemCode = @OldItemCode
       `);
 
@@ -179,6 +191,9 @@ exports.bulkCreateItems = async (req, res) => {
 
         request.parameters = {}; // Clear parameters
 
+        const formattedHSN = item.HSNCode ? String(item.HSNCode).trim().slice(0, 8).toUpperCase() : null;
+        const numReorderLevel = item.ReorderLevel !== undefined && item.ReorderLevel !== null && item.ReorderLevel !== '' ? parseFloat(item.ReorderLevel) : 0;
+
         if (checkItem.recordset.length > 0) {
           // Update existing
           await request
@@ -192,10 +207,13 @@ exports.bulkCreateItems = async (req, res) => {
             .input('UpdCosting', sql.Numeric(10, 0), Costing || 0)
             .input('UpdOpeningStock', sql.Numeric(12, 3), OpeningStock || 0)
             .input('UpdClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
+            .input('UpdHSNCode', sql.VarChar(8), formattedHSN)
+            .input('UpdReorderLevel', sql.Numeric(12, 3), numReorderLevel)
             .query(`
               UPDATE ItemMaster 
               SET ItemName = @UpdItemName, ItemType = @UpdItemType, Series = @UpdSeries, StdWeight = @UpdStdWeight, Unit = @UpdUnit,
-                  MRP = @UpdMRP, Costing = @UpdCosting, OpeningStock = @UpdOpeningStock, ClosingStock = @UpdClosingStock
+                  MRP = @UpdMRP, Costing = @UpdCosting, OpeningStock = @UpdOpeningStock, ClosingStock = @UpdClosingStock,
+                  HSNCode = @UpdHSNCode, ReorderLevel = @UpdReorderLevel
               WHERE ItemCode = @UpdItemCode
             `);
           request.parameters = {};
@@ -213,9 +231,11 @@ exports.bulkCreateItems = async (req, res) => {
             .input('InsCosting', sql.Numeric(10, 0), Costing || 0)
             .input('InsOpeningStock', sql.Numeric(12, 3), OpeningStock || 0)
             .input('InsClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
+            .input('InsHSNCode', sql.VarChar(8), formattedHSN)
+            .input('InsReorderLevel', sql.Numeric(12, 3), numReorderLevel)
             .query(`
-              INSERT INTO ItemMaster (ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock)
-              VALUES (@InsItemCode, @InsItemName, @InsItemType, @InsSeries, @InsStdWeight, @InsUnit, @InsMRP, @InsCosting, @InsOpeningStock, @InsClosingStock)
+              INSERT INTO ItemMaster (ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel)
+              VALUES (@InsItemCode, @InsItemName, @InsItemType, @InsSeries, @InsStdWeight, @InsUnit, @InsMRP, @InsCosting, @InsOpeningStock, @InsClosingStock, @InsHSNCode, @InsReorderLevel)
             `);
           request.parameters = {};
           results.added.push(item);

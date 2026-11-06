@@ -7,7 +7,7 @@ exports.getLedgers = async (req, res) => {
       SELECT 
         l.Id, l.LedgerName, l.AccountGroupID, l.Address, l.City, l.State, l.GSTIN, l.MobileNo, l.Email,
         l.BankName, l.AccountNo, l.IFSC, l.UPI, l.OwnBrand, l.OtherBrand, l.Discount, l.CD, l.Bill,
-        l.PaymentTerm, l.Transport, l.Remark,
+        l.PaymentTerm, l.Transport, ISNULL(l.DeliveryDays, 0) AS DeliveryDays, l.Remark,
         ISNULL(l.OpeningBalance, 0) as OpeningBalance,
         ISNULL(l.OpeningBalance, 0) + ISNULL(v.NetVouchers, 0) AS ClosingBalance,
         a.GroupName as AccountGroupName
@@ -163,7 +163,7 @@ exports.addLedger = async (req, res) => {
   const { 
     LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email, 
     OpeningBalance, ClosingBalance, BankName, AccountNo, IFSC, UPI, OwnBrand, OtherBrand, 
-    Discount, CD, Bill, PaymentTerm, Transport, Remark 
+    Discount, CD, Bill, PaymentTerm, Transport, DeliveryDays, Remark 
   } = req.body;
 
   if (!LedgerName || !AccountGroupID) {
@@ -204,16 +204,17 @@ exports.addLedger = async (req, res) => {
       .input('Bill', sql.Decimal(5,2), Bill || null)
       .input('PaymentTerm', sql.Numeric(3,0), PaymentTerm || null)
       .input('Transport', sql.VarChar(50), Transport || null)
+      .input('DeliveryDays', sql.Int, DeliveryDays !== undefined && DeliveryDays !== null && DeliveryDays !== '' ? parseInt(DeliveryDays, 10) : 0)
       .input('Remark', sql.VarChar(100), Remark || null)
       .query(`
         INSERT INTO LedgerMaster (
           LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email,
           OpeningBalance, ClosingBalance, BankName, AccountNo, IFSC, UPI, OwnBrand, OtherBrand,
-          Discount, CD, Bill, PaymentTerm, Transport, Remark
+          Discount, CD, Bill, PaymentTerm, Transport, DeliveryDays, Remark
         ) VALUES (
           @LedgerName, @AccountGroupID, @Address, @City, @State, @GSTIN, @MobileNo, @Email,
           @OpeningBalance, @ClosingBalance, @BankName, @AccountNo, @IFSC, @UPI, @OwnBrand, @OtherBrand,
-          @Discount, @CD, @Bill, @PaymentTerm, @Transport, @Remark
+          @Discount, @CD, @Bill, @PaymentTerm, @Transport, @DeliveryDays, @Remark
         )
       `);
       
@@ -229,7 +230,7 @@ exports.updateLedger = async (req, res) => {
   const { 
     LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email, 
     OpeningBalance, ClosingBalance, BankName, AccountNo, IFSC, UPI, OwnBrand, OtherBrand, 
-    Discount, CD, Bill, PaymentTerm, Transport, Remark 
+    Discount, CD, Bill, PaymentTerm, Transport, DeliveryDays, Remark 
   } = req.body;
 
   if (!LedgerName || !AccountGroupID) {
@@ -243,7 +244,7 @@ exports.updateLedger = async (req, res) => {
       .input('Id', sql.Numeric(10,0), id)
       .query('SELECT Id FROM LedgerMaster WHERE Id = @Id');
       
-    if (checkSys.recordset.length === 0) {
+    if (checkSys.recordset.length > 0 === false) {
       return res.status(404).json({ message: 'Ledger not found' });
     }
 
@@ -270,6 +271,7 @@ exports.updateLedger = async (req, res) => {
       .input('Bill', sql.Decimal(5,2), Bill || null)
       .input('PaymentTerm', sql.Numeric(3,0), PaymentTerm || null)
       .input('Transport', sql.VarChar(50), Transport || null)
+      .input('DeliveryDays', sql.Int, DeliveryDays !== undefined && DeliveryDays !== null && DeliveryDays !== '' ? parseInt(DeliveryDays, 10) : 0)
       .input('Remark', sql.VarChar(100), Remark || null)
       .query(`
         UPDATE LedgerMaster SET 
@@ -280,7 +282,7 @@ exports.updateLedger = async (req, res) => {
           BankName = @BankName, 
           AccountNo = @AccountNo, IFSC = @IFSC, UPI = @UPI, OwnBrand = @OwnBrand, OtherBrand = @OtherBrand,
           Discount = @Discount, CD = @CD, Bill = @Bill, PaymentTerm = @PaymentTerm, 
-          Transport = @Transport, Remark = @Remark
+          Transport = @Transport, DeliveryDays = @DeliveryDays, Remark = @Remark
         WHERE Id = @Id
       `);
       

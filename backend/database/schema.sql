@@ -111,7 +111,9 @@ CREATE TABLE IF NOT EXISTS "ItemMaster" (
     "MRP" DECIMAL(10, 0) DEFAULT 0,
     "Unit" VARCHAR(10) NOT NULL,
     "OpeningStock" DECIMAL(12, 3),
-    "ClosingStock" DECIMAL(12, 3)
+    "ClosingStock" DECIMAL(12, 3),
+    "HSNCode" VARCHAR(8),
+    "ReorderLevel" DECIMAL(12, 3) DEFAULT 0
 );
 
 -- Table: LedgerMaster
@@ -136,6 +138,7 @@ CREATE TABLE IF NOT EXISTS "LedgerMaster" (
     "Bill" DECIMAL(5, 2),
     "PaymentTerm" DECIMAL(3, 0),
     "Transport" VARCHAR(50),
+    "DeliveryDays" INTEGER DEFAULT 0,
     "OpeningBalance" DECIMAL(12, 2),
     "ClosingBalance" DECIMAL(12, 2),
     "Remark" VARCHAR(100),

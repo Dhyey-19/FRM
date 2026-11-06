@@ -23,7 +23,9 @@ import {
   DialogActions,
   CircularProgress,
   Tooltip,
-  IconButton
+  IconButton,
+  Badge,
+  Alert
 } from '@mui/material';
 import {
   AccountBalanceWallet as ValueIcon,
@@ -32,7 +34,12 @@ import {
   Inventory as AssetIcon,
   Storefront as StockIcon,
   CalendarMonth as CalendarMonthIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Notifications as NotificationsIcon,
+  WarningAmber as WarningIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -89,6 +96,12 @@ const DashboardHome = () => {
     }).format(Math.round(value || 0));
   };
 
+  const totalAlerts = (kpis?.lowStockCount || 0) + 
+    ((kpis?.totalReceivableOverdue || 0) > 0 ? 1 : 0) + 
+    ((kpis?.totalPayableOverdue || 0) > 0 ? 1 : 0);
+
+  const tc = kpis?.turnoverComparison;
+
   const topKpis = [
     {
       title: 'Total Stock Valuation',
@@ -97,16 +110,92 @@ const DashboardHome = () => {
       icon: <StockIcon sx={{ fontSize: 26 }} />,
       color: '#10b981', // Emerald
       bgColor: '#d1fae5',
-      link: '/dashboard/reports/stock'
+      link: '/dashboard/reports/stock',
+      customFooter: (
+        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Total Items:</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>{kpis?.totalItems || 0} SKUs</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Reorder Alerts:</Typography>
+            <Chip 
+              label={(kpis?.lowStockCount || 0) > 0 ? `${kpis.lowStockCount} below min` : 'Stock Healthy'}
+              size="small"
+              sx={{ 
+                height: 18, 
+                fontSize: '0.65rem', 
+                fontWeight: 700, 
+                bgcolor: (kpis?.lowStockCount || 0) > 0 ? '#fee2e2' : '#dcfce7',
+                color: (kpis?.lowStockCount || 0) > 0 ? '#ef4444' : '#15803d'
+              }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Valuation Mode:</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, fontSize: '0.72rem' }}>Closing * Costing</Typography>
+          </Box>
+        </Box>
+      )
     },
     {
       title: 'Total Turnover',
-      subtitle: 'Total Outward Value',
+      subtitle: 'Outward Revenue',
       value: formatCurrency(kpis?.totalTurnover || 0),
       icon: <ValueIcon sx={{ fontSize: 26 }} />,
       color: '#f59e0b', // Amber
       bgColor: '#fef3c7',
-      link: '/dashboard/reports/outward'
+      link: '/dashboard/reports/outward',
+      customFooter: (
+        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>This Month:</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              {formatCurrency(tc?.currentMonthTurnover || 0)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>vs Prev Month:</Typography>
+            {tc?.hasPrevMonthData ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: (tc.prevMonthGrowthPercent >= 0 ? '#10b981' : '#ef4444'), display: 'flex', alignItems: 'center' }}>
+                  {tc.prevMonthGrowthPercent >= 0 ? <TrendingUpIcon sx={{ fontSize: 13, mr: 0.2 }} /> : <TrendingDownIcon sx={{ fontSize: 13, mr: 0.2 }} />}
+                  {tc.prevMonthGrowthPercent >= 0 ? '+' : ''}{tc.prevMonthGrowthPercent}%
+                </Typography>
+                <Chip 
+                  label={formatCurrency(tc.previousMonthTurnover)} 
+                  size="small" 
+                  sx={{ height: 18, fontSize: '0.62rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }} 
+                />
+              </Box>
+            ) : (
+              <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.7rem' }}>
+                No prev data
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>vs Last Year:</Typography>
+            {tc?.hasLastYearData ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: (tc.lastYearGrowthPercent >= 0 ? '#10b981' : '#ef4444'), display: 'flex', alignItems: 'center' }}>
+                  {tc.lastYearGrowthPercent >= 0 ? <TrendingUpIcon sx={{ fontSize: 13, mr: 0.2 }} /> : <TrendingDownIcon sx={{ fontSize: 13, mr: 0.2 }} />}
+                  {tc.lastYearGrowthPercent >= 0 ? '+' : ''}{tc.lastYearGrowthPercent}%
+                </Typography>
+                <Chip 
+                  label={formatCurrency(tc.lastYearSameMonthTurnover)} 
+                  size="small" 
+                  sx={{ height: 18, fontSize: '0.62rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }} 
+                />
+              </Box>
+            ) : (
+              <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.7rem' }}>
+                No prior yr data
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      )
     },
     {
       title: 'Cash & Bank',
@@ -116,16 +205,60 @@ const DashboardHome = () => {
       icon: <ValueIcon sx={{ fontSize: 26 }} />,
       color: (kpis?.cashBankBalance || 0) < 0 ? '#ef4444' : '#8b5cf6',
       bgColor: (kpis?.cashBankBalance || 0) < 0 ? '#fef2f2' : '#f3e8ff',
-      onClick: fetchCashBankLedgers
+      onClick: fetchCashBankLedgers,
+      customFooter: (
+        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Liquidity State:</Typography>
+            <Chip 
+              label={(kpis?.cashBankBalance || 0) < 0 ? 'Overdrawn' : 'Solvent'} 
+              size="small" 
+              sx={{ 
+                height: 18, 
+                fontSize: '0.65rem', 
+                fontWeight: 700, 
+                bgcolor: (kpis?.cashBankBalance || 0) < 0 ? '#fee2e2' : '#f3e8ff',
+                color: (kpis?.cashBankBalance || 0) < 0 ? '#ef4444' : '#7c3aed' 
+              }} 
+            />
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Accounts:</Typography>
+            <Typography variant="caption" sx={{ color: '#8b5cf6', fontWeight: 700, cursor: 'pointer' }}>
+              Inspect Details ↗
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Scope:</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, fontSize: '0.72rem' }}>Cash + Bank Ledgers</Typography>
+          </Box>
+        </Box>
+      )
     },
     {
       title: 'Total Asset Value',
-      subtitle: 'Sum of Total Value of Assets',
+      subtitle: 'Sum of Registered Assets',
       value: formatCurrency(kpis?.totalAssetValue || 0),
       icon: <AssetIcon sx={{ fontSize: 26 }} />,
       color: '#0d9488', // Teal
       bgColor: '#ccfbf1',
-      link: '/dashboard/assets'
+      link: '/dashboard/assets',
+      customFooter: (
+        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Departments:</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>{kpis?.totalDepartments || 0} Units</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Transfers Today:</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#0d9488' }}>{kpis?.transfersToday || 0} batches</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Classification:</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, fontSize: '0.72rem' }}>Fixed Plant & Machinery</Typography>
+          </Box>
+        </Box>
+      )
     }
   ];
 
@@ -160,6 +293,41 @@ const DashboardHome = () => {
               boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}
           />
+          <Tooltip title="Notification & Alert Logs">
+            <IconButton
+              onClick={() => navigate('/dashboard/logs')}
+              sx={{
+                bgcolor: '#ffffff',
+                color: totalAlerts > 0 ? '#ea580c' : '#0F3B66',
+                border: '1px solid #cbd5e1',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                '&:hover': { bgcolor: '#f1f5f9', color: '#F88A01', borderColor: '#F88A01' }
+              }}
+            >
+              <Badge badgeContent={totalAlerts} color="error" max={99}>
+                <NotificationsIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<NotificationsIcon fontSize="small" />}
+            onClick={() => navigate('/dashboard/logs')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: 2,
+              color: '#0F3B66',
+              borderColor: '#cbd5e1',
+              bgcolor: '#ffffff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              '&:hover': { borderColor: '#0F3B66', bgcolor: '#f8fafc' }
+            }}
+          >
+            Alert Logs {totalAlerts > 0 && `(${totalAlerts})`}
+          </Button>
           <Tooltip title="Refresh Dashboard Data">
             <IconButton 
               onClick={() => { setLoading(true); fetchKPIs(); }}
@@ -176,6 +344,68 @@ const DashboardHome = () => {
           </Tooltip>
         </Box>
       </Box>
+
+      {/* Low Stock Warning Alert Banner */}
+      {kpis?.lowStockCount > 0 && (
+        <Alert 
+          severity="warning" 
+          icon={<WarningIcon fontSize="inherit" />}
+          sx={{ 
+            mb: 3, 
+            borderRadius: 2.5, 
+            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.1)',
+            border: '1px solid #fde68a',
+            bgcolor: '#fffbeb',
+            color: '#92400e',
+            alignItems: 'center',
+            '& .MuiAlert-message': { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }
+          }}
+        >
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#92400e' }}>
+              Low Stock Warning: {kpis.lowStockCount} {kpis.lowStockCount === 1 ? 'item is' : 'items are'} below minimum reorder level
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#b45309' }}>
+              Inventory stock has fallen under safety threshold. Prompt procurement or subcontract replenishment is recommended.
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Button 
+              size="small" 
+              variant="contained" 
+              onClick={() => navigate('/dashboard/logs')}
+              sx={{ 
+                bgcolor: '#d97706', 
+                color: '#ffffff', 
+                textTransform: 'none', 
+                fontWeight: 700, 
+                fontSize: '0.75rem',
+                borderRadius: 1.5,
+                boxShadow: 'none',
+                '&:hover': { bgcolor: '#b45309', boxShadow: 'none' } 
+              }}
+            >
+              View Alert Details
+            </Button>
+            <Button 
+              size="small" 
+              variant="outlined" 
+              onClick={() => navigate('/dashboard/items')}
+              sx={{ 
+                color: '#92400e', 
+                borderColor: '#d97706', 
+                textTransform: 'none', 
+                fontWeight: 700, 
+                fontSize: '0.75rem',
+                borderRadius: 1.5,
+                '&:hover': { borderColor: '#b45309', bgcolor: '#fef3c7' } 
+              }}
+            >
+              Item Master
+            </Button>
+          </Box>
+        </Alert>
+      )}
 
       {/* Row 1: Core KPI Metrics (4 Cards) */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -216,17 +446,21 @@ const DashboardHome = () => {
                   </Box>
 
                   {loading ? (
-                    <Skeleton variant="text" width={110} height={40} />
+                    <Box sx={{ mt: 'auto' }}>
+                      <Skeleton variant="text" width={110} height={36} />
+                      <Skeleton variant="rectangular" height={70} sx={{ mt: 1, borderRadius: 1 }} />
+                    </Box>
                   ) : (
                     <Box sx={{ mt: 'auto' }}>
                       <Typography variant="h5" sx={{ fontWeight: 800, color: card.valueColor || '#1e293b' }}>
                         {card.value}
                       </Typography>
                       {card.subtitle && (
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.3, mb: 0.5 }}>
                           {card.subtitle}
                         </Typography>
                       )}
+                      {card.customFooter}
                     </Box>
                   )}
                 </CardContent>

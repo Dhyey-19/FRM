@@ -86,7 +86,9 @@ const ItemMaster = () => {
     MRP: '',
     Costing: '',
     OpeningStock: '',
-    ClosingStock: ''
+    ClosingStock: '',
+    HSNCode: '',
+    ReorderLevel: ''
   });
 
   const fetchItems = async () => {
@@ -205,11 +207,13 @@ const ItemMaster = () => {
         MRP: item.MRP || '',
         Costing: item.Costing || '',
         OpeningStock: item.OpeningStock || '',
-        ClosingStock: item.ClosingStock || ''
+        ClosingStock: item.ClosingStock || '',
+        HSNCode: item.HSNCode || '',
+        ReorderLevel: item.ReorderLevel != null ? item.ReorderLevel : ''
       });
     } else {
       setOriginalItemCode(null);
-      setFormData({ ItemCode: '', ItemName: '', ItemType: '', Series: '', StdWeight: '', Unit: '', MRP: '', Costing: '', OpeningStock: '', ClosingStock: '' });
+      setFormData({ ItemCode: '', ItemName: '', ItemType: '', Series: '', StdWeight: '', Unit: '', MRP: '', Costing: '', OpeningStock: '', ClosingStock: '', HSNCode: '', ReorderLevel: '' });
     }
     setOpenDialog(true);
   };
@@ -221,8 +225,14 @@ const ItemMaster = () => {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
     
+    if (name === 'HSNCode') {
+      value = (value || '').slice(0, 8).toUpperCase();
+      setFormData(prev => ({ ...prev, HSNCode: value }));
+      return;
+    }
+
     if (name === 'OpeningStock') {
       const newOpening = parseFloat(value) || 0;
       
@@ -266,7 +276,9 @@ const ItemMaster = () => {
         MRP: parseFloat(formData.MRP) || 0,
         Costing: parseFloat(formData.Costing) || 0,
         OpeningStock: formData.OpeningStock ? parseFloat(formData.OpeningStock) : null,
-        ClosingStock: formData.ClosingStock ? parseFloat(formData.ClosingStock) : null
+        ClosingStock: formData.ClosingStock ? parseFloat(formData.ClosingStock) : null,
+        HSNCode: formData.HSNCode ? formData.HSNCode.trim().slice(0, 8).toUpperCase() : null,
+        ReorderLevel: formData.ReorderLevel !== '' && formData.ReorderLevel != null ? parseFloat(formData.ReorderLevel) : 0
       };
 
       const response = await fetch(url, {
@@ -513,6 +525,15 @@ const ItemMaster = () => {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel
+                    active={sortConfig.key === 'HSNCode'}
+                    direction={sortConfig.key === 'HSNCode' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('HSNCode')}
+                  >
+                    HSN Code
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <TableSortLabel
                     active={sortConfig.key === 'ItemType'}
                     direction={sortConfig.key === 'ItemType' ? sortConfig.direction : 'asc'}
                     onClick={() => handleSort('ItemType')}
@@ -583,6 +604,15 @@ const ItemMaster = () => {
                     Closing
                   </TableSortLabel>
                 </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <TableSortLabel
+                    active={sortConfig.key === 'ReorderLevel'}
+                    direction={sortConfig.key === 'ReorderLevel' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('ReorderLevel')}
+                  >
+                    Reorder Level
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -590,10 +620,16 @@ const ItemMaster = () => {
               {sortedItems
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((row) => {
+                  const isLowStock = row.ReorderLevel > 0 && (row.ClosingStock || 0) < row.ReorderLevel;
                   return (
                     <TableRow hover tabIndex={-1} key={row.ItemCode}>
                       <TableCell sx={{ fontWeight: 500 }}>{row.ItemCode}</TableCell>
                       <TableCell>{row.ItemName}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: row.HSNCode ? '#0F3B66' : 'text.secondary' }}>
+                          {row.HSNCode || '-'}
+                        </Typography>
+                      </TableCell>
                       <TableCell>{row.ItemType}</TableCell>
                       <TableCell>{row.Series}</TableCell>
                       <TableCell>{row.StdWeight != null && row.StdWeight !== '' ? Number(row.StdWeight).toFixed(3) : ''}</TableCell>
@@ -601,7 +637,26 @@ const ItemMaster = () => {
                       <TableCell>{row.MRP}</TableCell>
                       <TableCell>{row.Costing}</TableCell>
                       <TableCell>{row.OpeningStock}</TableCell>
-                      <TableCell>{row.ClosingStock}</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: isLowStock ? '#ef4444' : 'inherit' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <span>{row.ClosingStock}</span>
+                          {isLowStock && (
+                            <Chip 
+                              label="Low" 
+                              size="small" 
+                              color="error" 
+                              sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }} 
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {row.ReorderLevel != null && Number(row.ReorderLevel) > 0 ? (
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706' }}>
+                            {row.ReorderLevel}
+                          </Typography>
+                        ) : '-'}
+                      </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
                           <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
@@ -617,7 +672,7 @@ const ItemMaster = () => {
                 })}
               {sortedItems.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={11} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={13} align="center" sx={{ py: 3 }}>
                     No items found.
                   </TableCell>
                 </TableRow>
@@ -706,6 +761,30 @@ const ItemMaster = () => {
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField label="Opening Stock" name="OpeningStock" type="number" value={formData.OpeningStock} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Closing Stock" name="ClosingStock" type="number" value={formData.ClosingStock} onChange={handleInputChange} fullWidth size="small" />
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField 
+                label="HSN Code" 
+                name="HSNCode" 
+                value={formData.HSNCode} 
+                onChange={handleInputChange} 
+                inputProps={{ maxLength: 8 }} 
+                helperText="8 characters max"
+                fullWidth 
+                size="small" 
+              />
+              <TextField 
+                label="Reorder Level" 
+                name="ReorderLevel" 
+                type="number" 
+                inputProps={{ step: "any" }}
+                value={formData.ReorderLevel} 
+                onChange={handleInputChange} 
+                helperText="Alerts when closing stock is below this"
+                fullWidth 
+                size="small" 
+              />
             </Box>
           </Box>
         </DialogContent>

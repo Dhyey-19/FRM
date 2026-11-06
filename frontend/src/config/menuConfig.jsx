@@ -17,7 +17,8 @@ import {
   Settings as SettingsIcon,
   AccountBalance as AccountBalanceIcon,
   QrCode2 as QrCodeIcon,
-  ManageAccounts as UserAccessIcon
+  ManageAccounts as UserAccessIcon,
+  NotificationsActive as NotificationsActiveIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -34,6 +35,7 @@ export const MENU_STRUCTURE = [
     children: [
       { title: 'Company Profile', path: '/dashboard/company-profile', icon: <SettingsIcon /> },
       { title: 'Payment QR', path: '/dashboard/payment-qr', icon: <QrCodeIcon /> },
+      { title: 'Alerts & Logs', path: '/dashboard/logs', icon: <NotificationsActiveIcon /> },
       { title: 'User Master', path: '/dashboard/users', icon: <PeopleIcon /> },
       { title: 'User Access', path: '/dashboard/user-access', icon: <UserAccessIcon /> },
       { title: 'Assets', path: '/dashboard/assets', icon: <InventoryIcon /> },

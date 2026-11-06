@@ -50,6 +50,7 @@ import JobworkOutReport from './pages/reports/JobworkOutReport';
 import JobworkInReport from './pages/reports/JobworkInReport';
 import JobworkMovementReport from './pages/reports/JobworkMovementReport';
 import ItemStockLedgerReport from './pages/reports/ItemStockLedgerReport';
+import NotificationLogs from './pages/NotificationLogs';
 function AuthApp() {
   const [currentPage, setCurrentPage] = useState('login');
   const navigate = useNavigate();
@@ -131,6 +132,8 @@ function App() {
         {/* Dashboard Routes wrapped in the new Layout */}
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardHome />} />
+          <Route path="logs" element={<NotificationLogs />} />
+          <Route path="notifications" element={<NotificationLogs />} />
           <Route path="company-profile" element={<CompanyProfile />} />
           <Route path="payment-qr" element={<PaymentQR />} />
           <Route path="users" element={<UserMaster />} />

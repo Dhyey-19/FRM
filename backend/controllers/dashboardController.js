@@ -357,12 +357,64 @@ exports.getDashboardKPIs = async (req, res) => {
     totalPayableOverdueWithBill = Number(totalPayableOverdueWithBill.toFixed(2));
     totalPayableOverdueWithoutBill = Number(totalPayableOverdueWithoutBill.toFixed(2));
 
-    // 8. Total Turnover (Outward)
+    // 8. Total Turnover (Outward) & Historical Month Comparisons
     const turnoverResult = await pool.request().query(`
-      SELECT ISNULL(SUM(TOTALAMOUNT), 0) AS totalTurnover
+      SELECT 
+        ISNULL(SUM(TOTALAMOUNT), 0) AS totalTurnover,
+        ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS currentMonthTurnover,
+        ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('month', -1, GETDATE()), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS previousMonthTurnover,
+        ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('year', -1, GETDATE()), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS lastYearSameMonthTurnover,
+        COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM') THEN 1 END) AS currentMonthInvoices,
+        COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('month', -1, GETDATE()), 'yyyy-MM') THEN 1 END) AS previousMonthInvoices,
+        COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('year', -1, GETDATE()), 'yyyy-MM') THEN 1 END) AS lastYearSameMonthInvoices
       FROM OutwardHeader
     `);
-    const totalTurnover = turnoverResult.recordset[0].totalTurnover || 0;
+
+    const turnoverData = turnoverResult.recordset[0] || {};
+    const totalTurnover = turnoverData.totalTurnover || 0;
+    const currentMonthTurnover = turnoverData.currentMonthTurnover || 0;
+    const previousMonthTurnover = turnoverData.previousMonthTurnover || 0;
+    const lastYearSameMonthTurnover = turnoverData.lastYearSameMonthTurnover || 0;
+
+    const hasPrevMonthData = (turnoverData.previousMonthInvoices || 0) > 0 || previousMonthTurnover > 0;
+    const hasLastYearData = (turnoverData.lastYearSameMonthInvoices || 0) > 0 || lastYearSameMonthTurnover > 0;
+
+    let prevMonthDiff = currentMonthTurnover - previousMonthTurnover;
+    let prevMonthGrowthPercent = hasPrevMonthData && previousMonthTurnover > 0 
+      ? Number((((currentMonthTurnover - previousMonthTurnover) / previousMonthTurnover) * 100).toFixed(1))
+      : null;
+
+    let lastYearDiff = currentMonthTurnover - lastYearSameMonthTurnover;
+    let lastYearGrowthPercent = hasLastYearData && lastYearSameMonthTurnover > 0 
+      ? Number((((currentMonthTurnover - lastYearSameMonthTurnover) / lastYearSameMonthTurnover) * 100).toFixed(1))
+      : null;
+
+    const turnoverComparison = {
+      totalTurnover,
+      currentMonthTurnover,
+      previousMonthTurnover,
+      lastYearSameMonthTurnover,
+      hasPrevMonthData,
+      hasLastYearData,
+      prevMonthDiff,
+      prevMonthGrowthPercent,
+      lastYearDiff,
+      lastYearGrowthPercent
+    };
+
+    // 8a. Items Below Reorder Level (Low Stock Alert)
+    const reorderResult = await pool.request().query(`
+      SELECT 
+        ItemCode, ItemName, ItemType, Series, Unit, Costing,
+        ISNULL(ClosingStock, 0) AS ClosingStock,
+        ISNULL(ReorderLevel, 0) AS ReorderLevel,
+        (ISNULL(ReorderLevel, 0) - ISNULL(ClosingStock, 0)) AS Deficit
+      FROM ItemMaster
+      WHERE ISNULL(ReorderLevel, 0) > 0 AND ISNULL(ClosingStock, 0) < ISNULL(ReorderLevel, 0)
+      ORDER BY Deficit DESC, ItemName ASC
+    `);
+    const lowStockItems = reorderResult.recordset || [];
+    const lowStockCount = lowStockItems.length;
 
     // 9. Monthly Outward (Last 6 Months)
     const monthlyOutwardResult = await pool.request().query(`
@@ -416,6 +468,9 @@ exports.getDashboardKPIs = async (req, res) => {
       totalPayableOverdueWithBill,
       totalPayableOverdueWithoutBill,
       totalTurnover,
+      turnoverComparison,
+      lowStockCount,
+      lowStockItems,
       monthlyOutward,
       topParties,
       cashBankBalance,
@@ -424,6 +479,235 @@ exports.getDashboardKPIs = async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching dashboard KPIs:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// GET /api/dashboard/notifications
+exports.getDashboardNotifications = async (req, res) => {
+  try {
+    const pool = await connectDB();
+
+    // 1. Low stock / below reorder level items
+    const reorderResult = await pool.request().query(`
+      SELECT 
+        ItemCode, ItemName, ItemType, Series, Unit, Costing,
+        ISNULL(ClosingStock, 0) AS ClosingStock,
+        ISNULL(ReorderLevel, 0) AS ReorderLevel,
+        (ISNULL(ReorderLevel, 0) - ISNULL(ClosingStock, 0)) AS Deficit
+      FROM ItemMaster
+      WHERE ISNULL(ReorderLevel, 0) > 0 AND ISNULL(ClosingStock, 0) < ISNULL(ReorderLevel, 0)
+      ORDER BY Deficit DESC, ItemName ASC
+    `);
+
+    const notifications = [];
+
+    (reorderResult.recordset || []).forEach(item => {
+      notifications.push({
+        id: `reorder_${item.ItemCode}`,
+        type: 'reorder',
+        category: 'Low Stock Alert',
+        severity: item.ClosingStock <= 0 ? 'critical' : 'warning',
+        title: `Low Stock: ${item.ItemName} (${item.ItemCode})`,
+        message: `Current stock of ${item.ClosingStock} ${item.Unit} is below reorder level (${item.ReorderLevel} ${item.Unit}). Shortfall: ${item.Deficit} ${item.Unit}.`,
+        itemCode: item.ItemCode,
+        itemName: item.ItemName,
+        currentStock: item.ClosingStock,
+        reorderLevel: item.ReorderLevel,
+        deficit: item.Deficit,
+        unit: item.Unit,
+        timestamp: new Date().toISOString(),
+        actionLink: '/dashboard/items'
+      });
+    });
+
+    // 2. Overdue Receivables
+    const recInvoicesResult = await pool.request().query(`
+      WITH LedgerBalances AS (
+        SELECT 
+          l.Id,
+          l.LedgerName,
+          ISNULL(l.PaymentTerm, 0) AS CreditDays,
+          ISNULL(l.ClosingBalance, 0) AS ClosingBalance,
+          ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
+          ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
+        FROM LedgerMaster l
+        INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
+        LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
+        WHERE a.GroupName IN ('Sundry Debtors', 'Party')
+        GROUP BY l.Id, l.LedgerName, l.PaymentTerm, l.OpeningBalance, l.ClosingBalance
+      )
+      SELECT 
+          h.ID AS OutwardId,
+          h.OUTWARDNO AS OutwardNo,
+          h.OUTWARDDATE AS OutwardDate,
+          h.TOTALAMOUNT AS InvoiceAmount,
+          ISNULL(h.Bill, 1) AS Bill,
+          lb.Id AS LedgerId,
+          lb.LedgerName,
+          lb.CreditDays,
+          lb.ClosingBalance AS PartyClosingBalance,
+          lb.WithBillBalance,
+          lb.WithoutBillBalance
+      FROM OutwardHeader h
+      INNER JOIN LedgerBalances lb ON h.LEDGERID = lb.Id
+      ORDER BY lb.Id ASC, h.OUTWARDDATE ASC
+    `);
+
+    const parties = {};
+    (recInvoicesResult.recordset || []).forEach(row => {
+      if (!parties[row.LedgerId]) {
+        parties[row.LedgerId] = {
+          ledgerName: row.LedgerName,
+          closingBalance: parseFloat(row.PartyClosingBalance) || 0,
+          invoices: []
+        };
+      }
+      parties[row.LedgerId].invoices.push({
+        outwardId: row.OutwardId,
+        outwardNo: row.OutwardNo,
+        outwardDate: row.OutwardDate,
+        invoiceAmount: parseFloat(row.InvoiceAmount) || 0,
+        creditDays: parseInt(row.CreditDays) || 0,
+        bill: row.Bill === 1 || row.Bill === true || row.Bill === '1'
+      });
+    });
+
+    for (const ledgerId in parties) {
+      const p = parties[ledgerId];
+      let limit = p.closingBalance > 0 ? p.closingBalance : 0;
+      const sortedInvoices = [...p.invoices].sort((a, b) => new Date(b.outwardDate) - new Date(a.outwardDate));
+
+      sortedInvoices.forEach(inv => {
+        let outstanding = 0;
+        if (limit > 0) {
+          outstanding = Math.min(inv.invoiceAmount, limit);
+          limit -= outstanding;
+        }
+
+        if (outstanding > 0) {
+          const { dueDays } = calculateDueInfo(inv.outwardDate, inv.creditDays);
+          if (dueDays < 0) {
+            notifications.push({
+              id: `rec_overdue_${inv.outwardId}_${ledgerId}`,
+              type: 'receivable_overdue',
+              category: 'Payment Overdue',
+              severity: Math.abs(dueDays) > 30 ? 'critical' : 'warning',
+              title: `Overdue from ${p.ledgerName}`,
+              message: `Payment of ₹${Math.round(outstanding).toLocaleString('en-IN')} for Sales #${inv.outwardNo} is overdue by ${Math.abs(dueDays)} days.`,
+              amount: outstanding,
+              dueDays: dueDays,
+              outwardNo: inv.outwardNo,
+              partyName: p.ledgerName,
+              timestamp: new Date().toISOString(),
+              actionLink: '/dashboard/reports/receivable'
+            });
+          }
+        }
+      });
+    }
+
+    // 3. Overdue Payables
+    const payInvoicesResult = await pool.request().query(`
+      WITH LedgerBalances AS (
+        SELECT 
+          l.Id,
+          l.LedgerName,
+          ISNULL(l.PaymentTerm, 0) AS CreditDays,
+          ISNULL(l.ClosingBalance, 0) AS ClosingBalance,
+          ISNULL(l.OpeningBalance, 0) + ISNULL(SUM(CASE WHEN (v.Bill = 1 OR v.Bill IS NULL) THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithBillBalance,
+          ISNULL(SUM(CASE WHEN v.Bill = 0 THEN (CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END) ELSE 0 END), 0) AS WithoutBillBalance
+        FROM LedgerMaster l
+        INNER JOIN AccountGroup a ON l.AccountGroupID = a.Id
+        LEFT JOIN VoucherEntry v ON l.Id = v.LedgerId
+        WHERE a.GroupName IN ('Sundry Creditors', 'Vendor')
+        GROUP BY l.Id, l.LedgerName, l.PaymentTerm, l.OpeningBalance, l.ClosingBalance
+      )
+      SELECT 
+          h.ID AS InwardId,
+          h.INWARDNO AS InwardNo,
+          h.INWARDDATE AS InwardDate,
+          h.TOTALAMOUNT AS InvoiceAmount,
+          ISNULL(h.Bill, 1) AS Bill,
+          lb.Id AS LedgerId,
+          lb.LedgerName,
+          lb.CreditDays,
+          lb.ClosingBalance AS VendorClosingBalance,
+          lb.WithBillBalance,
+          lb.WithoutBillBalance
+      FROM InwardHeader h
+      INNER JOIN LedgerBalances lb ON h.LEDGERID = lb.Id
+      ORDER BY lb.Id ASC, h.INWARDDATE ASC
+    `);
+
+    const vendors = {};
+    (payInvoicesResult.recordset || []).forEach(row => {
+      if (!vendors[row.LedgerId]) {
+        vendors[row.LedgerId] = {
+          ledgerName: row.LedgerName,
+          closingBalance: parseFloat(row.VendorClosingBalance) || 0,
+          invoices: []
+        };
+      }
+      vendors[row.LedgerId].invoices.push({
+        inwardId: row.InwardId,
+        inwardNo: row.InwardNo,
+        inwardDate: row.InwardDate,
+        invoiceAmount: parseFloat(row.InvoiceAmount) || 0,
+        creditDays: parseInt(row.CreditDays) || 0,
+        bill: row.Bill === 1 || row.Bill === true || row.Bill === '1'
+      });
+    });
+
+    for (const ledgerId in vendors) {
+      const v = vendors[ledgerId];
+      let limit = v.closingBalance < 0 ? Math.abs(v.closingBalance) : 0;
+      const sortedInvoices = [...v.invoices].sort((a, b) => new Date(b.inwardDate) - new Date(a.inwardDate));
+
+      sortedInvoices.forEach(inv => {
+        let outstanding = 0;
+        if (limit > 0) {
+          outstanding = Math.min(inv.invoiceAmount, limit);
+          limit -= outstanding;
+        }
+
+        if (outstanding > 0) {
+          const { dueDays } = calculateDueInfo(inv.inwardDate, inv.creditDays);
+          if (dueDays < 0) {
+            notifications.push({
+              id: `pay_overdue_${inv.inwardId}_${ledgerId}`,
+              type: 'payable_overdue',
+              category: 'Payment Obligation',
+              severity: Math.abs(dueDays) > 30 ? 'critical' : 'warning',
+              title: `Payment Due to ${v.ledgerName}`,
+              message: `Payment of ₹${Math.round(outstanding).toLocaleString('en-IN')} for Purchase #${inv.inwardNo} is overdue by ${Math.abs(dueDays)} days.`,
+              amount: outstanding,
+              dueDays: dueDays,
+              inwardNo: inv.inwardNo,
+              vendorName: v.ledgerName,
+              timestamp: new Date().toISOString(),
+              actionLink: '/dashboard/reports/payable'
+            });
+          }
+        }
+      });
+    }
+
+    const summary = {
+      total: notifications.length,
+      reorder: notifications.filter(n => n.type === 'reorder').length,
+      receivables: notifications.filter(n => n.type === 'receivable_overdue').length,
+      payables: notifications.filter(n => n.type === 'payable_overdue').length,
+      critical: notifications.filter(n => n.severity === 'critical').length,
+      warning: notifications.filter(n => n.severity === 'warning').length
+    };
+
+    res.status(200).json({
+      notifications,
+      summary
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard notifications:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
