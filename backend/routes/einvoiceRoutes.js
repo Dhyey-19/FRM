@@ -17,4 +17,14 @@ router.post('/cancel/:id', einvoiceController.cancelEInvoice);
 // GET /api/einvoice/status/:id - Get e-Invoice details/status for an invoice
 router.get('/status/:id', einvoiceController.getEInvoiceDetails);
 
+// Settings & Direct NIC IRP API Integration
+router.get('/settings', einvoiceController.getSettings);
+router.post('/settings', einvoiceController.saveSettings);
+router.post('/test-connection', einvoiceController.testConnection);
+
+// 1-Click Automated NIC IRP Generation & Cancellation
+router.post('/auto-generate/:id', einvoiceController.autoGenerateIRN);
+router.post('/auto-cancel/:id', einvoiceController.autoCancelIRN);
+
 module.exports = router;
+

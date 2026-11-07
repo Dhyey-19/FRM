@@ -16,3 +16,4 @@ ALTER TABLE "OutwardHeader" ADD COLUMN "SignedInvoice" TEXT DEFAULT NULL;
 ALTER TABLE "OutwardHeader" ADD COLUMN "EInvoiceStatus" VARCHAR(20) DEFAULT 'Pending';
 ALTER TABLE "OutwardHeader" ADD COLUMN "EInvoiceCancelReason" VARCHAR(100) DEFAULT NULL;
 ALTER TABLE "OutwardHeader" ADD COLUMN "EInvoiceCancelDate" VARCHAR(30) DEFAULT NULL;
+

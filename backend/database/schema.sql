@@ -422,6 +422,24 @@ CREATE TABLE IF NOT EXISTS "OutwardDetail" (
     FOREIGN KEY ("PODETAILID") REFERENCES "PurchaseOrderDetail" ("ID")
 );
 
+-- Table: EInvoiceSettings (Direct NIC IRP API Credentials & Config)
+CREATE TABLE IF NOT EXISTS "EInvoiceSettings" (
+    "Id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "IsEnabled" INTEGER DEFAULT 1,
+    "Environment" VARCHAR(20) DEFAULT 'sandbox', -- 'sandbox' | 'production' | 'simulation'
+    "Gstin" VARCHAR(20),
+    "ClientId" VARCHAR(100),
+    "ClientSecret" VARCHAR(200),
+    "Username" VARCHAR(100),
+    "Password" VARCHAR(200),
+    "BaseUrl" VARCHAR(255) DEFAULT 'https://einv-apisandbox.nic.in/eivital/v1.03',
+    "AuthToken" TEXT DEFAULT NULL,
+    "TokenExpiry" VARCHAR(50) DEFAULT NULL,
+    "Sek" TEXT DEFAULT NULL,
+    "PublicKeyCert" TEXT DEFAULT NULL,
+    "UpdatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Table: StockJournal
 CREATE TABLE IF NOT EXISTS "StockJournal" (
     "SJID" INTEGER PRIMARY KEY AUTOINCREMENT,

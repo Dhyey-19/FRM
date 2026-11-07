@@ -3,7 +3,8 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Box, Typography, Button, Tabs, Tab, TextField, Alert,
   Chip, CircularProgress, Divider, Paper, IconButton,
-  Tooltip, Grid, FormControl, InputLabel, Select, MenuItem
+  Tooltip, Grid, FormControl, InputLabel, Select, MenuItem,
+  RadioGroup, FormControlLabel, Radio
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -16,25 +17,47 @@ import {
   Error as ErrorIcon,
   OpenInNew as OpenInNewIcon,
   Cancel as CancelIcon,
-  AssignmentTurnedIn as VerifiedIcon
+  AssignmentTurnedIn as VerifiedIcon,
+  ElectricBolt as BoltIcon,
+  Settings as SettingsIcon,
+  CloudDone as CloudDoneIcon,
+  Send as SendIcon,
+  Key as KeyIcon,
+  Security as SecurityIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import QRCode from 'qrcode';
 
 const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(0); // 0: 1-Click Auto, 1: Manual JSON Export/Import, 2: IRN Details & QR, 3: Credentials Settings
   const [loading, setLoading] = useState(false);
+  const [autoGenerating, setAutoGenerating] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  
   const [exportData, setExportData] = useState(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Import form state
+  // Settings State
+  const [settings, setSettings] = useState({
+    Environment: 'simulation',
+    Gstin: '',
+    ClientId: '',
+    ClientSecret: '',
+    Username: '',
+    Password: '',
+    BaseUrl: 'https://einv-apisandbox.nic.in/eivital/v1.03'
+  });
+  const [settingsStatus, setSettingsStatus] = useState(null);
+
+  // Manual Import Form State
   const [importIrn, setImportIrn] = useState('');
   const [importAckNo, setImportAckNo] = useState('');
   const [importAckDate, setImportAckDate] = useState('');
   const [importSignedQRCode, setImportSignedQRCode] = useState('');
 
-  // Cancel dialog state
+  // Cancel Dialog State
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('1'); // 1 = Duplicate, 2 = Data Entry Error, 3 = Order Cancelled, 4 = Others
   const [cancelRemarks, setCancelRemarks] = useState('');
@@ -46,18 +69,22 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
   const outwardNo = invoice?.OUTWARDNO || invoice?.outwardNo || '';
   const currentStatus = invoice?.EInvoiceStatus || invoice?.einvoiceStatus || (invoice?.IRN ? 'Generated' : 'Pending');
 
-  // Load e-Invoice JSON payload whenever modal opens
+  // Load Invoice data and Settings whenever modal opens
   useEffect(() => {
     if (open && invoiceId) {
       fetchEInvoiceJSON();
-      // If invoice already has IRN, default to Tab 2 (Details/QR) or Tab 0
-      if (invoice?.IRN) {
+      fetchSettings();
+      setErrorMessage('');
+      setSuccessMessage('');
+      setSettingsStatus(null);
+
+      // If invoice already has IRN, default to Details tab (2), otherwise 1-Click Auto tab (0)
+      if (invoice?.IRN && invoice?.EInvoiceStatus !== 'Cancelled') {
         setActiveTab(2);
       } else {
         setActiveTab(0);
       }
-      setErrorMessage('');
-      setSuccessMessage('');
+
       setImportIrn(invoice?.IRN || '');
       setImportAckNo(invoice?.AckNo || '');
       setImportAckDate(invoice?.AckDate || '');
@@ -65,7 +92,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     }
   }, [open, invoiceId]);
 
-  // Render QR Code onto canvas when Tab 2 is active or when invoice changes
+  // Render QR Code onto canvas when Details Tab (2) is active or invoice changes
   useEffect(() => {
     if (activeTab === 2 && qrCanvasRef.current && (invoice?.SignedQRCode || invoice?.IRN)) {
       const qrText = invoice.SignedQRCode || invoice.IRN || `IRN:${invoice.IRN}`;
@@ -81,6 +108,22 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
       });
     }
   }, [activeTab, invoice?.SignedQRCode, invoice?.IRN]);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        setSettings(prev => ({
+          ...prev,
+          ...data,
+          Environment: data.Environment || 'simulation'
+        }));
+      }
+    } catch (err) {
+      console.error('Error loading e-Invoice settings:', err);
+    }
+  };
 
   const fetchEInvoiceJSON = async () => {
     if (!invoiceId) return;
@@ -102,6 +145,100 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     }
   };
 
+  // 1-Click Automatic Generation via NIC API
+  const handleAutoGenerateIRN = async () => {
+    if (!invoiceId) return;
+    setAutoGenerating(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/auto-generate/${invoiceId}`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to auto-generate IRN from NIC gateway');
+      }
+
+      setSuccessMessage(data.message || 'Government e-Invoice successfully generated!');
+      const updatedInvoice = {
+        ...invoice,
+        IRN: data.irn,
+        AckNo: data.ackNo,
+        AckDate: data.ackDate,
+        SignedQRCode: data.signedQRCode,
+        EInvoiceStatus: 'Generated'
+      };
+
+      if (onInvoiceUpdated) {
+        onInvoiceUpdated(updatedInvoice);
+      }
+
+      // Switch to Tab 2 to preview QR Code & IRN
+      setActiveTab(2);
+    } catch (err) {
+      console.error('Auto generate error:', err);
+      setErrorMessage(err.message || 'Network error communicating with NIC e-Invoice Gateway');
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
+
+  // Save Settings
+  const handleSaveSettings = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to save settings');
+      setSuccessMessage('e-Invoice API configuration saved successfully!');
+      fetchSettings();
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to save settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Test Connection
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setSettingsStatus(null);
+    setErrorMessage('');
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Gateway connection failed');
+      setSettingsStatus({
+        success: true,
+        message: data.message || 'Connection verified successfully!'
+      });
+    } catch (err) {
+      setSettingsStatus({
+        success: false,
+        message: err.message || 'Gateway connection error.'
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  // Manual Download JSON
   const handleDownloadJSON = () => {
     if (!exportData?.einvoiceJSON) return;
     const jsonString = JSON.stringify(exportData.einvoiceJSON, null, 2);
@@ -116,6 +253,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     URL.revokeObjectURL(url);
   };
 
+  // Copy to Clipboard
   const handleCopyToClipboard = async () => {
     if (!exportData?.einvoiceJSON) return;
     try {
@@ -127,6 +265,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     }
   };
 
+  // Manual File Upload
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -135,9 +274,6 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target.result);
-        // Handle various NIC response formats
-        // Could be direct object { Irn: '...', AckNo: '...', AckDt: '...', SignedQRCode: '...' }
-        // Or { response: { ... } } or array [ { ... } ]
         const resObj = Array.isArray(parsed) ? parsed[0] : (parsed.response || parsed.Data || parsed);
 
         const irn = resObj.Irn || resObj.IRN || resObj.irn || '';
@@ -150,7 +286,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
         if (ackDate) setImportAckDate(String(ackDate));
         if (signedQR) setImportSignedQRCode(signedQR);
 
-        setSuccessMessage('Successfully parsed government response file. Click "Save e-Invoice" below.');
+        setSuccessMessage('Successfully parsed portal response file. Click "Save e-Invoice" below.');
       } catch (err) {
         setErrorMessage('Failed to parse uploaded JSON file: ' + err.message);
       }
@@ -158,6 +294,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     reader.readAsText(file);
   };
 
+  // Save Manual Import
   const handleSaveImport = async () => {
     if (!invoiceId) return;
     if (!importIrn || importIrn.trim().length !== 64) {
@@ -205,11 +342,12 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     }
   };
 
+  // 1-Click Cancel via API
   const handleConfirmCancel = async () => {
     if (!invoiceId) return;
     setLoading(true);
     try {
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/cancel/${invoiceId}`;
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/auto-cancel/${invoiceId}`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -225,7 +363,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
       }
 
       setCancelOpen(false);
-      setSuccessMessage('e-Invoice marked as Cancelled in ERP.');
+      setSuccessMessage('e-Invoice successfully marked as Cancelled.');
       if (onInvoiceUpdated) {
         onInvoiceUpdated({
           ...invoice,
@@ -246,10 +384,11 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
           <QrCodeIcon sx={{ fontSize: 28 }} />
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              GST e-Invoice Government Utility (NIC INV-01)
+              GST e-Invoice Gateway (NIC IRP INV-01)
             </Typography>
             <Typography variant="caption" sx={{ color: '#d0e2ff' }}>
               Invoice #{outwardNo} | Status: <Chip size="small" label={currentStatus} color={currentStatus === 'Generated' ? 'success' : currentStatus === 'Cancelled' ? 'error' : 'warning'} sx={{ height: 20, fontSize: '0.7rem', fontWeight: 'bold' }} />
+              &nbsp;| Mode: <strong>{settings.Environment.toUpperCase()}</strong>
             </Typography>
           </Box>
         </Box>
@@ -260,11 +399,32 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: '#f8fafc', px: 2 }}>
         <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)} textColor="primary" indicatorColor="primary">
-          <Tab label="1. Export Government JSON" sx={{ fontWeight: 600, textTransform: 'none' }} />
-          <Tab label="2. Import IRN & QR Code" sx={{ fontWeight: 600, textTransform: 'none' }} />
+          <Tab 
+            icon={<BoltIcon sx={{ fontSize: 18 }} />} 
+            iconPosition="start" 
+            label="1-Click Auto IRN" 
+            sx={{ fontWeight: 700, textTransform: 'none' }} 
+          />
+          <Tab 
+            icon={<DownloadIcon sx={{ fontSize: 18 }} />} 
+            iconPosition="start" 
+            label="Manual Upload / Import" 
+            sx={{ fontWeight: 600, textTransform: 'none' }} 
+          />
           {invoice?.IRN && (
-            <Tab label="3. e-Invoice Details & QR" sx={{ fontWeight: 600, textTransform: 'none' }} />
+            <Tab 
+              icon={<QrCodeIcon sx={{ fontSize: 18 }} />} 
+              iconPosition="start" 
+              label="IRN & Scannable QR" 
+              sx={{ fontWeight: 600, textTransform: 'none' }} 
+            />
           )}
+          <Tab 
+            icon={<SettingsIcon sx={{ fontSize: 18 }} />} 
+            iconPosition="start" 
+            label="NIC Credentials & Settings" 
+            sx={{ fontWeight: 600, textTransform: 'none', ml: 'auto' }} 
+          />
         </Tabs>
       </Box>
 
@@ -280,135 +440,191 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
           </Alert>
         )}
 
-        {/* TAB 0: EXPORT GOVERNMENT JSON */}
+        {/* TAB 0: 1-CLICK AUTOMATIC NIC IRP GENERATION */}
         {activeTab === 0 && (
           <Box>
-            {loading ? (
-              <Box sx={{ py: 6, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 2 }}>
-                <CircularProgress />
-                <Typography variant="body2" color="text.secondary">Generating official NIC INV-01 payload...</Typography>
+            {/* Status & Gateway Connection Badge */}
+            <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: '#f0fdf4', borderColor: '#bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <CloudDoneIcon color="success" sx={{ fontSize: 28 }} />
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#166534' }}>
+                    NIC IRP Gateway Connected ({settings.Environment === 'simulation' ? 'Testing Simulation Engine' : settings.Environment === 'sandbox' ? 'NIC Sandbox Portal' : 'Live Production einvoice1.gst.gov.in'})
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#15803d' }}>
+                    GSTIN: <strong>{settings.Gstin || '24AAACF1234K1Z5'}</strong> {settings.Username ? `| User: ${settings.Username}` : ''}
+                  </Typography>
+                </Box>
               </Box>
-            ) : (
-              <Box>
-                {/* Validation Status Cards */}
-                {exportData && (
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                      <VerifiedIcon color={exportData.isValid ? 'success' : 'error'} />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                        Schema Validation: {exportData.isValid ? 'Ready for Government Portal' : 'Action Required Before Upload'}
+              <Button
+                size="small"
+                variant="outlined"
+                color="success"
+                startIcon={<SettingsIcon />}
+                onClick={() => setActiveTab(3)}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Change Credentials
+              </Button>
+            </Paper>
+
+            {/* Invoice Pre-flight Summary Card */}
+            {exportData?.invoiceSummary && (
+              <Paper variant="outlined" sx={{ p: 2.5, mb: 3, bgcolor: '#f8fafc' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1.5 }}>
+                  Invoice Details Ready for Government Submission:
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Invoice No</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>{outwardNo}</Typography>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Party / Buyer</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{exportData.einvoiceJSON?.BuyerDtls?.LglNm || '-'}</Typography>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Buyer GSTIN & State</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {exportData.einvoiceJSON?.BuyerDtls?.Gstin || 'URP'} (Code: {exportData.einvoiceJSON?.BuyerDtls?.Stcd || '-'})
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Total Invoice Value</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 800, color: '#10b981', fontSize: '1rem' }}>
+                      ₹{parseFloat(exportData.invoiceSummary?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Typography>
+                  </Grid>
+                </Grid>
+
+                {exportData.warnings && exportData.warnings.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" sx={{ color: '#d97706', fontWeight: 600, display: 'block' }}>
+                      Auto-Applied Notice:
+                    </Typography>
+                    {exportData.warnings.map((w, idx) => (
+                      <Typography key={idx} variant="caption" sx={{ color: '#b45309', display: 'block' }}>
+                        • {w}
                       </Typography>
-                    </Box>
-
-                    {exportData.errors && exportData.errors.length > 0 && (
-                      <Alert severity="error" sx={{ mb: 1.5 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Please fix the following schema errors:</Typography>
-                        <ul style={{ margin: 0, paddingLeft: 20 }}>
-                          {exportData.errors.map((err, i) => <li key={i}>{err}</li>)}
-                        </ul>
-                      </Alert>
-                    )}
-
-                    {exportData.warnings && exportData.warnings.length > 0 && (
-                      <Alert severity="warning" sx={{ mb: 1.5 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Notices / Auto-Defaults Applied:</Typography>
-                        <ul style={{ margin: 0, paddingLeft: 20 }}>
-                          {exportData.warnings.map((warn, i) => <li key={i}>{warn}</li>)}
-                        </ul>
-                      </Alert>
-                    )}
+                    ))}
                   </Box>
                 )}
+              </Paper>
+            )}
 
-                {/* Step-by-step instructions */}
-                <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: '#f0f7ff', borderColor: '#b3d7ff' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
-                    How to Submit to Official GST e-Invoice Portal:
-                  </Typography>
-                  <Box component="ol" sx={{ pl: 2.5, m: 0, '& li': { mb: 0.5, fontSize: '0.85rem' } }}>
-                    <li>Click <strong>Download INV-01 JSON</strong> below to get the official schema file.</li>
-                    <li>Open official portal <a href="https://einvoice1.gst.gov.in" target="_blank" rel="noreferrer" style={{ color: '#0F3B66', fontWeight: 600 }}>einvoice1.gst.gov.in</a> and login.</li>
-                    <li>Navigate to <strong>e-Invoice &gt; Bulk Upload</strong> and upload this JSON file.</li>
-                    <li>The government portal generates the signed <strong>IRN, Ack No, and QR Code</strong>.</li>
-                    <li>Switch to the <strong>2. Import IRN & QR Code</strong> tab to attach the response to this invoice!</li>
+            {/* Action Box */}
+            <Box sx={{ textAlign: 'center', py: 2 }}>
+              {currentStatus === 'Generated' ? (
+                <Box>
+                  <Alert severity="success" sx={{ mb: 2, display: 'inline-flex', textAlign: 'left' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      e-Invoice is already active with IRN:
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'Consolas, monospace', display: 'block' }}>
+                      {invoice.IRN}
+                    </Typography>
+                  </Alert>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 1 }}>
+                    <Button variant="contained" startIcon={<QrCodeIcon />} onClick={() => setActiveTab(2)} sx={{ bgcolor: '#0F3B66' }}>
+                      View IRN & QR Code
+                    </Button>
+                    <Button variant="outlined" color="error" startIcon={<CancelIcon />} onClick={() => setCancelOpen(true)}>
+                      Cancel e-Invoice
+                    </Button>
                   </Box>
-                </Paper>
-
-                {/* Action Buttons */}
-                <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                </Box>
+              ) : (
+                <Box>
                   <Button
                     variant="contained"
-                    startIcon={<DownloadIcon />}
-                    onClick={handleDownloadJSON}
-                    disabled={!exportData?.einvoiceJSON}
-                    sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#0a2744' }, fontWeight: 600 }}
+                    size="large"
+                    disabled={autoGenerating}
+                    startIcon={autoGenerating ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : <BoltIcon sx={{ fontSize: 26 }} />}
+                    onClick={handleAutoGenerateIRN}
+                    sx={{
+                      bgcolor: '#0F3B66',
+                      '&:hover': { bgcolor: '#0a2744' },
+                      px: 5,
+                      py: 1.6,
+                      fontSize: '1.05rem',
+                      fontWeight: 800,
+                      borderRadius: 2,
+                      boxShadow: '0 4px 14px rgba(15, 59, 102, 0.35)'
+                    }}
                   >
-                    Download INV-01 JSON
+                    {autoGenerating ? 'Connecting to NIC IRP & Signing IRN...' : '⚡ 1-Click Generate e-Invoice'}
                   </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<CopyIcon />}
-                    onClick={handleCopyToClipboard}
-                    disabled={!exportData?.einvoiceJSON}
-                    color={copySuccess ? 'success' : 'primary'}
-                    sx={{ fontWeight: 600 }}
-                  >
-                    {copySuccess ? 'Copied to Clipboard!' : 'Copy JSON Payload'}
-                  </Button>
-                  <Button
-                    variant="text"
-                    endIcon={<OpenInNewIcon />}
-                    href="https://einvoice1.gst.gov.in"
-                    target="_blank"
-                    rel="noreferrer"
-                    sx={{ color: '#0F3B66', ml: 'auto', fontWeight: 600 }}
-                  >
-                    Open GST e-Invoice Portal
-                  </Button>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+                    Connects directly to the government IRP, encrypts with RSA & AES-256, generates 64-char IRN hash, and saves scannable QR Code automatically.
+                  </Typography>
                 </Box>
-
-                {/* JSON Preview Accordion / Box */}
-                {exportData?.einvoiceJSON && (
-                  <Box>
-                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                      Raw INV-01 JSON Preview (NIC Schema 1.1)
-                    </Typography>
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 1.5,
-                        bgcolor: '#1e1e1e',
-                        color: '#d4d4d4',
-                        fontFamily: 'Consolas, monospace',
-                        fontSize: '0.75rem',
-                        maxHeight: 220,
-                        overflowY: 'auto',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-all'
-                      }}
-                    >
-                      {JSON.stringify(exportData.einvoiceJSON, null, 2)}
-                    </Paper>
-                  </Box>
-                )}
-              </Box>
-            )}
+              )}
+            </Box>
           </Box>
         )}
 
-        {/* TAB 1: IMPORT IRN & QR CODE */}
+        {/* TAB 1: MANUAL UPLOAD / IMPORT (OPTION A - KEPT AS REQUESTED!) */}
         {activeTab === 1 && (
           <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Upload the response JSON downloaded from <strong>einvoice1.gst.gov.in</strong>, or paste the IRN and QR code details returned by the portal:
+            <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: '#f0f7ff', borderColor: '#b3d7ff' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
+                Offline Government JSON Workflow (Free Fallback):
+              </Typography>
+              <Box component="ol" sx={{ pl: 2.5, m: 0, '& li': { mb: 0.5, fontSize: '0.85rem' } }}>
+                <li>Download the generated <strong>INV-01 JSON</strong> below.</li>
+                <li>Upload to <a href="https://einvoice1.gst.gov.in" target="_blank" rel="noreferrer" style={{ color: '#0F3B66', fontWeight: 600 }}>einvoice1.gst.gov.in</a> under <strong>e-Invoice &gt; Bulk Upload</strong>.</li>
+                <li>Download the signed portal response file and upload it below to attach the IRN & QR Code.</li>
+              </Box>
+            </Paper>
+
+            {/* Export JSON Actions */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
+              Step A: Export Official Government Payload
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                startIcon={<DownloadIcon />}
+                onClick={handleDownloadJSON}
+                disabled={!exportData?.einvoiceJSON}
+                sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#0a2744' }, fontWeight: 600 }}
+              >
+                Download INV-01 JSON
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<CopyIcon />}
+                onClick={handleCopyToClipboard}
+                disabled={!exportData?.einvoiceJSON}
+                color={copySuccess ? 'success' : 'primary'}
+                sx={{ fontWeight: 600 }}
+              >
+                {copySuccess ? 'Copied to Clipboard!' : 'Copy JSON Payload'}
+              </Button>
+              <Button
+                variant="text"
+                endIcon={<OpenInNewIcon />}
+                href="https://einvoice1.gst.gov.in"
+                target="_blank"
+                rel="noreferrer"
+                sx={{ color: '#0F3B66', ml: 'auto', fontWeight: 600 }}
+              >
+                Open GST e-Invoice Portal
+              </Button>
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* Import Portal Response */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
+              Step B: Import Government Portal Response / IRN
             </Typography>
 
-            {/* Quick File Drop/Selector */}
             <Paper
               variant="outlined"
               sx={{
-                p: 2.5,
-                mb: 3,
+                p: 2,
+                mb: 2.5,
                 borderStyle: 'dashed',
                 borderWidth: 2,
                 borderColor: '#90caf9',
@@ -416,47 +632,40 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                 bgcolor: '#fafbfc'
               }}
             >
-              <UploadFileIcon sx={{ fontSize: 36, color: '#0F3B66', mb: 1 }} />
+              <UploadFileIcon sx={{ fontSize: 32, color: '#0F3B66', mb: 0.5 }} />
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                Upload Portal Response File (.json)
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                Directly extracts IRN, Ack No, Ack Date, and Signed QR string
+                Drop or Select Government Response JSON File
               </Typography>
               <Button
                 variant="outlined"
                 component="label"
                 size="small"
-                sx={{ textTransform: 'none', fontWeight: 600 }}
+                sx={{ textTransform: 'none', fontWeight: 600, mt: 1 }}
               >
-                Choose File
+                Choose File (.json)
                 <input type="file" accept=".json" hidden onChange={handleFileUpload} />
               </Button>
             </Paper>
-
-            <Divider sx={{ mb: 3 }}>
-              <Typography variant="caption" color="text.secondary">OR ENTER / EDIT MANUALLY</Typography>
-            </Divider>
 
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
                   size="small"
-                  label="Invoice Reference Number (IRN)"
-                  placeholder="64-character hash (e.g., 3b8908f7fbe6b0a1...)"
+                  label="IRN (64-Character Hexadecimal Hash)"
+                  placeholder="3b8908f7fbe6b0a1a3b8d54238e833440eec920b72a6bc89c7d413b1ab063683"
                   value={importIrn}
                   onChange={(e) => setImportIrn(e.target.value)}
-                  helperText={`${importIrn.length}/64 characters`}
                   error={importIrn.length > 0 && importIrn.length !== 64}
+                  helperText={`${importIrn.length}/64 characters`}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   size="small"
-                  label="Acknowledgement No (Ack No)"
-                  placeholder="e.g. 112612345678901"
+                  label="Ack No"
+                  placeholder="112612345678901"
                   value={importAckNo}
                   onChange={(e) => setImportAckNo(e.target.value)}
                 />
@@ -465,8 +674,8 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                 <TextField
                   fullWidth
                   size="small"
-                  label="Acknowledgement Date (Ack Date)"
-                  placeholder="e.g. 2026-10-18 14:32:00"
+                  label="Ack Date"
+                  placeholder="2026-10-18 14:32:00"
                   value={importAckDate}
                   onChange={(e) => setImportAckDate(e.target.value)}
                 />
@@ -475,31 +684,30 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                 <TextField
                   fullWidth
                   multiline
-                  rows={3}
+                  rows={2}
                   size="small"
                   label="Signed QR Code String"
                   placeholder="Signed QR text string provided by GST portal..."
                   value={importSignedQRCode}
                   onChange={(e) => setImportSignedQRCode(e.target.value)}
-                  helperText="Used to generate official scannable GST QR code on Tax Invoice PDF"
                 />
               </Grid>
             </Grid>
 
-            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+            <Box sx={{ mt: 2.5, display: 'flex', justifyContent: 'flex-end' }}>
               <Button
                 variant="contained"
                 onClick={handleSaveImport}
                 disabled={loading || !importIrn || importIrn.trim().length !== 64}
                 sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#0a2744' }, fontWeight: 600, px: 3 }}
               >
-                {loading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Save e-Invoice to ERP'}
+                Save e-Invoice to ERP
               </Button>
             </Box>
           </Box>
         )}
 
-        {/* TAB 2: e-INVOICE DETAILS & QR CODE */}
+        {/* TAB 2: IRN DETAILS & SCANNABLE QR CODE */}
         {activeTab === 2 && invoice?.IRN && (
           <Box>
             <Paper variant="outlined" sx={{ p: 2.5, bgcolor: '#f8fafc', mb: 3 }}>
@@ -570,7 +778,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
             </Paper>
 
             {invoice.EInvoiceStatus !== 'Cancelled' && (
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                 <Button
                   variant="outlined"
                   color="error"
@@ -578,10 +786,136 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                   onClick={() => setCancelOpen(true)}
                   sx={{ fontWeight: 600 }}
                 >
-                  Cancel e-Invoice
+                  1-Click Cancel e-Invoice
                 </Button>
               </Box>
             )}
+          </Box>
+        )}
+
+        {/* TAB 3: NIC IRP CREDENTIALS & SETTINGS */}
+        {activeTab === 3 && (
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
+              Official NIC IRP Gateway Configuration
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+              Enter the credentials generated from <strong>einvoice1.gst.gov.in</strong> under API Registration.
+            </Typography>
+
+            {settingsStatus && (
+              <Alert severity={settingsStatus.success ? 'success' : 'error'} sx={{ mb: 2 }}>
+                {settingsStatus.message}
+              </Alert>
+            )}
+
+            <Paper variant="outlined" sx={{ p: 2.5, mb: 3 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1 }}>
+                SELECT ENVIRONMENT:
+              </Typography>
+              <RadioGroup
+                row
+                value={settings.Environment}
+                onChange={(e) => {
+                  const env = e.target.value;
+                  let url = settings.BaseUrl;
+                  if (env === 'sandbox') url = 'https://einv-apisandbox.nic.in/eivital/v1.03';
+                  if (env === 'production') url = 'https://api.einvoice1.gst.gov.in/eivital/v1.03';
+                  setSettings(prev => ({ ...prev, Environment: env, BaseUrl: url }));
+                }}
+                sx={{ mb: 2.5 }}
+              >
+                <FormControlLabel value="simulation" control={<Radio size="small" />} label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Simulation Engine (Safe Demo Testing)</Typography>} />
+                <FormControlLabel value="sandbox" control={<Radio size="small" />} label={<Typography variant="body2" sx={{ fontWeight: 600 }}>NIC Sandbox (Testing Portal)</Typography>} />
+                <FormControlLabel value="production" control={<Radio size="small" />} label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Live Production (einvoice1.gst.gov.in)</Typography>} />
+              </RadioGroup>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="GSTIN"
+                    value={settings.Gstin}
+                    onChange={(e) => setSettings({ ...settings, Gstin: e.target.value.toUpperCase() })}
+                    helperText="15-digit Registered Taxpayer GSTIN"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="API Username"
+                    value={settings.Username}
+                    onChange={(e) => setSettings({ ...settings, Username: e.target.value })}
+                    helperText="Username created in e-Invoice portal API Registration"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="password"
+                    label="API Password"
+                    placeholder="Enter API password"
+                    value={settings.Password}
+                    onChange={(e) => setSettings({ ...settings, Password: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Client ID"
+                    value={settings.ClientId}
+                    onChange={(e) => setSettings({ ...settings, ClientId: e.target.value })}
+                    helperText="Issued by NIC upon API integration"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="password"
+                    label="Client Secret"
+                    placeholder="Enter Client Secret"
+                    value={settings.ClientSecret}
+                    onChange={(e) => setSettings({ ...settings, ClientSecret: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Gateway Base URL"
+                    value={settings.BaseUrl}
+                    onChange={(e) => setSettings({ ...settings, BaseUrl: e.target.value })}
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+              <Button
+                variant="outlined"
+                color="info"
+                disabled={testingConnection}
+                startIcon={testingConnection ? <CircularProgress size={18} /> : <SecurityIcon />}
+                onClick={handleTestConnection}
+                sx={{ fontWeight: 600 }}
+              >
+                {testingConnection ? 'Testing Gateway Handshake...' : 'Test Connection'}
+              </Button>
+
+              <Button
+                variant="contained"
+                disabled={loading}
+                onClick={handleSaveSettings}
+                sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#0a2744' }, fontWeight: 700, px: 3 }}
+              >
+                Save Credentials
+              </Button>
+            </Box>
           </Box>
         )}
       </DialogContent>
@@ -592,14 +926,14 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
         </Button>
       </DialogActions>
 
-      {/* Cancel e-Invoice Subdialog */}
+      {/* Cancel e-Invoice Dialog */}
       <Dialog open={cancelOpen} onClose={() => setCancelOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
           Cancel e-Invoice
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Are you sure you want to cancel e-Invoice for <strong>#{outwardNo}</strong>?
+            Are you sure you want to cancel e-Invoice for <strong>#{outwardNo}</strong> on NIC Gateway?
           </Typography>
           <FormControl fullWidth size="small" sx={{ mb: 2 }}>
             <InputLabel>Cancellation Reason</InputLabel>
@@ -625,7 +959,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
         <DialogActions>
           <Button onClick={() => setCancelOpen(false)}>Back</Button>
           <Button onClick={handleConfirmCancel} variant="contained" color="error">
-            Confirm Cancellation
+            Confirm 1-Click Cancellation
           </Button>
         </DialogActions>
       </Dialog>

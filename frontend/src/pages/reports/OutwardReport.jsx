@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, Button, Paper, CircularProgress, TextField, Chip, IconButton } from '@mui/material';
 import { DataGrid, GridToolbar, useGridApiRef, gridFilteredSortedRowEntriesSelector } from '@mui/x-data-grid';
-import { PictureAsPdf, Visibility, TableView, Share, QrCode2 } from '@mui/icons-material';
+import { PictureAsPdf, Visibility, TableView, Share, QrCode2, ElectricBolt } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import EInvoiceModal from '../../components/common/EInvoiceModal';
 import { jsPDF } from 'jspdf';
@@ -128,12 +128,12 @@ const OutwardReport = () => {
             />
             <IconButton 
               size="small" 
-              color="info" 
+              color={isGenerated ? 'info' : 'primary'} 
               onClick={() => handleOpenEinvoice(row)}
-              title="e-Invoice (NIC INV-01)"
+              title={isGenerated ? 'View e-Invoice QR & IRN' : '1-Click Generate e-Invoice (NIC IRP)'}
               sx={{ p: 0.25 }}
             >
-              <QrCode2 fontSize="small" />
+              {isGenerated ? <QrCode2 fontSize="small" /> : <ElectricBolt fontSize="small" />}
             </IconButton>
           </Box>
         );

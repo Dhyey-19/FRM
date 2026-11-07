@@ -12,7 +12,7 @@ import {
   Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, 
   Input as InputIcon, Visibility as ViewIcon, Close as CloseIcon, AddCircle as AddCircleIcon,
   Description as DescriptionIcon, Print as PrintIcon, ReceiptLong, Receipt, MoneyOff,
-  QrCode2 as QrCodeIcon
+  QrCode2 as QrCodeIcon, ElectricBolt as BoltIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import PdfPreviewModal from '../components/common/PdfPreviewModal';
@@ -1223,8 +1223,17 @@ const OutwardEntry = () => {
                   </TableCell>
                   <TableCell align="center">
                     {row.Bill !== false && row.Bill !== 0 && (
-                      <IconButton color="info" size="small" onClick={() => handleOpenEinvoice(row)} title="e-Invoice (NIC INV-01)">
-                        <QrCodeIcon fontSize="small" />
+                      <IconButton 
+                        color={row.EInvoiceStatus === 'Generated' || row.IRN ? 'info' : 'primary'} 
+                        size="small" 
+                        onClick={() => handleOpenEinvoice(row)} 
+                        title={row.EInvoiceStatus === 'Generated' || row.IRN ? 'View e-Invoice QR & IRN' : '1-Click Generate e-Invoice (NIC IRP)'}
+                      >
+                        {row.EInvoiceStatus === 'Generated' || row.IRN ? (
+                          <QrCodeIcon fontSize="small" />
+                        ) : (
+                          <BoltIcon fontSize="small" />
+                        )}
                       </IconButton>
                     )}
                     <IconButton color="secondary" size="small" onClick={() => handlePrint(row)} title="Print Invoice">

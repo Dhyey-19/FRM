@@ -1,4 +1,5 @@
 const { sql, connectDB } = require('../config/db');
+const nicApiService = require('../services/nicApiService');
 
 // State Code lookup dictionary for Indian States and Union Territories
 const STATE_CODES = {
@@ -575,3 +576,312 @@ exports.getEInvoiceDetails = async (req, res) => {
     res.status(500).json({ message: 'Server error fetching e-Invoice details', error: error.message });
   }
 };
+
+// Helper: Get Settings from DB
+async function getSettingsFromDB() {
+  const pool = await connectDB();
+  const res = await pool.request().query('SELECT * FROM EInvoiceSettings WHERE Id = 1');
+  if (res.recordset.length > 0) return res.recordset[0];
+  return {
+    Id: 1,
+    IsEnabled: 1,
+    Environment: 'sandbox',
+    Gstin: '24AAACF1234K1Z5',
+    ClientId: '',
+    ClientSecret: '',
+    Username: '',
+    Password: '',
+    BaseUrl: 'https://einv-apisandbox.nic.in/eivital/v1.03'
+  };
+}
+
+// GET /api/einvoice/settings - Fetch saved NIC API settings
+exports.getSettings = async (req, res) => {
+  try {
+    const settings = await getSettingsFromDB();
+    res.status(200).json({
+      Id: settings.Id,
+      IsEnabled: settings.IsEnabled === 1 || settings.IsEnabled === true,
+      Environment: settings.Environment || 'sandbox',
+      Gstin: settings.Gstin || '',
+      ClientId: settings.ClientId || '',
+      ClientSecret: settings.ClientSecret ? '••••••••' : '',
+      Username: settings.Username || '',
+      Password: settings.Password ? '••••••••' : '',
+      BaseUrl: settings.BaseUrl || 'https://einv-apisandbox.nic.in/eivital/v1.03',
+      HasPassword: Boolean(settings.Password),
+      HasClientSecret: Boolean(settings.ClientSecret),
+      UpdatedAt: settings.UpdatedAt
+    });
+  } catch (error) {
+    console.error('Error fetching e-Invoice settings:', error);
+    res.status(500).json({ message: 'Error fetching settings', error: error.message });
+  }
+};
+
+// POST /api/einvoice/settings - Save or update NIC API settings
+exports.saveSettings = async (req, res) => {
+  const {
+    IsEnabled, Environment, Gstin, ClientId, ClientSecret,
+    Username, Password, BaseUrl, PublicKeyCert
+  } = req.body;
+
+  try {
+    const pool = await connectDB();
+    const current = await getSettingsFromDB();
+
+    // Preserve existing password / secret if masked placeholder passed
+    const finalPassword = (Password && !Password.includes('••') && Password.trim() !== '') ? Password.trim() : current.Password;
+    const finalSecret = (ClientSecret && !ClientSecret.includes('••') && ClientSecret.trim() !== '') ? ClientSecret.trim() : current.ClientSecret;
+    const finalEnv = Environment || current.Environment || 'sandbox';
+
+    let defaultBaseUrl = 'https://einv-apisandbox.nic.in/eivital/v1.03';
+    if (finalEnv === 'production') {
+      defaultBaseUrl = 'https://api.einvoice1.gst.gov.in/eivital/v1.03';
+    }
+
+    const finalBaseUrl = (BaseUrl && BaseUrl.trim()) ? BaseUrl.trim() : defaultBaseUrl;
+
+    await pool.request()
+      .input('IsEnabled', sql.Int, (IsEnabled === false || IsEnabled === 0) ? 0 : 1)
+      .input('Environment', sql.VarChar(20), finalEnv)
+      .input('Gstin', sql.VarChar(20), (Gstin || '').trim())
+      .input('ClientId', sql.VarChar(100), (ClientId || '').trim())
+      .input('ClientSecret', sql.VarChar(200), finalSecret || '')
+      .input('Username', sql.VarChar(100), (Username || '').trim())
+      .input('Password', sql.VarChar(200), finalPassword || '')
+      .input('BaseUrl', sql.VarChar(255), finalBaseUrl)
+      .input('PublicKeyCert', sql.NVarChar(sql.MAX), PublicKeyCert ? PublicKeyCert.trim() : (current.PublicKeyCert || null))
+      .query(`
+        UPDATE EInvoiceSettings
+        SET 
+          IsEnabled = @IsEnabled,
+          Environment = @Environment,
+          Gstin = @Gstin,
+          ClientId = @ClientId,
+          ClientSecret = @ClientSecret,
+          Username = @Username,
+          Password = @Password,
+          BaseUrl = @BaseUrl,
+          PublicKeyCert = @PublicKeyCert,
+          UpdatedAt = CURRENT_TIMESTAMP
+        WHERE Id = 1
+      `);
+
+    res.status(200).json({
+      message: 'e-Invoice settings successfully saved.',
+      environment: finalEnv
+    });
+  } catch (error) {
+    console.error('Error saving e-Invoice settings:', error);
+    res.status(500).json({ message: 'Error saving settings', error: error.message });
+  }
+};
+
+// POST /api/einvoice/test-connection - Test credentials against gateway
+exports.testConnection = async (req, res) => {
+  try {
+    const current = await getSettingsFromDB();
+    const env = req.body?.Environment || current.Environment || 'sandbox';
+
+    const settingsToTest = {
+      ...current,
+      Environment: env,
+      Gstin: req.body?.Gstin || current.Gstin,
+      ClientId: req.body?.ClientId || current.ClientId,
+      ClientSecret: (req.body?.ClientSecret && !req.body.ClientSecret.includes('••')) ? req.body.ClientSecret : current.ClientSecret,
+      Username: req.body?.Username || current.Username,
+      Password: (req.body?.Password && !req.body.Password.includes('••')) ? req.body.Password : current.Password,
+      BaseUrl: req.body?.BaseUrl || current.BaseUrl
+    };
+
+    const authRes = await nicApiService.authenticate(settingsToTest);
+    res.status(200).json({
+      success: true,
+      message: authRes.message,
+      environment: env,
+      tokenExpiry: authRes.tokenExpiry
+    });
+  } catch (error) {
+    console.error('Test connection error:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to authenticate with NIC IRP gateway.'
+    });
+  }
+};
+
+// POST /api/einvoice/auto-generate/:id - 1-Click Automated NIC IRP Generation
+exports.autoGenerateIRN = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const pool = await connectDB();
+
+    // 1. Fetch Header
+    const headerRes = await pool.request()
+      .input('ID', sql.Numeric(8, 0), id)
+      .query('SELECT * FROM OutwardHeader WHERE ID = @ID');
+
+    if (headerRes.recordset.length === 0) {
+      return res.status(404).json({ message: 'Sales Outward invoice not found' });
+    }
+    const header = headerRes.recordset[0];
+
+    if (header.IRN && header.EInvoiceStatus === 'Generated') {
+      return res.status(400).json({
+        message: 'e-Invoice is already generated for this invoice.',
+        irn: header.IRN
+      });
+    }
+
+    // 2. Fetch Buyer (LedgerMaster)
+    const ledgerRes = await pool.request()
+      .input('LedgerID', sql.Numeric(10, 0), header.LEDGERID)
+      .query('SELECT * FROM LedgerMaster WHERE Id = @LedgerID');
+    const buyer = ledgerRes.recordset[0] || {};
+
+    // 3. Fetch Seller (CompanyProfile)
+    const companyRes = await pool.request().query('SELECT * FROM CompanyProfile LIMIT 1');
+    const seller = companyRes.recordset[0] || {};
+
+    // 4. Fetch Details
+    const detailRes = await pool.request()
+      .input('OutwardID', sql.Numeric(8, 0), id)
+      .query(`
+        SELECT d.*, i.ItemName, i.HSNCode 
+        FROM OutwardDetail d
+        LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
+        WHERE d.OUTWARDID = @OutwardID
+      `);
+    const details = detailRes.recordset || [];
+
+    if (details.length === 0) {
+      return res.status(400).json({ message: 'Invoice has no line items' });
+    }
+
+    // 5. Build NIC INV-01 Schema
+    const schemaResult = buildNICInvoiceJSON(header, details, seller, buyer);
+    if (!schemaResult.isValid && schemaResult.errors.length > 0) {
+      return res.status(400).json({
+        message: 'Schema validation failed before submission to NIC portal.',
+        errors: schemaResult.errors,
+        warnings: schemaResult.warnings
+      });
+    }
+
+    // 6. Get settings
+    const settings = await getSettingsFromDB();
+
+    // 7. Call NIC API Service (or simulation engine)
+    const nicResult = await nicApiService.generateIRN(schemaResult.einvoiceJSON, settings);
+
+    if (!nicResult || !nicResult.irn) {
+      return res.status(502).json({ message: 'NIC IRP did not return a valid IRN hash.' });
+    }
+
+    // 8. Update database record
+    await pool.request()
+      .input('ID', sql.Numeric(8, 0), id)
+      .input('IRN', sql.VarChar(64), nicResult.irn)
+      .input('AckNo', sql.VarChar(30), String(nicResult.ackNo || ''))
+      .input('AckDate', sql.VarChar(30), String(nicResult.ackDt || ''))
+      .input('SignedQRCode', sql.NVarChar(sql.MAX), nicResult.signedQRCode || '')
+      .input('SignedInvoice', sql.NVarChar(sql.MAX), nicResult.signedInvoice || '')
+      .query(`
+        UPDATE OutwardHeader
+        SET 
+          IRN = @IRN,
+          AckNo = @AckNo,
+          AckDate = @AckDate,
+          SignedQRCode = @SignedQRCode,
+          SignedInvoice = @SignedInvoice,
+          EInvoiceStatus = 'Generated',
+          EInvoiceCancelReason = NULL,
+          EInvoiceCancelDate = NULL
+        WHERE ID = @ID
+      `);
+
+    res.status(200).json({
+      success: true,
+      message: nicResult.isSimulated 
+        ? 'e-Invoice generated successfully via Simulation Engine (Official SHA256 & QR).' 
+        : 'e-Invoice generated successfully directly from NIC IRP Gateway!',
+      irn: nicResult.irn,
+      ackNo: nicResult.ackNo,
+      ackDate: nicResult.ackDt,
+      signedQRCode: nicResult.signedQRCode,
+      einvoiceStatus: 'Generated',
+      isSimulated: nicResult.isSimulated,
+      warnings: schemaResult.warnings
+    });
+  } catch (error) {
+    console.error('Auto e-Invoice generation error:', error);
+    res.status(500).json({
+      message: error.message || 'Error communicating with NIC e-Invoice Gateway',
+      error: error.message
+    });
+  }
+};
+
+// POST /api/einvoice/auto-cancel/:id - 1-Click Automated NIC IRP Cancellation
+exports.autoCancelIRN = async (req, res) => {
+  const { id } = req.params;
+  const { cancelReason, cancelRemarks } = req.body;
+
+  try {
+    const pool = await connectDB();
+    const result = await pool.request()
+      .input('ID', sql.Numeric(8, 0), id)
+      .query('SELECT IRN, EInvoiceStatus, OUTWARDNO FROM OutwardHeader WHERE ID = @ID');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    const invoice = result.recordset[0];
+    if (!invoice.IRN) {
+      return res.status(400).json({ message: 'Invoice does not have an IRN to cancel.' });
+    }
+
+    const settings = await getSettingsFromDB();
+    const cancelRes = await nicApiService.cancelIRN(invoice.IRN, cancelReason, cancelRemarks, settings);
+
+    const reasonMap = {
+      '1': 'Duplicate Entry',
+      '2': 'Data Entry Error',
+      '3': 'Order Cancelled',
+      '4': 'Others'
+    };
+    const reasonText = reasonMap[String(cancelReason)] || cancelRemarks || 'Cancelled';
+
+    await pool.request()
+      .input('ID', sql.Numeric(8, 0), id)
+      .input('Reason', sql.VarChar(100), reasonText)
+      .input('CancelDate', sql.VarChar(30), String(cancelRes.cancelDate || new Date().toISOString()))
+      .query(`
+        UPDATE OutwardHeader
+        SET 
+          EInvoiceStatus = 'Cancelled',
+          EInvoiceCancelReason = @Reason,
+          EInvoiceCancelDate = @CancelDate
+        WHERE ID = @ID
+      `);
+
+    res.status(200).json({
+      success: true,
+      message: cancelRes.isSimulated
+        ? 'e-Invoice cancelled successfully via Simulation Engine.'
+        : 'e-Invoice cancelled successfully on NIC IRP Gateway.',
+      einvoiceStatus: 'Cancelled',
+      cancelDate: cancelRes.cancelDate
+    });
+  } catch (error) {
+    console.error('Auto e-Invoice cancel error:', error);
+    res.status(500).json({
+      message: error.message || 'Error cancelling e-Invoice with NIC Gateway',
+      error: error.message
+    });
+  }
+};
+
