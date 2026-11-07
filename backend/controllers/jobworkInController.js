@@ -639,7 +639,6 @@ exports.getJobworkStockReport = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
-};
 
 // Helper to parse entry timestamp from CreatedBy signature
 const parseEntryTimestamp = (sig) => {

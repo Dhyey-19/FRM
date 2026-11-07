@@ -399,7 +399,6 @@ exports.updateInward = async (req, res) => {
               END
             WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
           `);
-          `);
       }
 
       // 5. Generate Voucher and Update Ledgers
