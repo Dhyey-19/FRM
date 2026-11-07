@@ -30,23 +30,37 @@ exports.getNextOutwardNo = async (req, res) => {
 
 exports.getOutwards = async (req, res) => {
   try {
+    const { outwardNo, id } = req.query;
     const pool = await connectDB();
-    // Fetch all OutwardHeaders with LedgerName
-    const headerResult = await pool.request().query(`
+    const headerReq = pool.request();
+    let headerQuery = `
       SELECT h.*, l.LedgerName 
       FROM OutwardHeader h
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+    `;
+
+    if (outwardNo) {
+      headerQuery += ' WHERE h.OUTWARDNO = @OutwardNo';
+      headerReq.input('OutwardNo', sql.VarChar(50), outwardNo.trim());
+    } else if (id) {
+      headerQuery += ' WHERE h.ID = @HeaderId';
+      headerReq.input('HeaderId', sql.Numeric(8, 0), id);
+    }
+
+    headerQuery += `
       ORDER BY 
         CASE WHEN TRY_CAST(h.OUTWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
         TRY_CAST(h.OUTWARDNO AS INT) DESC,
         h.OUTWARDNO DESC
-    `);
+    `;
+
+    const headerResult = await headerReq.query(headerQuery);
     
-    // Fetch all OutwardDetails
+    // Fetch OutwardDetails
     const detailResult = await pool.request().query(`
-      SELECT d.*, i.ItemName
+      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, i.ItemName
       FROM OutwardDetail d
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
     `);
 
     // Group details by OutwardId
@@ -81,6 +95,7 @@ exports.getOutwardReport = async (req, res) => {
         h.OUTWARDDATE, 
         l.LedgerName, 
         d.ITEMCODE, 
+        ISNULL(d.SUBCODE, '') AS SUBCODE,
         i.ItemName, 
         d.UNIT, 
         d.QUANTITY, 
@@ -92,7 +107,7 @@ exports.getOutwardReport = async (req, res) => {
       FROM OutwardDetail d
       INNER JOIN OutwardHeader h ON d.OUTWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
       ORDER BY 
         CASE WHEN TRY_CAST(h.OUTWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
         TRY_CAST(h.OUTWARDNO AS INT) DESC,
@@ -155,9 +170,11 @@ exports.addOutward = async (req, res) => {
         }
         
         const detailReq = new sql.Request(transaction);
+        const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
         await detailReq
           .input('OUTWARDID', sql.Numeric(8,0), newOutwardId)
-          .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
+          .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
+          .input('SUBCODE', sql.VarChar(50), subCodeVal)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -167,8 +184,8 @@ exports.addOutward = async (req, res) => {
           .input('DISCOUNT', sql.Numeric(5,2), d.DISCOUNT || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
-            VALUES (@OUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
+            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
+            VALUES (@OUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
@@ -176,7 +193,7 @@ exports.addOutward = async (req, res) => {
                 WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
-            WHERE ItemCode = @ITEMCODE;
+            WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
           `);
       }
 
@@ -283,12 +300,13 @@ exports.updateOutward = async (req, res) => {
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, QUANTITY, NETWT, UNIT FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
           await revertItemReq
-            .input('OLD_ITEMCODE', sql.VarChar(10), oldD.ITEMCODE)
+            .input('OLD_ITEMCODE', sql.VarChar(50), oldD.ITEMCODE)
+            .input('OLD_SUBCODE', sql.VarChar(50), (oldD.SUBCODE || '').trim())
             .input('OLD_QUANTITY', sql.Numeric(10,2), oldD.QUANTITY)
             .input('OLD_NETWT', sql.Numeric(10,3), oldD.NETWT || 0)
             .input('OLD_UNIT', sql.VarChar(10), oldD.UNIT || '')
@@ -299,7 +317,7 @@ exports.updateOutward = async (req, res) => {
                   WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @OLD_NETWT
                   ELSE @OLD_QUANTITY
                 END
-              WHERE ItemCode = @OLD_ITEMCODE;
+              WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
             `);
         }
       }
@@ -342,9 +360,11 @@ exports.updateOutward = async (req, res) => {
         }
         
         const detailReq = new sql.Request(transaction);
+        const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
         await detailReq
           .input('OUTWARDID', sql.Numeric(8,0), id)
-          .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
+          .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
+          .input('SUBCODE', sql.VarChar(50), subCodeVal)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -354,8 +374,8 @@ exports.updateOutward = async (req, res) => {
           .input('DISCOUNT', sql.Numeric(5,2), d.DISCOUNT || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
-            VALUES (@OUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
+            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
+            VALUES (@OUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
@@ -363,7 +383,8 @@ exports.updateOutward = async (req, res) => {
                 WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
-            WHERE ItemCode = @ITEMCODE;
+            WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
+          `);
           `);
       }
 
@@ -465,12 +486,13 @@ exports.deleteOutward = async (req, res) => {
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, QUANTITY, NETWT, UNIT FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
           await revertItemReq
-            .input('OLD_ITEMCODE', sql.VarChar(10), oldD.ITEMCODE)
+            .input('OLD_ITEMCODE', sql.VarChar(50), oldD.ITEMCODE)
+            .input('OLD_SUBCODE', sql.VarChar(50), (oldD.SUBCODE || '').trim())
             .input('OLD_QUANTITY', sql.Numeric(10,2), oldD.QUANTITY)
             .input('OLD_NETWT', sql.Numeric(10,3), oldD.NETWT || 0)
             .input('OLD_UNIT', sql.VarChar(10), oldD.UNIT || '')
@@ -481,7 +503,7 @@ exports.deleteOutward = async (req, res) => {
                   WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @OLD_NETWT
                   ELSE @OLD_QUANTITY
                 END
-              WHERE ItemCode = @OLD_ITEMCODE;
+              WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
             `);
         }
       }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import { 
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
@@ -19,6 +20,7 @@ import autoTable from 'jspdf-autotable';
 
 const emptyRow = {
   ITEMCODE: '',
+  SUBCODE: '',
   GROSSWT: '',
   NETWT: '',
   TENPCSWT: '',
@@ -29,6 +31,9 @@ const emptyRow = {
 };
 
 const InwardEntry = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterParamInwardNo = searchParams.get('inwardNo');
+
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [Inwards, setInwards] = useState([]);
@@ -43,8 +48,8 @@ const InwardEntry = () => {
   const [billFilter, setBillFilter] = useState('combined'); // 'combined', 'with_bill', 'without_bill'
   
   const todayDate = new Date().toISOString().split('T')[0];
-  const [fromDate, setFromDate] = useState(todayDate);
-  const [toDate, setToDate] = useState(todayDate);
+  const [fromDate, setFromDate] = useState(filterParamInwardNo ? '' : todayDate);
+  const [toDate, setToDate] = useState(filterParamInwardNo ? '' : todayDate);
   
   // Dialog States
   const [openDialog, setOpenDialog] = useState(false);
@@ -75,7 +80,8 @@ const InwardEntry = () => {
 
   const fetchInwards = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Inwards`);
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Inwards${filterParamInwardNo ? `?inwardNo=${encodeURIComponent(filterParamInwardNo)}` : ''}`;
+      const response = await fetch(url);
       const data = await response.json();
       if (response.ok && Array.isArray(data)) setInwards(data);
     } catch (error) {
@@ -181,6 +187,9 @@ const InwardEntry = () => {
   const handleChangeRowsPerPage = (event) => { setRowsPerPage(parseInt(event.target.value, 10)); setPage(0); };
 
   const filteredInwards = Inwards.filter(i => {
+    if (filterParamInwardNo) {
+      return String(i.INWARDNO || '').trim().toLowerCase() === filterParamInwardNo.trim().toLowerCase();
+    }
     const matchesSearch = (i.LedgerName && i.LedgerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (i.INWARDNO && i.INWARDNO.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (i.REMARK && i.REMARK.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -297,6 +306,7 @@ const InwardEntry = () => {
     if (Inward.Details && Inward.Details.length > 0) {
       setGridRows(Inward.Details.map(d => ({
         ITEMCODE: d.ITEMCODE || '',
+        SUBCODE: d.SUBCODE || '',
         GROSSWT: d.GROSSWT || '',
         NETWT: d.NETWT || '',
         TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
@@ -356,6 +366,7 @@ const InwardEntry = () => {
   const handleItemSelect = (index, item) => {
     const newRows = [...gridRows];
     newRows[index].ITEMCODE = item ? item.ItemCode : '';
+    newRows[index].SUBCODE = item ? (item.SubCode || '') : '';
     newRows[index].UNIT = item ? item.Unit : '';
     newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     setGridRows(newRows);
@@ -489,10 +500,12 @@ const InwardEntry = () => {
     const detailsSource = isSaveAction ? inward.Details : (inward.Details || []);
     
     const tableRows = detailsSource.map((d, index) => {
-      const itemName = d.ItemName || items.find(item => item.ItemCode === d.ITEMCODE)?.ItemName || '';
+      const matched = items.find(item => item.ItemCode === d.ITEMCODE && (item.SubCode || '') === (d.SUBCODE || ''));
+      const itemName = d.ItemName || matched?.ItemName || '';
+      const itemCodeDisplay = d.SUBCODE ? `${d.ITEMCODE} / ${d.SUBCODE}` : d.ITEMCODE;
       return [
         index + 1,
-        `${d.ITEMCODE} - ${itemName}`,
+        `${itemCodeDisplay} - ${itemName}`,
         (d.GROSSWT || 0).toFixed(3),
         (d.NETWT || 0).toFixed(3),
         (d.QUANTITY || 0).toFixed(2),
@@ -677,6 +690,7 @@ const InwardEntry = () => {
       UPDATEDBY: username,
       Details: validRows.map(r => ({
         ...r,
+        SUBCODE: r.SUBCODE || '',
         GROSSWT: parseFloat(r.GROSSWT) || 0,
         NETWT: parseFloat(r.NETWT) || 0,
         TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
@@ -806,6 +820,20 @@ const InwardEntry = () => {
             </ToggleButtonGroup>
           </Box>
         </Toolbar>
+
+        {filterParamInwardNo && (
+          <Alert 
+            severity="info" 
+            action={
+              <Button color="inherit" size="small" onClick={() => { setSearchParams({}); setFromDate(todayDate); setToDate(todayDate); fetchInwards(); }}>
+                Show All Purchases
+              </Button>
+            }
+            sx={{ mx: 2, mt: 2 }}
+          >
+            Viewing single Purchase Voucher <strong>#{filterParamInwardNo}</strong> opened from notification.
+          </Alert>
+        )}
 
         <TableContainer>
           <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 32 } }}>
@@ -944,8 +972,8 @@ const InwardEntry = () => {
                     <TableCell>
                       <Autocomplete
                         options={items}
-                        getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
-                        value={items.find(i => i.ItemCode === row.ITEMCODE) || null}
+                        getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                        value={items.find(i => i.ItemCode === row.ITEMCODE && (i.SubCode || '') === (row.SUBCODE || '')) || null}
                         onChange={(e, newValue) => handleItemSelect(index, newValue)}
                         renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
                         fullWidth

@@ -61,6 +61,7 @@ const JobworkOutReport = () => {
     { field: 'FromDepartment', headerName: 'From Dept', width: 120 },
     { field: 'LedgerName', headerName: 'Ledger Name', width: 180 },
     { field: 'ITEMCODE', headerName: 'Item Code', width: 110 },
+    { field: 'SUBCODE', headerName: 'Sub Code', width: 95, valueGetter: (value, row) => row?.SUBCODE || '-' },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
     { field: 'PROCESS', headerName: 'Process', width: 120 },
     { field: 'UNIT', headerName: 'Unit', width: 80 },
@@ -110,6 +111,7 @@ const JobworkOutReport = () => {
       row.FromDepartment || 'Stock',
       row.LedgerName || '',
       row.ITEMCODE,
+      row.SUBCODE || '-',
       row.ItemName,
       row.PROCESS || '',
       row.UNIT || '',
@@ -121,7 +123,7 @@ const JobworkOutReport = () => {
     ]);
     
     autoTable(doc, {
-      head: [['Challan No', 'Date', 'From Dept', 'Ledger', 'Item Code', 'Item Name', 'Process', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Amount']],
+      head: [['Challan No', 'Date', 'From Dept', 'Ledger', 'Item Code', 'Sub Code', 'Item Name', 'Process', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Amount']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -181,6 +183,7 @@ const JobworkOutReport = () => {
       'From Department': row.FromDepartment || 'Stock',
       'Ledger Name': row.LedgerName,
       'Item Code': row.ITEMCODE,
+      'Sub Code': row.SUBCODE || '-',
       'Item Name': row.ItemName,
       'Process': row.PROCESS,
       'Unit': row.UNIT,

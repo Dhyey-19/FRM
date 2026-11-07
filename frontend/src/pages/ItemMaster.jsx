@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import { 
   Box, 
@@ -20,7 +21,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  DialogContentText,
   Alert,
   Autocomplete,
   TableSortLabel,
@@ -28,7 +28,11 @@ import {
   Tabs,
   Tab,
   MenuItem,
-  Chip
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  Tooltip
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -36,12 +40,18 @@ import {
   Edit as EditIcon, 
   Delete as DeleteIcon,
   FileDownload as ExportIcon,
-  FileUpload as ImportIcon
+  FileUpload as ImportIcon,
+  FilterList as FilterListIcon,
+  RestartAlt as ResetIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import * as XLSX from 'xlsx';
 
 const ItemMaster = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterParamItemCode = searchParams.get('itemCode');
+  const filterParamSubCode = searchParams.get('subCode');
+
   const [items, setItems] = useState([]);
   const [brands, setBrands] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -53,6 +63,7 @@ const ItemMaster = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'ItemCode', direction: 'asc' });
   
   // Filter States
+  const [filterCategory, setFilterCategory] = useState('All');
   const [filterItemType, setFilterItemType] = useState('All');
   const [filterSeries, setFilterSeries] = useState('All');
   
@@ -61,8 +72,9 @@ const ItemMaster = () => {
   const [dialogMode, setDialogMode] = useState('add'); // 'add' or 'edit'
   const [dialogError, setDialogError] = useState('');
   
-  // Track original ItemCode for edit PUT request
+  // Track original composite key for edit PUT request
   const [originalItemCode, setOriginalItemCode] = useState(null);
+  const [originalSubCode, setOriginalSubCode] = useState('');
   
   // Delete Confirm States
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -75,11 +87,13 @@ const ItemMaster = () => {
   const [showImportResults, setShowImportResults] = useState(false);
   const [resultTab, setResultTab] = useState(0);
 
-
-
   const [formData, setFormData] = useState({
+    Category: 'Inhouse',
     ItemCode: '',
+    SubCode: '',
     ItemName: '',
+    WarehouseNo: '',
+    Location: '',
     ItemType: '',
     Series: '',
     StdWeight: '',
@@ -92,9 +106,17 @@ const ItemMaster = () => {
     ReorderLevel: ''
   });
 
-  const fetchItems = async () => {
+  const fetchItems = async (singleCode = null, singleSubCode = null) => {
+    setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items`);
+      let url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items`;
+      if (singleCode) {
+        url += `?itemCode=${encodeURIComponent(singleCode)}`;
+        if (singleSubCode !== null && singleSubCode !== undefined) {
+          url += `&subCode=${encodeURIComponent(singleSubCode)}`;
+        }
+      }
+      const response = await fetch(url);
       const data = await response.json();
       if (response.ok && Array.isArray(data)) {
         setItems(data);
@@ -145,11 +167,20 @@ const ItemMaster = () => {
   };
 
   useEffect(() => {
-    fetchItems();
+    if (filterParamItemCode) {
+      fetchItems(filterParamItemCode, filterParamSubCode);
+    } else {
+      fetchItems();
+    }
     fetchBrands();
     fetchItemTypes();
     fetchUnits();
-  }, []);
+  }, [filterParamItemCode, filterParamSubCode]);
+
+  const handleClearSingleItemFilter = () => {
+    setSearchParams({});
+    fetchItems();
+  };
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -168,11 +199,15 @@ const ItemMaster = () => {
     const matchesSearch = (
       (item.ItemName && item.ItemName.toLowerCase().includes(searchLower)) ||
       (item.ItemCode && item.ItemCode.toLowerCase().includes(searchLower)) ||
+      (item.SubCode && item.SubCode.toLowerCase().includes(searchLower)) ||
+      (item.WarehouseNo && item.WarehouseNo.toLowerCase().includes(searchLower)) ||
+      (item.Location && item.Location.toLowerCase().includes(searchLower)) ||
       (item.Series && item.Series.toLowerCase().includes(searchLower))
     );
+    const matchesCategory = filterCategory === 'All' || item.Category === filterCategory;
     const matchesType = filterItemType === 'All' || item.ItemType === filterItemType;
     const matchesSeries = filterSeries === 'All' || item.Series === filterSeries;
-    return matchesSearch && matchesType && matchesSeries;
+    return matchesSearch && matchesCategory && matchesType && matchesSeries;
   });
 
   const handleSort = (key) => {
@@ -184,10 +219,12 @@ const ItemMaster = () => {
   };
 
   const sortedItems = [...filteredItems].sort((a, b) => {
-    if (a[sortConfig.key] < b[sortConfig.key]) {
+    const valA = a[sortConfig.key] !== undefined && a[sortConfig.key] !== null ? a[sortConfig.key] : '';
+    const valB = b[sortConfig.key] !== undefined && b[sortConfig.key] !== null ? b[sortConfig.key] : '';
+    if (valA < valB) {
       return sortConfig.direction === 'asc' ? -1 : 1;
     }
-    if (a[sortConfig.key] > b[sortConfig.key]) {
+    if (valA > valB) {
       return sortConfig.direction === 'asc' ? 1 : -1;
     }
     return 0;
@@ -198,9 +235,14 @@ const ItemMaster = () => {
     setDialogError('');
     if (mode === 'edit' && item) {
       setOriginalItemCode(item.ItemCode);
+      setOriginalSubCode(item.SubCode || '');
       setFormData({
+        Category: item.Category || 'Inhouse',
         ItemCode: item.ItemCode,
+        SubCode: item.SubCode || '',
         ItemName: item.ItemName,
+        WarehouseNo: item.WarehouseNo || '',
+        Location: item.Location || '',
         ItemType: item.ItemType || '',
         Series: item.Series || '',
         StdWeight: item.StdWeight != null ? Number(item.StdWeight).toFixed(3) : '',
@@ -214,7 +256,25 @@ const ItemMaster = () => {
       });
     } else {
       setOriginalItemCode(null);
-      setFormData({ ItemCode: '', ItemName: '', ItemType: '', Series: '', StdWeight: '', Unit: '', MRP: '', Costing: '', OpeningStock: '', ClosingStock: '', HSNCode: '', ReorderLevel: '' });
+      setOriginalSubCode('');
+      setFormData({
+        Category: 'Inhouse',
+        ItemCode: '',
+        SubCode: '',
+        ItemName: '',
+        WarehouseNo: '',
+        Location: '',
+        ItemType: '',
+        Series: '',
+        StdWeight: '',
+        Unit: '',
+        MRP: '',
+        Costing: '',
+        OpeningStock: '',
+        ClosingStock: '',
+        HSNCode: '',
+        ReorderLevel: ''
+      });
     }
     setOpenDialog(true);
   };
@@ -222,6 +282,7 @@ const ItemMaster = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setOriginalItemCode(null);
+    setOriginalSubCode('');
     setDialogError('');
   };
 
@@ -245,8 +306,6 @@ const ItemMaster = () => {
           const currentClosing = parseFloat(prev.ClosingStock) || 0;
           const diff = newOpening - oldOpening;
           const newClosing = currentClosing + diff;
-          
-          // Using Math.round to avoid floating point precision issues
           const newClosingRounded = Math.round(newClosing * 1000) / 1000;
           return { ...prev, OpeningStock: value, ClosingStock: newClosingRounded.toString() };
         }
@@ -264,14 +323,22 @@ const ItemMaster = () => {
     }
     
     try {
-      const url = dialogMode === 'add' ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items` : `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/${originalItemCode}`;
+      const url = dialogMode === 'add' 
+        ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items` 
+        : `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/${encodeURIComponent(originalItemCode)}?subCode=${encodeURIComponent(originalSubCode || '')}`;
       const method = dialogMode === 'add' ? 'POST' : 'PUT';
       
       const payload = {
-        ItemCode: formData.ItemCode,
-        ItemName: formData.ItemName,
-        ItemType: formData.ItemType,
-        Series: formData.Series,
+        originalItemCode: originalItemCode,
+        originalSubCode: originalSubCode || '',
+        Category: formData.Category || 'Inhouse',
+        ItemCode: formData.ItemCode.trim(),
+        SubCode: (formData.SubCode || '').trim(),
+        ItemName: formData.ItemName.trim(),
+        WarehouseNo: (formData.WarehouseNo || '').trim(),
+        Location: (formData.Location || '').trim(),
+        ItemType: formData.ItemType || null,
+        Series: formData.Series || null,
         StdWeight: formData.StdWeight ? parseFloat(formData.StdWeight) : null,
         Unit: formData.Unit,
         MRP: parseFloat(formData.MRP) || 0,
@@ -290,7 +357,11 @@ const ItemMaster = () => {
       
       if (response.ok) {
         handleCloseDialog();
-        fetchItems();
+        if (filterParamItemCode) {
+          fetchItems(filterParamItemCode, filterParamSubCode);
+        } else {
+          fetchItems();
+        }
       } else {
         const data = await response.json();
         setDialogError(data.message || 'Error saving item');
@@ -301,8 +372,8 @@ const ItemMaster = () => {
     }
   };
 
-  const openDeleteConfirm = (id) => {
-    setItemToDelete(id);
+  const openDeleteConfirm = (item) => {
+    setItemToDelete({ ItemCode: item.ItemCode, SubCode: item.SubCode || '', ItemName: item.ItemName });
     setDeleteConfirmOpen(true);
   };
 
@@ -314,9 +385,16 @@ const ItemMaster = () => {
   const handleDeleteItem = async () => {
     if (itemToDelete) {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/${itemToDelete}`, { method: 'DELETE' });
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/${encodeURIComponent(itemToDelete.ItemCode)}?subCode=${encodeURIComponent(itemToDelete.SubCode || '')}`, 
+          { method: 'DELETE' }
+        );
         if (response.ok) {
-          fetchItems();
+          if (filterParamItemCode) {
+            handleClearSingleItemFilter();
+          } else {
+            fetchItems();
+          }
           closeDeleteConfirm();
         } else {
           console.error('Error deleting item');
@@ -329,8 +407,12 @@ const ItemMaster = () => {
 
   const handleExport = () => {
     const exportData = items.map(item => ({
+      Category: item.Category || 'Inhouse',
       ItemCode: item.ItemCode,
+      SubCode: item.SubCode || '',
       ItemName: item.ItemName,
+      WarehouseNo: item.WarehouseNo || '',
+      Location: item.Location || '',
       ItemType: item.ItemType || '',
       Series: item.Series || '',
       StdWeight: item.StdWeight || 0,
@@ -338,7 +420,9 @@ const ItemMaster = () => {
       MRP: item.MRP || 0,
       Costing: item.Costing || 0,
       OpeningStock: item.OpeningStock || 0,
-      ClosingStock: item.ClosingStock || 0
+      ClosingStock: item.ClosingStock || 0,
+      HSNCode: item.HSNCode || '',
+      ReorderLevel: item.ReorderLevel || 0
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
@@ -359,74 +443,86 @@ const ItemMaster = () => {
         const ws = workbook.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
         
-        if (data.length > 0) {
-          setImporting(true);
-          setImportProgress(0);
-          setImportResults({ added: [], updated: [], failed: [] });
-          
-          const BATCH_SIZE = 50;
-          let processed = 0;
-          const results = { added: [], updated: [], failed: [] };
+        if (!data || data.length === 0) {
+          alert('Uploaded excel sheet is empty!');
+          return;
+        }
 
-          for (let i = 0; i < data.length; i += BATCH_SIZE) {
-            const chunk = data.slice(i, i + BATCH_SIZE);
-            
-            try {
-              const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/bulk`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(chunk)
-              });
-              
-              if (response.ok) {
-                const resData = await response.json();
-                results.added.push(...(resData.added || []));
-                results.updated.push(...(resData.updated || []));
-                results.failed.push(...(resData.failed || []));
-              } else {
-                const resData = await response.json();
-                chunk.forEach(item => results.failed.push({ item, reason: resData.message || 'Server error' }));
-              }
-            } catch (err) {
-              chunk.forEach(item => results.failed.push({ item, reason: err.message || 'Network error' }));
-            }
-            
-            processed += chunk.length;
-            setImportProgress(Math.round((processed / data.length) * 100));
-          }
-          
-          setImportResults(results);
+        setImporting(true);
+        setImportProgress(10);
+
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        setImportProgress(90);
+        const result = await response.json();
+        setImportProgress(100);
+
+        setTimeout(() => {
           setImporting(false);
+          setImportResults(result);
           setShowImportResults(true);
           fetchItems();
-        }
-      } catch (error) {
-        console.error('Error parsing file:', error);
-        alert('Error parsing the Excel file.');
+        }, 500);
+
+      } catch (err) {
+        console.error('Import error:', err);
         setImporting(false);
+        alert('Failed to parse or upload excel file.');
       }
     };
     reader.readAsBinaryString(file);
-    e.target.value = null; // reset input
+    e.target.value = null;
   };
-
-
 
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
-          Item Master
-        </Typography>
+      <Box sx={{ mb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 0.5 }}>
+            Item Master
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#64748b' }}>
+            Manage inventory items with composite identification (Code + SubCode), procurement classification, and warehouse tracking.
+          </Typography>
+        </Box>
+        {filterParamItemCode && (
+          <Button 
+            variant="outlined" 
+            size="small" 
+            startIcon={<ResetIcon />}
+            onClick={handleClearSingleItemFilter}
+            sx={{ textTransform: 'none', borderColor: '#0F3B66', color: '#0F3B66', fontWeight: 600 }}
+          >
+            Show All Items
+          </Button>
+        )}
       </Box>
+
+      {filterParamItemCode && (
+        <Alert 
+          severity="info" 
+          action={
+            <Button color="inherit" size="small" onClick={handleClearSingleItemFilter} startIcon={<ResetIcon />}>
+              Reset Filter
+            </Button>
+          }
+          sx={{ mb: 2.5, borderRadius: 2, bgcolor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe' }}
+        >
+          <strong>Single Item Alert View:</strong> Showing only record for Item Code <strong>{filterParamItemCode}</strong>{filterParamSubCode ? ` (SubCode: "${filterParamSubCode}")` : ''}.
+        </Alert>
+      )}
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
         
-        <Toolbar sx={{ px: { xs: 1.5, sm: 2 }, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', pt: 2, pb: 2 }}>
+        <Toolbar sx={{ px: { xs: 1.5, sm: 2 }, display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'space-between', pt: 2, pb: 2 }}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, width: { xs: '100%', md: 'auto' } }}>
             <TextField
               size="small"
-              placeholder="Search items..."
+              placeholder="Search items, subcode, warehouse..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -436,15 +532,28 @@ const ItemMaster = () => {
                   </InputAdornment>
                 ),
               }}
-              sx={{ width: { xs: '100%', sm: 220, md: 250 } }}
+              sx={{ width: { xs: '100%', sm: 240, md: 260 } }}
             />
+            <TextField
+              select
+              size="small"
+              label="Category"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              sx={{ width: { xs: '100%', sm: 140 }, minWidth: { sm: 140 } }}
+            >
+              <MenuItem value="All">All Categories</MenuItem>
+              <MenuItem value="SubContract">SubContract</MenuItem>
+              <MenuItem value="Inhouse">Inhouse</MenuItem>
+              <MenuItem value="BOP">BOP</MenuItem>
+            </TextField>
             <TextField
               select
               size="small"
               label="Item Type"
               value={filterItemType}
               onChange={(e) => setFilterItemType(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 150 }, minWidth: { sm: 150 } }}
+              sx={{ width: { xs: '100%', sm: 140 }, minWidth: { sm: 140 } }}
             >
               <MenuItem value="All">All Types</MenuItem>
               {itemTypes.map(t => (
@@ -457,7 +566,7 @@ const ItemMaster = () => {
               label="Series"
               value={filterSeries}
               onChange={(e) => setFilterSeries(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 150 }, minWidth: { sm: 150 } }}
+              sx={{ width: { xs: '100%', sm: 140 }, minWidth: { sm: 140 } }}
             >
               {uniqueSeries.map(s => (
                 <MenuItem key={s} value={s}>{s}</MenuItem>
@@ -477,7 +586,7 @@ const ItemMaster = () => {
                 variant="outlined" 
                 component="span"
                 startIcon={<ImportIcon />}
-                sx={{ boxShadow: 0 }}
+                sx={{ boxShadow: 0, textTransform: 'none', fontWeight: 600 }}
               >
                 Import
               </Button>
@@ -486,16 +595,16 @@ const ItemMaster = () => {
               variant="outlined" 
               startIcon={<ExportIcon />}
               onClick={handleExport}
-              sx={{ boxShadow: 0 }}
+              sx={{ boxShadow: 0, textTransform: 'none', fontWeight: 600 }}
             >
               Export
             </Button>
             <Button 
               variant="contained" 
-              color="secondary" 
               startIcon={<AddIcon />}
-              onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
-              sx={{ boxShadow: 0 }}
+              onClick={() => handleOpenDialog('add')} 
+              disabled={!hasAddPermission()}
+              sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' }, textTransform: 'none', fontWeight: 600, boxShadow: 0 }}
             >
               Add Item
             </Button>
@@ -503,10 +612,10 @@ const ItemMaster = () => {
         </Toolbar>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 750, '& .MuiTableRow-root': { height: 32 } }} aria-labelledby="tableTitle">
+          <Table size="small" sx={{ minWidth: 950, '& .MuiTableRow-root': { height: 36 } }} aria-labelledby="tableTitle">
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'ItemCode'}
                     direction={sortConfig.key === 'ItemCode' ? sortConfig.direction : 'asc'}
@@ -515,7 +624,25 @@ const ItemMaster = () => {
                     Code
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                  <TableSortLabel
+                    active={sortConfig.key === 'SubCode'}
+                    direction={sortConfig.key === 'SubCode' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('SubCode')}
+                  >
+                    Sub Code
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                  <TableSortLabel
+                    active={sortConfig.key === 'Category'}
+                    direction={sortConfig.key === 'Category' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('Category')}
+                  >
+                    Category
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'ItemName'}
                     direction={sortConfig.key === 'ItemName' ? sortConfig.direction : 'asc'}
@@ -524,7 +651,9 @@ const ItemMaster = () => {
                     Item Name
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Warehouse</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Location</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'HSNCode'}
                     direction={sortConfig.key === 'HSNCode' ? sortConfig.direction : 'asc'}
@@ -533,7 +662,7 @@ const ItemMaster = () => {
                     HSN Code
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'ItemType'}
                     direction={sortConfig.key === 'ItemType' ? sortConfig.direction : 'asc'}
@@ -542,7 +671,7 @@ const ItemMaster = () => {
                     Type
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'Series'}
                     direction={sortConfig.key === 'Series' ? sortConfig.direction : 'asc'}
@@ -551,7 +680,7 @@ const ItemMaster = () => {
                     Series
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'StdWeight'}
                     direction={sortConfig.key === 'StdWeight' ? sortConfig.direction : 'asc'}
@@ -560,25 +689,8 @@ const ItemMaster = () => {
                     Std Wt
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'Unit'}
-                    direction={sortConfig.key === 'Unit' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('Unit')}
-                  >
-                    Unit
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'MRP'}
-                    direction={sortConfig.key === 'MRP' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('MRP')}
-                  >
-                    MRP
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Unit</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'Costing'}
                     direction={sortConfig.key === 'Costing' ? sortConfig.direction : 'asc'}
@@ -587,34 +699,17 @@ const ItemMaster = () => {
                     Costing
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'OpeningStock'}
-                    direction={sortConfig.key === 'OpeningStock' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('OpeningStock')}
-                  >
-                    Opening
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'ClosingStock'}
                     direction={sortConfig.key === 'ClosingStock' ? sortConfig.direction : 'asc'}
                     onClick={() => handleSort('ClosingStock')}
                   >
-                    Closing
+                    Closing Stock
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'ReorderLevel'}
-                    direction={sortConfig.key === 'ReorderLevel' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('ReorderLevel')}
-                  >
-                    Reorder Level
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Reorder Level</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, color: '#0F3B66' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -622,25 +717,45 @@ const ItemMaster = () => {
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((row) => {
                   const isLowStock = row.ReorderLevel > 0 && (row.ClosingStock || 0) < row.ReorderLevel;
+                  const categoryColor = row.Category === 'SubContract' ? '#ea580c' : (row.Category === 'BOP' ? '#0891b2' : '#0F3B66');
+                  const categoryBg = row.Category === 'SubContract' ? '#fff7ed' : (row.Category === 'BOP' ? '#ecfeff' : '#eff6ff');
+
                   return (
-                    <TableRow hover tabIndex={-1} key={row.ItemCode}>
-                      <TableCell sx={{ fontWeight: 500 }}>{row.ItemCode}</TableCell>
-                      <TableCell>{row.ItemName}</TableCell>
+                    <TableRow hover tabIndex={-1} key={`${row.ItemCode}_${row.SubCode || ''}`}>
+                      <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>{row.ItemCode}</TableCell>
+                      <TableCell sx={{ fontWeight: 500, color: row.SubCode ? '#334155' : '#94a3b8' }}>
+                        {row.SubCode || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={row.Category || 'Inhouse'} 
+                          size="small" 
+                          sx={{ 
+                            fontSize: '0.7rem', 
+                            fontWeight: 700,
+                            bgcolor: categoryBg, 
+                            color: categoryColor,
+                            border: `1px solid ${categoryColor}33`,
+                            height: 22 
+                          }} 
+                        />
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>{row.ItemName}</TableCell>
+                      <TableCell sx={{ color: row.WarehouseNo ? '#1e293b' : '#94a3b8' }}>{row.WarehouseNo || '-'}</TableCell>
+                      <TableCell sx={{ color: row.Location ? '#1e293b' : '#94a3b8' }}>{row.Location || '-'}</TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: row.HSNCode ? '#0F3B66' : 'text.secondary' }}>
                           {row.HSNCode || '-'}
                         </Typography>
                       </TableCell>
-                      <TableCell>{row.ItemType}</TableCell>
-                      <TableCell>{row.Series}</TableCell>
-                      <TableCell>{row.StdWeight != null && row.StdWeight !== '' ? Number(row.StdWeight).toFixed(3) : ''}</TableCell>
+                      <TableCell>{row.ItemType || '-'}</TableCell>
+                      <TableCell>{row.Series || '-'}</TableCell>
+                      <TableCell>{row.StdWeight != null && row.StdWeight !== '' ? Number(row.StdWeight).toFixed(3) : '-'}</TableCell>
                       <TableCell>{row.Unit}</TableCell>
-                      <TableCell>{row.MRP}</TableCell>
-                      <TableCell>{row.Costing}</TableCell>
-                      <TableCell>{row.OpeningStock}</TableCell>
+                      <TableCell>{row.Costing || 0}</TableCell>
                       <TableCell sx={{ fontWeight: 600, color: isLowStock ? '#ef4444' : 'inherit' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <span>{row.ClosingStock}</span>
+                          <span>{row.ClosingStock || 0}</span>
                           {isLowStock && (
                             <Chip 
                               label="Low" 
@@ -660,12 +775,16 @@ const ItemMaster = () => {
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
-                          <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton color="error" size="small" onClick={() => openDeleteConfirm(row.ItemCode)} disabled={!hasDeletePermission()}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <Tooltip title="Edit Item">
+                            <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete Item">
+                            <IconButton color="error" size="small" onClick={() => openDeleteConfirm(row)} disabled={!hasDeletePermission()}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </TableCell>
                     </TableRow>
@@ -673,8 +792,8 @@ const ItemMaster = () => {
                 })}
               {sortedItems.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={13} align="center" sx={{ py: 3 }}>
-                    No items found.
+                  <TableCell colSpan={15} align="center" sx={{ py: 3, color: '#64748b' }}>
+                    No items found matching the selected filters.
                   </TableCell>
                 </TableRow>
               )}
@@ -694,24 +813,111 @@ const ItemMaster = () => {
       </Paper>
 
       {/* Add / Edit Dialog */}
-      <Dialog open={openDialog} onClose={(event, reason) => { if (reason !== 'backdropClick') handleCloseDialog(); }} maxWidth="sm" fullWidth>
-        <DialogTitle>{dialogMode === 'add' ? 'Add New Item' : 'Edit Item'}</DialogTitle>
-        <DialogContent dividers>
+      <Dialog 
+        open={openDialog} 
+        onClose={(event, reason) => { if (reason !== 'backdropClick') handleCloseDialog(); }} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5 }}>
+          {dialogMode === 'add' ? 'Add New Item' : 'Edit Item'}
+        </DialogTitle>
+        <DialogContent dividers sx={{ pt: 2.5 }}>
           {dialogError && (
-            <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>
+            <Alert severity="error" sx={{ mb: 2.5 }}>{dialogError}</Alert>
           )}
-          <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 0.5 }}>
+            
+            {/* Top Dropdown: Category (SubContract, Inhouse, BOP) */}
+            <FormControl fullWidth size="small">
+              <InputLabel id="item-category-label">Category / Classification *</InputLabel>
+              <Select
+                labelId="item-category-label"
+                label="Category / Classification *"
+                name="Category"
+                value={formData.Category || 'Inhouse'}
+                onChange={handleInputChange}
+                sx={{ fontWeight: 600 }}
+              >
+                <MenuItem value="SubContract">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="SubContract" size="small" sx={{ bgcolor: '#fff7ed', color: '#ea580c', fontWeight: 700, height: 20 }} />
+                    <Typography variant="body2" sx={{ color: '#475569' }}>- Processed or sourced via external job workers</Typography>
+                  </Box>
+                </MenuItem>
+                <MenuItem value="Inhouse">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="Inhouse" size="small" sx={{ bgcolor: '#eff6ff', color: '#0F3B66', fontWeight: 700, height: 20 }} />
+                    <Typography variant="body2" sx={{ color: '#475569' }}>- Manufactured or machined in factory departments</Typography>
+                  </Box>
+                </MenuItem>
+                <MenuItem value="BOP">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="BOP" size="small" sx={{ bgcolor: '#ecfeff', color: '#0891b2', fontWeight: 700, height: 20 }} />
+                    <Typography variant="body2" sx={{ color: '#475569' }}>- Bought-Out Parts (Purchased raw material / standard parts)</Typography>
+                  </Box>
+                </MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Composite Primary Key Fields: ItemCode & SubCode */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField 
-                label="Code" 
+                label="Item Code *" 
                 name="ItemCode" 
                 value={formData.ItemCode} 
                 onChange={handleInputChange} 
-                fullWidth size="small" 
+                fullWidth 
+                size="small" 
+                required
+                helperText="Primary identifier (e.g. RM-BR01, FG-101)"
               />
-              <TextField label="Item Name" name="ItemName" value={formData.ItemName} onChange={handleInputChange} fullWidth size="small" />
+              <TextField 
+                label="Sub Code" 
+                name="SubCode" 
+                value={formData.SubCode} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                placeholder="Optional subcode (e.g. 01, A, REV-1)"
+                helperText="Composite key with Item Code"
+              />
+            </Box>
+
+            {/* Item Name */}
+            <TextField 
+              label="Item Name *" 
+              name="ItemName" 
+              value={formData.ItemName} 
+              onChange={handleInputChange} 
+              fullWidth 
+              size="small" 
+              required 
+            />
+
+            {/* WarehouseNo and Location (Both string inputs) */}
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+              <TextField 
+                label="Warehouse No" 
+                name="WarehouseNo" 
+                placeholder="e.g. WH-1, Raw Material Shed, Yard-B"
+                value={formData.WarehouseNo} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+              />
+              <TextField 
+                label="Location" 
+                name="Location" 
+                placeholder="e.g. Bin-04, Rack-A3, Shelf-2"
+                value={formData.Location} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+              />
             </Box>
             
+            {/* Classification, Unit & Series */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <Autocomplete
                 autoHighlight
@@ -736,7 +942,7 @@ const ItemMaster = () => {
                 }}
                 fullWidth
                 size="small"
-                renderInput={(params) => <TextField {...params} label="Unit" required />}
+                renderInput={(params) => <TextField {...params} label="Unit *" required />}
               />
               <Autocomplete
                 autoHighlight
@@ -753,17 +959,20 @@ const ItemMaster = () => {
               />
             </Box>
 
+            {/* Weights and Pricing */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
-              <TextField label="Std Weight" name="StdWeight" type="number" inputProps={{ step: "0.001" }} value={formData.StdWeight} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="MRP" name="MRP" type="number" value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="Costing" name="Costing" type="number" value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="Std Weight (Kg)" name="StdWeight" type="number" inputProps={{ step: "0.001" }} value={formData.StdWeight} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="MRP (₹)" name="MRP" type="number" value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="Costing (₹)" name="Costing" type="number" value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
+            {/* Stock Quantities */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Opening Stock" name="OpeningStock" type="number" value={formData.OpeningStock} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Closing Stock" name="ClosingStock" type="number" value={formData.ClosingStock} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
+            {/* HSN Code & Reorder Level */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField 
                 label="HSN Code" 
@@ -782,16 +991,22 @@ const ItemMaster = () => {
                 inputProps={{ step: "any" }}
                 value={formData.ReorderLevel} 
                 onChange={handleInputChange} 
-                helperText="Alerts when closing stock is below this"
+                helperText="Alerts when closing stock is below this threshold"
                 fullWidth 
                 size="small" 
               />
             </Box>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-          <Button onClick={handleSaveItem} variant="contained" color="primary">Save</Button>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e2e8f0' }}>
+          <Button onClick={handleCloseDialog} color="inherit" sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button 
+            onClick={handleSaveItem} 
+            variant="contained" 
+            sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' }, textTransform: 'none', fontWeight: 600, px: 3 }}
+          >
+            Save Item
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -803,7 +1018,7 @@ const ItemMaster = () => {
         onClose={closeDeleteConfirm}
         onConfirm={handleDeleteItem}
         title="Confirm Deletion"
-        itemName="this item"
+        itemName={itemToDelete ? `${itemToDelete.ItemName} (${itemToDelete.ItemCode}${itemToDelete.SubCode ? ` / ${itemToDelete.SubCode}` : ''})` : 'this item'}
       />
 
       {/* Import Progress Dialog */}
@@ -837,17 +1052,19 @@ const ItemMaster = () => {
                   <TableHead>
                     <TableRow>
                       <TableCell>Item Code</TableCell>
+                      <TableCell>Sub Code</TableCell>
                       <TableCell>Item Name</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {importResults.added.map((item, idx) => (
                       <TableRow key={idx}>
-                        <TableCell>{item.ItemCode}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{item.ItemCode}</TableCell>
+                        <TableCell>{item.SubCode || '-'}</TableCell>
                         <TableCell>{item.ItemName}</TableCell>
                       </TableRow>
                     ))}
-                    {importResults.added.length === 0 && <TableRow><TableCell colSpan={2} align="center">No items added</TableCell></TableRow>}
+                    {importResults.added.length === 0 && <TableRow><TableCell colSpan={3} align="center">No items added</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -858,17 +1075,19 @@ const ItemMaster = () => {
                   <TableHead>
                     <TableRow>
                       <TableCell>Item Code</TableCell>
+                      <TableCell>Sub Code</TableCell>
                       <TableCell>Item Name</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {importResults.updated.map((item, idx) => (
                       <TableRow key={idx}>
-                        <TableCell>{item.ItemCode}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{item.ItemCode}</TableCell>
+                        <TableCell>{item.SubCode || '-'}</TableCell>
                         <TableCell>{item.ItemName}</TableCell>
                       </TableRow>
                     ))}
-                    {importResults.updated.length === 0 && <TableRow><TableCell colSpan={2} align="center">No items updated</TableCell></TableRow>}
+                    {importResults.updated.length === 0 && <TableRow><TableCell colSpan={3} align="center">No items updated</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -879,6 +1098,7 @@ const ItemMaster = () => {
                   <TableHead>
                     <TableRow>
                       <TableCell>Item Code</TableCell>
+                      <TableCell>Sub Code</TableCell>
                       <TableCell>Item Name</TableCell>
                       <TableCell sx={{ color: 'error.main' }}>Reason</TableCell>
                     </TableRow>
@@ -886,12 +1106,13 @@ const ItemMaster = () => {
                   <TableBody>
                     {importResults.failed.map((fail, idx) => (
                       <TableRow key={idx}>
-                        <TableCell>{fail.item?.ItemCode || 'Unknown'}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{fail.item?.ItemCode || 'Unknown'}</TableCell>
+                        <TableCell>{fail.item?.SubCode || '-'}</TableCell>
                         <TableCell>{fail.item?.ItemName || 'Unknown'}</TableCell>
                         <TableCell sx={{ color: 'error.main' }}>{fail.reason}</TableCell>
                       </TableRow>
                     ))}
-                    {importResults.failed.length === 0 && <TableRow><TableCell colSpan={3} align="center">No failed items</TableCell></TableRow>}
+                    {importResults.failed.length === 0 && <TableRow><TableCell colSpan={4} align="center">No failed items</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </TableContainer>

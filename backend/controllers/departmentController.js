@@ -140,26 +140,28 @@ exports.getDepartmentStockReport = async (req, res) => {
         SELECT 
           ds.DeptID,
           ds.ItemCode,
+          ISNULL(ds.SubCode, '') AS SubCode,
           COALESCE(
-            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND ISNULL(st.InSubCode, '') = ISNULL(ds.SubCode, '') AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND ISNULL(st.OutSubCode, '') = ISNULL(ds.SubCode, '') AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE ((st.InItemCode = ds.ItemCode AND ISNULL(st.InSubCode, '') = ISNULL(ds.SubCode, '')) OR (st.OutItemCode = ds.ItemCode AND ISNULL(st.OutSubCode, '') = ISNULL(ds.SubCode, ''))) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
             im.Costing,
             0
           ) AS TransferRate,
           COALESCE(
-            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND ISNULL(st.InSubCode, '') = ISNULL(ds.SubCode, '') AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND ISNULL(st.OutSubCode, '') = ISNULL(ds.SubCode, '') AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE ((st.InItemCode = ds.ItemCode AND ISNULL(st.InSubCode, '') = ISNULL(ds.SubCode, '')) OR (st.OutItemCode = ds.ItemCode AND ISNULL(st.OutSubCode, '') = ISNULL(ds.SubCode, ''))) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
             im.Unit
           ) AS ValuationUnit
         FROM DepartmentStock ds
-        JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+        JOIN ItemMaster im ON ds.ItemCode = im.ItemCode AND ISNULL(ds.SubCode, '') = ISNULL(im.SubCode, '')
       )
       SELECT 
         ds.DeptID, 
         dm.DeptName, 
         ds.ItemCode, 
+        ISNULL(ds.SubCode, '') AS SubCode,
         im.ItemName,
         im.Costing AS MasterCosting,
         tr.TransferRate AS Costing,
@@ -178,8 +180,8 @@ exports.getDepartmentStockReport = async (req, res) => {
         ) AS Valuation
       FROM DepartmentStock ds
       LEFT JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID
-      LEFT JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
-      JOIN TransferRates tr ON ds.DeptID = tr.DeptID AND ds.ItemCode = tr.ItemCode
+      LEFT JOIN ItemMaster im ON ds.ItemCode = im.ItemCode AND ISNULL(ds.SubCode, '') = ISNULL(im.SubCode, '')
+      JOIN TransferRates tr ON ds.DeptID = tr.DeptID AND ds.ItemCode = tr.ItemCode AND ISNULL(ds.SubCode, '') = tr.SubCode
       ORDER BY dm.DeptName ASC, im.ItemName ASC
     `);
     res.status(200).json(result.recordset);

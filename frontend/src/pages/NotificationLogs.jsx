@@ -288,12 +288,14 @@ const NotificationLogs = () => {
                 return (
                   <Paper 
                     key={item.id}
+                    onClick={() => item.actionLink && navigate(item.actionLink)}
                     sx={{ 
                       p: 2.5, 
                       borderRadius: 2.5, 
                       border: '1px solid',
                       borderColor: isCritical ? '#fecaca' : (isReorder ? '#fed7aa' : '#e2e8f0'),
                       bgcolor: isCritical ? '#fffbfa' : (isReorder ? '#fffdfa' : '#ffffff'),
+                      cursor: item.actionLink ? 'pointer' : 'default',
                       transition: 'all 0.2s ease',
                       '&:hover': {
                         boxShadow: '0 4px 16px rgba(15, 59, 102, 0.08)',

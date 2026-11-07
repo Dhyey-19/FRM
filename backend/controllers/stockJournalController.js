@@ -15,9 +15,9 @@ exports.getJournals = async (req, res) => {
         const pool = await connectDB();
         const result = await pool.request()
             .query(`
-                SELECT sj.*, i.ItemName 
+                SELECT sj.*, ISNULL(sj.SubCode, '') AS SubCode, i.ItemName 
                 FROM StockJournal sj
-                INNER JOIN ItemMaster i ON sj.ItemCode = i.ItemCode
+                INNER JOIN ItemMaster i ON sj.ItemCode = i.ItemCode AND ISNULL(sj.SubCode, '') = ISNULL(i.SubCode, '')
                 ORDER BY sj.SJID DESC
             `);
         res.status(200).json(result.recordset);

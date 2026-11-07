@@ -58,6 +58,7 @@ const JobworkStockReport = () => {
     return [
       { field: 'LedgerName', headerName: 'Job Worker', width: getColWidth('LedgerName', 'Job Worker', 180) },
       { field: 'ItemCode', headerName: 'Item Code', width: getColWidth('ItemCode', 'Item Code', 110) },
+      { field: 'SubCode', headerName: 'Sub Code', width: getColWidth('SubCode', 'Sub Code', 100), valueGetter: (value, row) => row?.SubCode || '-' },
       { field: 'ItemName', headerName: 'Item Name', width: getColWidth('ItemName', 'Item Name', 180) },
       { field: 'OutQty', headerName: 'Sent Qty', width: getColWidth('OutQty', 'Sent Qty', 120), type: 'number' },
       { field: 'OutNetWt', headerName: 'Sent Wt', width: getColWidth('OutNetWt', 'Sent Wt', 120), type: 'number' },
@@ -112,6 +113,7 @@ const JobworkStockReport = () => {
     const tableData = stockRecords.map(row => [
       row.LedgerName || '',
       row.ItemCode || '',
+      row.SubCode || '-',
       row.ItemName || '',
       row.OutQty,
       row.OutNetWt,
@@ -122,7 +124,7 @@ const JobworkStockReport = () => {
     ]);
     
     autoTable(doc, {
-      head: [['Job Worker', 'Item Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt']],
+      head: [['Job Worker', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -175,6 +177,7 @@ const JobworkStockReport = () => {
     const exportData = stockRecords.map(row => ({
       'Job Worker': row.LedgerName,
       'Item Code': row.ItemCode,
+      'Sub Code': row.SubCode || '-',
       'Item Name': row.ItemName,
       'Sent Qty': row.OutQty,
       'Sent Wt': row.OutNetWt,

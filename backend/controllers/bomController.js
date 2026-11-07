@@ -7,17 +7,19 @@ exports.getAllBOMReport = async (req, res) => {
     const result = await pool.request().query(`
       SELECT 
         b.ParentItemCode,
+        ISNULL(b.ParentSubCode, '') AS ParentSubCode,
         p.ItemName AS ParentItemName,
         p.Series AS ParentBrandName,
         b.ChildItemCode,
+        ISNULL(b.ChildSubCode, '') AS ChildSubCode,
         c.ItemName AS ChildItemName,
         b.Quantity,
         ISNULL(c.Costing, 0) AS ChildCosting,
         CAST((b.Quantity * ISNULL(c.Costing, 0)) AS NUMERIC(15,2)) AS TotalChildCost
       FROM BOM_Master b
-      INNER JOIN ItemMaster p ON b.ParentItemCode = p.ItemCode
-      INNER JOIN ItemMaster c ON b.ChildItemCode = c.ItemCode
-      ORDER BY b.ParentItemCode ASC, b.ChildItemCode ASC
+      INNER JOIN ItemMaster p ON b.ParentItemCode = p.ItemCode AND ISNULL(b.ParentSubCode, '') = ISNULL(p.SubCode, '')
+      INNER JOIN ItemMaster c ON b.ChildItemCode = c.ItemCode AND ISNULL(b.ChildSubCode, '') = ISNULL(c.SubCode, '')
+      ORDER BY b.ParentItemCode ASC, b.ParentSubCode ASC, b.ChildItemCode ASC
     `);
     
     res.status(200).json(result.recordset);
@@ -30,18 +32,28 @@ exports.getAllBOMReport = async (req, res) => {
 // GET /api/bom/:parentCode
 exports.getBOMByParent = async (req, res) => {
   const { parentCode } = req.params;
+  const parentSubCode = (req.query.parentSubCode || req.query.subCode || '').trim();
 
   try {
     const pool = await connectDB();
-    const result = await pool.request()
-      .input('ParentItemCode', sql.VarChar(10), parentCode)
-      .query(`
-        SELECT b.ChildItemCode, i.ItemName, i.Unit, b.Quantity
-        FROM BOM_Master b
-        INNER JOIN ItemMaster i ON b.ChildItemCode = i.ItemCode
-        WHERE b.ParentItemCode = @ParentItemCode
-        ORDER BY b.ChildItemCode ASC
-      `);
+    const request = pool.request()
+      .input('ParentItemCode', sql.VarChar(50), parentCode)
+      .input('ParentSubCode', sql.VarChar(50), parentSubCode);
+
+    let query = `
+      SELECT b.ChildItemCode, ISNULL(b.ChildSubCode, '') AS ChildSubCode, i.ItemName, i.Unit, b.Quantity
+      FROM BOM_Master b
+      INNER JOIN ItemMaster i ON b.ChildItemCode = i.ItemCode AND ISNULL(b.ChildSubCode, '') = ISNULL(i.SubCode, '')
+      WHERE b.ParentItemCode = @ParentItemCode
+    `;
+
+    if (parentSubCode) {
+      query += ` AND ISNULL(b.ParentSubCode, '') = @ParentSubCode`;
+    }
+
+    query += ` ORDER BY b.ChildItemCode ASC`;
+
+    const result = await request.query(query);
       
     res.status(200).json(result.recordset);
   } catch (error) {
@@ -52,11 +64,14 @@ exports.getBOMByParent = async (req, res) => {
 
 // POST /api/bom
 exports.saveBOM = async (req, res) => {
-  const { ParentItemCode, items } = req.body;
+  const { ParentItemCode, ParentSubCode = '', items } = req.body;
 
   if (!ParentItemCode || !Array.isArray(items)) {
     return res.status(400).json({ message: 'ParentItemCode and an array of items are required' });
   }
+
+  const cleanParentCode = String(ParentItemCode).trim();
+  const cleanParentSubCode = String(ParentSubCode || '').trim();
 
   try {
     const pool = await connectDB();
@@ -70,21 +85,27 @@ exports.saveBOM = async (req, res) => {
 
       // 1. Delete existing BOM for this parent
       await request
-        .input('ParentItemCode', sql.VarChar(10), ParentItemCode)
-        .query('DELETE FROM BOM_Master WHERE ParentItemCode = @ParentItemCode');
+        .input('ParentItemCode', sql.VarChar(50), cleanParentCode)
+        .input('ParentSubCode', sql.VarChar(50), cleanParentSubCode)
+        .query('DELETE FROM BOM_Master WHERE ParentItemCode = @ParentItemCode AND ISNULL(ParentSubCode, \'\') = @ParentSubCode');
 
       // 2. Insert new child items
       for (const item of items) {
         if (!item.ChildItemCode || item.Quantity === undefined) continue;
         
+        const cleanChildCode = String(item.ChildItemCode).trim();
+        const cleanChildSubCode = String(item.ChildSubCode || '').trim();
+
         const insertReq = new sql.Request(transaction);
         await insertReq
-          .input('ParentItemCode', sql.VarChar(10), ParentItemCode)
-          .input('ChildItemCode', sql.VarChar(10), item.ChildItemCode)
+          .input('ParentItemCode', sql.VarChar(50), cleanParentCode)
+          .input('ParentSubCode', sql.VarChar(50), cleanParentSubCode)
+          .input('ChildItemCode', sql.VarChar(50), cleanChildCode)
+          .input('ChildSubCode', sql.VarChar(50), cleanChildSubCode)
           .input('Quantity', sql.Numeric(5, 3), parseFloat(item.Quantity) || 0)
           .query(`
-            INSERT INTO BOM_Master (ParentItemCode, ChildItemCode, Quantity)
-            VALUES (@ParentItemCode, @ChildItemCode, @Quantity)
+            INSERT INTO BOM_Master (ParentItemCode, ParentSubCode, ChildItemCode, ChildSubCode, Quantity)
+            VALUES (@ParentItemCode, @ParentSubCode, @ChildItemCode, @ChildSubCode, @Quantity)
           `);
       }
 
@@ -103,12 +124,20 @@ exports.saveBOM = async (req, res) => {
 // DELETE /api/bom/:parentCode
 exports.deleteBOM = async (req, res) => {
   const { parentCode } = req.params;
+  const parentSubCode = (req.query.parentSubCode || req.query.subCode || '').trim();
 
   try {
     const pool = await connectDB();
-    const result = await pool.request()
-      .input('ParentItemCode', sql.VarChar(10), parentCode)
-      .query('DELETE FROM BOM_Master WHERE ParentItemCode = @ParentItemCode');
+    const request = pool.request()
+      .input('ParentItemCode', sql.VarChar(50), parentCode)
+      .input('ParentSubCode', sql.VarChar(50), parentSubCode);
+
+    let query = 'DELETE FROM BOM_Master WHERE ParentItemCode = @ParentItemCode';
+    if (parentSubCode) {
+      query += ' AND ISNULL(ParentSubCode, \'\') = @ParentSubCode';
+    }
+
+    const result = await request.query(query);
 
     if (result.rowsAffected && result.rowsAffected[0] === 0) {
       return res.status(404).json({ message: 'BOM not found for this item' });

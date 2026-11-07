@@ -15,6 +15,9 @@ exports.getStockTransfers = async (req, res) => {
     const result = await pool.request().query(`
       SELECT 
         st.*,
+        ISNULL(st.OutSubCode, '') AS OutSubCode,
+        ISNULL(st.InSubCode, '') AS InSubCode,
+        ISNULL(st.ScrapSubCode, '') AS ScrapSubCode,
         fd.DeptName as FromDeptName,
         td.DeptName as ToDeptName,
         oi.ItemName as OutItemName,
@@ -23,9 +26,9 @@ exports.getStockTransfers = async (req, res) => {
       FROM StockTransfer st
       LEFT JOIN DepartmentMaster fd ON st.FromDeptID = fd.DeptID
       LEFT JOIN DepartmentMaster td ON st.ToDeptID = td.DeptID
-      LEFT JOIN ItemMaster oi ON st.OutItemCode = oi.ItemCode
-      LEFT JOIN ItemMaster ii ON st.InItemCode = ii.ItemCode
-      LEFT JOIN ItemMaster si ON st.ScrapItemCode = si.ItemCode
+      LEFT JOIN ItemMaster oi ON st.OutItemCode = oi.ItemCode AND ISNULL(st.OutSubCode, '') = ISNULL(oi.SubCode, '')
+      LEFT JOIN ItemMaster ii ON st.InItemCode = ii.ItemCode AND ISNULL(st.InSubCode, '') = ISNULL(ii.SubCode, '')
+      LEFT JOIN ItemMaster si ON st.ScrapItemCode = si.ItemCode AND ISNULL(st.ScrapSubCode, '') = ISNULL(si.SubCode, '')
       ORDER BY st.MoveDate DESC, st.MoveID DESC
     `);
     res.json(result.recordset);
@@ -50,7 +53,7 @@ exports.getAvailableStock = async (req, res) => {
 
     if (deptName === 'stock') {
       const dbRes = await pool.request().query(`
-        SELECT ItemCode, ItemName, Unit, ClosingStock, Costing
+        SELECT ItemCode, ISNULL(SubCode, '') AS SubCode, ItemName, Unit, ClosingStock, Costing
         FROM ItemMaster 
         WHERE ISNULL(ClosingStock, 0) > 0
       `);
@@ -58,6 +61,7 @@ exports.getAvailableStock = async (req, res) => {
         const isWeight = item.Unit === 'KG' || item.Unit === 'KGS';
         return {
           ItemCode: item.ItemCode,
+          SubCode: item.SubCode || '',
           ItemName: item.ItemName,
           Unit: item.Unit,
           Costing: item.Costing,
@@ -68,9 +72,9 @@ exports.getAvailableStock = async (req, res) => {
       return res.json(mapped);
     } else {
       const dbRes = await pool.request().query(`
-        SELECT d.ItemCode, i.ItemName, i.Unit, i.Costing, d.Pcs, d.Weight
+        SELECT d.ItemCode, ISNULL(d.SubCode, '') AS SubCode, i.ItemName, i.Unit, i.Costing, d.Pcs, d.Weight
         FROM DepartmentStock d
-        JOIN ItemMaster i ON d.ItemCode = i.ItemCode
+        JOIN ItemMaster i ON d.ItemCode = i.ItemCode AND ISNULL(d.SubCode, '') = ISNULL(i.SubCode, '')
         WHERE d.DeptID = ${deptId} AND (ISNULL(d.Pcs, 0) > 0 OR ISNULL(d.Weight, 0) > 0)
       `);
       return res.json(dbRes.recordset);
@@ -117,15 +121,16 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
   
   if (!itemsStr) return; // No items to process
 
-  const itemResult = await request.query(`SELECT ItemCode, Unit FROM ItemMaster WHERE ItemCode IN (${itemsStr})`);
+  const itemResult = await request.query(`SELECT ItemCode, ISNULL(SubCode, '') AS SubCode, Unit FROM ItemMaster WHERE ItemCode IN (${itemsStr})`);
   const units = {};
-  itemResult.recordset.forEach(i => { units[i.ItemCode] = i.Unit ? i.Unit.toUpperCase() : '' });
+  itemResult.recordset.forEach(i => { units[`${i.ItemCode}_${i.SubCode || ''}`] = i.Unit ? i.Unit.toUpperCase() : '' });
 
   // --- OUT ITEM LOGIC ---
   if (detail.OutItemCode) {
+    const outSub = detail.OutSubCode || detail.SubCode || '';
     if (fromDeptName === 'stock') {
       // Reduce ClosingStock
-      const unit = units[detail.OutItemCode];
+      const unit = units[`${detail.OutItemCode}_${outSub}`] || '';
       let qtyToReduce = 0;
       if (unit === 'KG' || unit === 'KGS') qtyToReduce = detail.OutWeight || 0;
       else qtyToReduce = detail.OutPcs || 0;
@@ -135,24 +140,24 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
       await request.query(`
         UPDATE ItemMaster 
         SET ClosingStock = ISNULL(ClosingStock, 0) + (${change})
-        WHERE ItemCode = '${detail.OutItemCode}'
+        WHERE ItemCode = '${detail.OutItemCode}' AND ISNULL(SubCode, '') = '${outSub}'
       `);
     } else {
       // Reduce DepartmentStock
       const pcsChange = -1 * multiplier * (detail.OutPcs || 0);
       const wtChange = -1 * multiplier * (detail.OutWeight || 0);
 
-      const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}'`);
+      const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}' AND ISNULL(SubCode, '') = '${outSub}'`);
       if (check.recordset.length > 0) {
         await request.query(`
           UPDATE DepartmentStock
           SET Pcs = ISNULL(Pcs, 0) + (${pcsChange}), Weight = ISNULL(Weight, 0) + (${wtChange})
-          WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}'
+          WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}' AND ISNULL(SubCode, '') = '${outSub}'
         `);
       } else {
         await request.query(`
-          INSERT INTO DepartmentStock (DeptID, ItemCode, Pcs, Weight)
-          VALUES (${FromDeptID}, '${detail.OutItemCode}', ${pcsChange}, ${wtChange})
+          INSERT INTO DepartmentStock (DeptID, ItemCode, SubCode, Pcs, Weight)
+          VALUES (${FromDeptID}, '${detail.OutItemCode}', '${outSub}', ${pcsChange}, ${wtChange})
         `);
       }
     }
@@ -160,9 +165,10 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
 
   // --- IN ITEM LOGIC ---
   if (detail.InItemCode) {
+    const inSub = detail.InSubCode || detail.SubCode || '';
     if (toDeptName === 'stock') {
       // Increase ClosingStock
-      const unit = units[detail.InItemCode];
+      const unit = units[`${detail.InItemCode}_${inSub}`] || '';
       let qtyToAdd = 0;
       if (unit === 'KG' || unit === 'KGS') qtyToAdd = detail.InWeight || 0;
       else qtyToAdd = detail.InPcs || 0;
@@ -171,24 +177,24 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
       await request.query(`
         UPDATE ItemMaster 
         SET ClosingStock = ISNULL(ClosingStock, 0) + (${change})
-        WHERE ItemCode = '${detail.InItemCode}'
+        WHERE ItemCode = '${detail.InItemCode}' AND ISNULL(SubCode, '') = '${inSub}'
       `);
     } else {
       // Increase DepartmentStock
       const pcsChange = 1 * multiplier * (detail.InPcs || 0);
       const wtChange = 1 * multiplier * (detail.InWeight || 0);
 
-      const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}'`);
+      const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}' AND ISNULL(SubCode, '') = '${inSub}'`);
       if (check.recordset.length > 0) {
         await request.query(`
           UPDATE DepartmentStock
           SET Pcs = ISNULL(Pcs, 0) + (${pcsChange}), Weight = ISNULL(Weight, 0) + (${wtChange})
-          WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}'
+          WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}' AND ISNULL(SubCode, '') = '${inSub}'
         `);
       } else {
         await request.query(`
-          INSERT INTO DepartmentStock (DeptID, ItemCode, Pcs, Weight)
-          VALUES (${ToDeptID}, '${detail.InItemCode}', ${pcsChange}, ${wtChange})
+          INSERT INTO DepartmentStock (DeptID, ItemCode, SubCode, Pcs, Weight)
+          VALUES (${ToDeptID}, '${detail.InItemCode}', '${inSub}', ${pcsChange}, ${wtChange})
         `);
       }
     }
@@ -196,12 +202,13 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
 
   // --- SCRAP ITEM LOGIC ---
   if (detail.ScrapItemCode) {
+    const scrapSub = detail.ScrapSubCode || detail.SubCode || '';
     // Always increase ClosingStock by Weight
     const change = 1 * multiplier * (detail.ScrapWeight || 0);
     await request.query(`
       UPDATE ItemMaster 
       SET ClosingStock = ISNULL(ClosingStock, 0) + (${change})
-      WHERE ItemCode = '${detail.ScrapItemCode}'
+      WHERE ItemCode = '${detail.ScrapItemCode}' AND ISNULL(SubCode, '') = '${scrapSub}'
     `);
   }
 };
@@ -243,6 +250,7 @@ exports.createStockTransfers = async (req, res) => {
     for (let i = 0; i < outItems.length; i++) {
       const item = outItems[i];
       if (!item.ItemCode) continue;
+      const subCode = item.SubCode || item.OutSubCode || '';
       const lossWt = i === 0 ? parseFloat(LossWeight) || 0 : 0;
       const lossRt = i === 0 ? parseFloat(LossRate) || 0 : 0;
       const lossAmt = i === 0 ? parseFloat(LossAmount) || 0 : 0;
@@ -251,36 +259,38 @@ exports.createStockTransfers = async (req, res) => {
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
 
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, OutItemCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, OutItemCode, OutSubCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', '${subCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
-      await modifyStock(request, { OutItemCode: item.ItemCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+      await modifyStock(request, { OutItemCode: item.ItemCode, OutSubCode: subCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
 
     // Insert In Items
     for (const item of inItems) {
       if (!item.ItemCode) continue;
+      const subCode = item.SubCode || item.InSubCode || '';
       const rate = parseFloat(item.Rate) || 0;
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, InItemCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, InItemCode, InSubCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', '${subCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
-      await modifyStock(request, { InItemCode: item.ItemCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+      await modifyStock(request, { InItemCode: item.ItemCode, InSubCode: subCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
 
     // Insert Scrap Items
     for (const item of scrapItems) {
       if (!item.ItemCode) continue;
+      const subCode = item.SubCode || item.ScrapSubCode || '';
       const rate = parseFloat(item.Rate) || 0;
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, ScrapItemCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, ScrapItemCode, ScrapSubCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${nextTransferId}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', '${subCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
-      await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+      await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapSubCode: subCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
 
     await transaction.commit();
@@ -331,6 +341,7 @@ exports.updateStockTransfer = async (req, res) => {
     for (let i = 0; i < outItems.length; i++) {
       const item = outItems[i];
       if (!item.ItemCode) continue;
+      const subCode = item.SubCode || item.OutSubCode || '';
       const lossWt = i === 0 ? parseFloat(LossWeight) || 0 : 0;
       const lossRt = i === 0 ? parseFloat(LossRate) || 0 : 0;
       const lossAmt = i === 0 ? parseFloat(LossAmount) || 0 : 0;
@@ -339,36 +350,38 @@ exports.updateStockTransfer = async (req, res) => {
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
 
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, OutItemCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, OutItemCode, OutSubCode, OutPcs, OutWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', '${subCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, ${lossWt}, ${lossRt}, ${lossAmt}, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
-      await modifyStock(request, { OutItemCode: item.ItemCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+      await modifyStock(request, { OutItemCode: item.ItemCode, OutSubCode: subCode, OutPcs: parseFloat(item.Pcs) || 0, OutWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
 
     // Insert In Items
     for (const item of inItems) {
       if (!item.ItemCode) continue;
+      const subCode = item.SubCode || item.InSubCode || '';
       const rate = parseFloat(item.Rate) || 0;
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, InItemCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, InItemCode, InSubCode, InPcs, InWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', '${subCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
-      await modifyStock(request, { InItemCode: item.ItemCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+      await modifyStock(request, { InItemCode: item.ItemCode, InSubCode: subCode, InPcs: parseFloat(item.Pcs) || 0, InWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
 
     // Insert Scrap Items
     for (const item of scrapItems) {
       if (!item.ItemCode) continue;
+      const subCode = item.SubCode || item.ScrapSubCode || '';
       const rate = parseFloat(item.Rate) || 0;
       const amount = parseFloat(item.Amount) || 0;
       const unitEscaped = item.Unit ? `'${item.Unit.replace(/'/g, "''")}'` : 'NULL';
       await request.query(`
-        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, ScrapItemCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
-        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
+        INSERT INTO StockTransfer (TransferID, MoveDate, FromDeptID, ToDeptID, ManualChallanNo, ScrapItemCode, ScrapSubCode, ScrapPcs, ScrapWeight, Unit, LossWeight, LossRate, LossAmount, Rate, Amount, Remarks, CreatedBy, UpdatedBy)
+        VALUES ('${id}', '${MoveDate}', ${FromDeptID}, ${ToDeptID}, ${manualChallanEscaped}, '${item.ItemCode}', '${subCode}', ${parseFloat(item.Pcs) || 0}, ${parseFloat(item.Weight) || 0}, ${unitEscaped}, 0, 0, 0, ${rate}, ${amount}, ${remarksEscaped}, '${sig}', '${sig}')
       `);
-      await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
+      await modifyStock(request, { ScrapItemCode: item.ItemCode, ScrapSubCode: subCode, ScrapPcs: parseFloat(item.Pcs) || 0, ScrapWeight: parseFloat(item.Weight) || 0 }, FromDeptID, ToDeptID, 1);
     }
 
     await transaction.commit();

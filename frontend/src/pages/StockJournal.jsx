@@ -276,6 +276,7 @@ const StockJournal = ({ user }) => {
             SJDate: sjDate,
             SJType: sjType,
             ItemCode: selectedItem.ItemCode,
+            SubCode: selectedItem.SubCode || '',
             Qty: parseFloat(qty),
             Remarks: remarks,
             CreatedBy: user?.username || 'Admin',
@@ -349,12 +350,17 @@ const StockJournal = ({ user }) => {
         autoTable(doc, {
             startY: 50,
             head: [['Item Code', 'Item Name', 'Qty', 'Remarks']],
-            body: details.map(d => [
-                d.ItemCode || row.ItemCode || '-',
-                d.ItemName || row.ItemName || '-',
-                d.Qty || row.Qty || '-',
-                d.Remarks || row.Remarks || '-'
-            ]),
+            body: details.map(d => {
+                const code = d.ItemCode || row.ItemCode || '-';
+                const sub = d.SubCode || row.SubCode || '';
+                const codeDisplay = sub ? `${code} / ${sub}` : code;
+                return [
+                    codeDisplay,
+                    d.ItemName || row.ItemName || '-',
+                    d.Qty || row.Qty || '-',
+                    d.Remarks || row.Remarks || '-'
+                ];
+            }),
             theme: 'grid',
             headStyles: { fillColor: [15, 59, 102] }
         });
@@ -372,7 +378,10 @@ const StockJournal = ({ user }) => {
         setQty(row.Qty);
         setRemarks(row.Remarks || '');
         
-        const parentItem = items.find(i => String(i.ItemCode).trim().toLowerCase() === String(row.ItemCode).trim().toLowerCase());
+        const parentItem = items.find(i => 
+            String(i.ItemCode).trim().toLowerCase() === String(row.ItemCode).trim().toLowerCase() &&
+            String(i.SubCode || '').trim().toLowerCase() === String(row.SubCode || '').trim().toLowerCase()
+        );
         setSelectedItem(parentItem || null);
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -470,7 +479,7 @@ const StockJournal = ({ user }) => {
                         <Autocomplete
                             fullWidth
                             options={items}
-                            getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
+                            getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
                             value={selectedItem}
                             onChange={(e, newValue) => setSelectedItem(newValue)}
                             renderInput={(params) => <TextField {...params} label="Select Item" size="small" required />}
@@ -544,7 +553,7 @@ const StockJournal = ({ user }) => {
                                             {row.SJType === 'Production' ? 'Production (+)' : (row.SJType === 'Consumption' ? 'Consumption (-)' : row.SJType)}
                                         </Typography>
                                     </TableCell>
-                                    <TableCell>{row.ItemCode} - {row.ItemName}</TableCell>
+                                    <TableCell>{row.ItemCode}{row.SubCode ? ` / ${row.SubCode}` : ''} - {row.ItemName}</TableCell>
                                     <TableCell align="right">{row.Qty}</TableCell>
                                     <TableCell>{row.Remarks || '-'}</TableCell>
                                     <TableCell align="center">

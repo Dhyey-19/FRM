@@ -25,11 +25,14 @@ exports.getNextAssemblyNo = async (req, res) => {
 
 // POST /api/assembly
 exports.createAssembly = async (req, res) => {
-    const { AssemblyNo, AssemblyDate, ItemCode, Quantity, Remark, CreatedBy } = req.body;
+    const { AssemblyNo, AssemblyDate, ItemCode, SubCode = '', Quantity, Remark, CreatedBy } = req.body;
 
     if (!AssemblyNo || !AssemblyDate || !ItemCode || !Quantity) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+
+    const cleanItemCode = String(ItemCode).trim();
+    const cleanSubCode = String(SubCode || '').trim();
 
     try {
         const pool = await connectDB();
@@ -39,8 +42,9 @@ exports.createAssembly = async (req, res) => {
         try {
             // 1. Fetch child items from BOM_Master
             const bomResult = await transaction.request()
-                .input('ParentItemCode', sql.VarChar(10), ItemCode)
-                .query('SELECT ChildItemCode, Quantity AS BOMQuantity FROM BOM_Master WHERE ParentItemCode = @ParentItemCode');
+                .input('ParentItemCode', sql.VarChar(50), cleanItemCode)
+                .input('ParentSubCode', sql.VarChar(50), cleanSubCode)
+                .query('SELECT ChildItemCode, ISNULL(ChildSubCode, \'\') AS ChildSubCode, Quantity AS BOMQuantity FROM BOM_Master WHERE ParentItemCode = @ParentItemCode AND ISNULL(ParentSubCode, \'\') = @ParentSubCode');
 
             const childItems = bomResult.recordset;
 
@@ -49,8 +53,9 @@ exports.createAssembly = async (req, res) => {
                 const requiredQty = child.BOMQuantity * Quantity;
 
                 const stockResult = await transaction.request()
-                    .input('ChildItemCode', sql.VarChar(10), child.ChildItemCode)
-                    .query('SELECT ClosingStock FROM ItemMaster WHERE ItemCode = @ChildItemCode');
+                    .input('ChildItemCode', sql.VarChar(50), child.ChildItemCode)
+                    .input('ChildSubCode', sql.VarChar(50), child.ChildSubCode)
+                    .query('SELECT ClosingStock FROM ItemMaster WHERE ItemCode = @ChildItemCode AND ISNULL(SubCode, \'\') = @ChildSubCode');
 
                 if (stockResult.recordset.length === 0) {
                     throw new Error(`Child item ${child.ChildItemCode} not found in ItemMaster`);
@@ -67,29 +72,32 @@ exports.createAssembly = async (req, res) => {
                 const requiredQty = child.BOMQuantity * Quantity;
 
                 await transaction.request()
-                    .input('ChildItemCode', sql.VarChar(10), child.ChildItemCode)
+                    .input('ChildItemCode', sql.VarChar(50), child.ChildItemCode)
+                    .input('ChildSubCode', sql.VarChar(50), child.ChildSubCode)
                     .input('QtyToDeduct', sql.Numeric(12, 3), requiredQty)
-                    .query('UPDATE ItemMaster SET ClosingStock = ClosingStock - @QtyToDeduct WHERE ItemCode = @ChildItemCode');
+                    .query('UPDATE ItemMaster SET ClosingStock = ClosingStock - @QtyToDeduct WHERE ItemCode = @ChildItemCode AND ISNULL(SubCode, \'\') = @ChildSubCode');
             }
 
             // 4. Increase stock for parent item
             await transaction.request()
-                .input('ParentItemCode', sql.VarChar(10), ItemCode)
+                .input('ParentItemCode', sql.VarChar(50), cleanItemCode)
+                .input('ParentSubCode', sql.VarChar(50), cleanSubCode)
                 .input('QtyToAdd', sql.Numeric(12, 3), Quantity)
-                .query('UPDATE ItemMaster SET ClosingStock = ClosingStock + @QtyToAdd WHERE ItemCode = @ParentItemCode');
+                .query('UPDATE ItemMaster SET ClosingStock = ClosingStock + @QtyToAdd WHERE ItemCode = @ParentItemCode AND ISNULL(SubCode, \'\') = @ParentSubCode');
 
             // 5. Insert into AssemblyTransactions
             await transaction.request()
                 .input('AssemblyNo', sql.Numeric(8, 0), AssemblyNo)
                 .input('AssemblyDate', sql.Date, AssemblyDate)
-                .input('ItemCode', sql.VarChar(10), ItemCode)
+                .input('ItemCode', sql.VarChar(50), cleanItemCode)
+                .input('SubCode', sql.VarChar(50), cleanSubCode)
                 .input('Quantity', sql.Numeric(8, 0), Quantity)
                 .input('Remark', sql.VarChar(50), Remark || null)
                 .input('CreatedBy', sql.VarChar(40), getSignature(CreatedBy))
                 .input('UpdatedBy', sql.VarChar(40), getSignature(CreatedBy))
                 .query(`
-                    INSERT INTO AssemblyTransactions (AssemblyNo, AssemblyDate, ItemCode, Quantity, Remark, CreatedBy, UpdatedBy)
-                    VALUES (@AssemblyNo, @AssemblyDate, @ItemCode, @Quantity, @Remark, @CreatedBy, @UpdatedBy)
+                    INSERT INTO AssemblyTransactions (AssemblyNo, AssemblyDate, ItemCode, SubCode, Quantity, Remark, CreatedBy, UpdatedBy)
+                    VALUES (@AssemblyNo, @AssemblyDate, @ItemCode, @SubCode, @Quantity, @Remark, @CreatedBy, @UpdatedBy)
                 `);
 
             await transaction.commit();
@@ -111,9 +119,9 @@ exports.getTodayAssemblies = async (req, res) => {
         const pool = await connectDB();
         const result = await pool.request()
             .query(`
-                SELECT a.Id, a.AssemblyNo, a.AssemblyDate, a.ItemCode, a.Quantity, CAST(a.Remark AS VARCHAR(50)) AS Remark, a.CreatedBy, a.UpdatedBy, i.ItemName 
+                SELECT a.Id, a.AssemblyNo, a.AssemblyDate, a.ItemCode, ISNULL(a.SubCode, '') AS SubCode, a.Quantity, CAST(a.Remark AS VARCHAR(50)) AS Remark, a.CreatedBy, a.UpdatedBy, i.ItemName 
                 FROM AssemblyTransactions a
-                INNER JOIN ItemMaster i ON a.ItemCode = i.ItemCode
+                INNER JOIN ItemMaster i ON a.ItemCode = i.ItemCode AND ISNULL(a.SubCode, '') = ISNULL(i.SubCode, '')
                 WHERE CAST(a.AssemblyDate AS DATE) = CAST(GETDATE() AS DATE)
                 ORDER BY a.AssemblyNo DESC
             `);
@@ -130,9 +138,9 @@ exports.getFilteredAssemblies = async (req, res) => {
     try {
         const pool = await connectDB();
         let query = `
-            SELECT a.Id, a.AssemblyNo, a.AssemblyDate, a.ItemCode, a.Quantity, CAST(a.Remark AS VARCHAR(50)) AS Remark, a.CreatedBy, a.UpdatedBy, i.ItemName 
+            SELECT a.Id, a.AssemblyNo, a.AssemblyDate, a.ItemCode, ISNULL(a.SubCode, '') AS SubCode, a.Quantity, CAST(a.Remark AS VARCHAR(50)) AS Remark, a.CreatedBy, a.UpdatedBy, i.ItemName 
             FROM AssemblyTransactions a
-            INNER JOIN ItemMaster i ON a.ItemCode = i.ItemCode
+            INNER JOIN ItemMaster i ON a.ItemCode = i.ItemCode AND ISNULL(a.SubCode, '') = ISNULL(i.SubCode, '')
             WHERE 1=1
         `;
         const request = pool.request();
@@ -162,9 +170,9 @@ exports.getAllAssembliesReport = async (req, res) => {
         const pool = await connectDB();
         const result = await pool.request()
             .query(`
-                SELECT a.Id, a.AssemblyNo, a.AssemblyDate, a.ItemCode, a.Quantity, CAST(a.Remark AS VARCHAR(50)) AS Remark, a.CreatedBy, a.UpdatedBy, i.ItemName 
+                SELECT a.Id, a.AssemblyNo, a.AssemblyDate, a.ItemCode, ISNULL(a.SubCode, '') AS SubCode, a.Quantity, CAST(a.Remark AS VARCHAR(50)) AS Remark, a.CreatedBy, a.UpdatedBy, i.ItemName 
                 FROM AssemblyTransactions a
-                INNER JOIN ItemMaster i ON a.ItemCode = i.ItemCode
+                INNER JOIN ItemMaster i ON a.ItemCode = i.ItemCode AND ISNULL(a.SubCode, '') = ISNULL(i.SubCode, '')
                 ORDER BY a.AssemblyDate DESC, a.AssemblyNo DESC
             `);
         res.status(200).json(result.recordset);
@@ -181,34 +189,37 @@ const reverseAssemblyTransaction = async (transaction, assemblyId, deleteRecord 
     const recordReq = new sql.Request(transaction);
     const recordResult = await recordReq
         .input('AssemblyId', sql.Int, assemblyId)
-        .query('SELECT ItemCode, Quantity FROM AssemblyTransactions WHERE Id = @AssemblyId');
+        .query("SELECT ItemCode, ISNULL(SubCode, '') AS SubCode, Quantity FROM AssemblyTransactions WHERE Id = @AssemblyId");
 
     if (recordResult.recordset.length === 0) {
         throw new Error('Assembly transaction not found');
     }
 
-    const { ItemCode, Quantity } = recordResult.recordset[0];
+    const { ItemCode, SubCode, Quantity } = recordResult.recordset[0];
 
     const bomReq = new sql.Request(transaction);
     const bomResult = await bomReq
         .input('ReverseParentCode', sql.VarChar(10), ItemCode)
-        .query('SELECT ChildItemCode, Quantity AS BOMQuantity FROM BOM_Master WHERE ParentItemCode = @ReverseParentCode');
+        .input('ReverseParentSubCode', sql.VarChar(50), SubCode || '')
+        .query("SELECT ChildItemCode, ISNULL(ChildSubCode, '') AS ChildSubCode, Quantity AS BOMQuantity FROM BOM_Master WHERE ParentItemCode = @ReverseParentCode AND ISNULL(ParentSubCode, '') = @ReverseParentSubCode");
     
     const childItems = bomResult.recordset;
 
     const deductParentReq = new sql.Request(transaction);
     await deductParentReq
         .input('ReverseParentCode', sql.VarChar(10), ItemCode)
+        .input('ReverseParentSubCode', sql.VarChar(50), SubCode || '')
         .input('ReverseQtyToDeduct', sql.Numeric(12, 3), Quantity)
-        .query('UPDATE ItemMaster SET ClosingStock = ClosingStock - @ReverseQtyToDeduct WHERE ItemCode = @ReverseParentCode');
+        .query("UPDATE ItemMaster SET ClosingStock = ClosingStock - @ReverseQtyToDeduct WHERE ItemCode = @ReverseParentCode AND ISNULL(SubCode, '') = @ReverseParentSubCode");
 
     for (const child of childItems) {
         const qtyToAddBack = child.BOMQuantity * Quantity;
         const addChildReq = new sql.Request(transaction);
         await addChildReq
             .input('ReverseChildCode', sql.VarChar(10), child.ChildItemCode)
+            .input('ReverseChildSubCode', sql.VarChar(50), child.ChildSubCode || '')
             .input('ReverseQtyToAdd', sql.Numeric(12, 3), qtyToAddBack)
-            .query('UPDATE ItemMaster SET ClosingStock = ClosingStock + @ReverseQtyToAdd WHERE ItemCode = @ReverseChildCode');
+            .query("UPDATE ItemMaster SET ClosingStock = ClosingStock + @ReverseQtyToAdd WHERE ItemCode = @ReverseChildCode AND ISNULL(SubCode, '') = @ReverseChildSubCode");
     }
 
     if (deleteRecord) {
@@ -245,7 +256,7 @@ exports.deleteAssembly = async (req, res) => {
 // PUT /api/assembly/:id
 exports.updateAssembly = async (req, res) => {
     const { id } = req.params;
-    const { AssemblyDate, ItemCode, Quantity, Remark, UpdatedBy } = req.body;
+    const { AssemblyDate, ItemCode, SubCode = '', Quantity, Remark, UpdatedBy } = req.body;
 
     if (!AssemblyDate || !ItemCode || !Quantity) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -273,7 +284,8 @@ exports.updateAssembly = async (req, res) => {
             const applyReq = new sql.Request(transaction);
             const bomResult = await applyReq
                 .input('NewParentItemCode', sql.VarChar(10), ItemCode)
-                .query('SELECT ChildItemCode, Quantity AS BOMQuantity FROM BOM_Master WHERE ParentItemCode = @NewParentItemCode');
+                .input('NewParentSubCode', sql.VarChar(50), SubCode || '')
+                .query("SELECT ChildItemCode, ISNULL(ChildSubCode, '') AS ChildSubCode, Quantity AS BOMQuantity FROM BOM_Master WHERE ParentItemCode = @NewParentItemCode AND ISNULL(ParentSubCode, '') = @NewParentSubCode");
             const childItems = bomResult.recordset;
 
             for (const child of childItems) {
@@ -281,7 +293,8 @@ exports.updateAssembly = async (req, res) => {
                 const stockReq = new sql.Request(transaction);
                 const stockResult = await stockReq
                     .input('CheckChildCode', sql.VarChar(10), child.ChildItemCode)
-                    .query('SELECT ClosingStock FROM ItemMaster WHERE ItemCode = @CheckChildCode');
+                    .input('CheckChildSubCode', sql.VarChar(50), child.ChildSubCode || '')
+                    .query("SELECT ClosingStock FROM ItemMaster WHERE ItemCode = @CheckChildCode AND ISNULL(SubCode, '') = @CheckChildSubCode");
 
                 if (stockResult.recordset.length === 0) throw new Error(`Child item ${child.ChildItemCode} not found in ItemMaster`);
                 const currentStock = stockResult.recordset[0].ClosingStock;
@@ -293,21 +306,24 @@ exports.updateAssembly = async (req, res) => {
                 const deductReq = new sql.Request(transaction);
                 await deductReq
                     .input('DeductChildCode', sql.VarChar(10), child.ChildItemCode)
+                    .input('DeductChildSubCode', sql.VarChar(50), child.ChildSubCode || '')
                     .input('QtyToDeduct', sql.Numeric(12, 3), requiredQty)
-                    .query('UPDATE ItemMaster SET ClosingStock = ClosingStock - @QtyToDeduct WHERE ItemCode = @DeductChildCode');
+                    .query("UPDATE ItemMaster SET ClosingStock = ClosingStock - @QtyToDeduct WHERE ItemCode = @DeductChildCode AND ISNULL(SubCode, '') = @DeductChildSubCode");
             }
 
             const addReq = new sql.Request(transaction);
             await addReq
                 .input('AddParentCode', sql.VarChar(10), ItemCode)
+                .input('AddParentSubCode', sql.VarChar(50), SubCode || '')
                 .input('QtyToAdd', sql.Numeric(12, 3), Quantity)
-                .query('UPDATE ItemMaster SET ClosingStock = ClosingStock + @QtyToAdd WHERE ItemCode = @AddParentCode');
+                .query("UPDATE ItemMaster SET ClosingStock = ClosingStock + @QtyToAdd WHERE ItemCode = @AddParentCode AND ISNULL(SubCode, '') = @AddParentSubCode");
 
             const updateReq = new sql.Request(transaction);
             await updateReq
                 .input('AssemblyId', sql.Int, id)
                 .input('AssemblyDate', sql.Date, AssemblyDate)
                 .input('ItemCode', sql.VarChar(10), ItemCode)
+                .input('SubCode', sql.VarChar(50), SubCode || '')
                 .input('Quantity', sql.Numeric(8, 0), Quantity)
                 .input('Remark', sql.VarChar(50), Remark || null)
                 .input('UpdatedBy', sql.VarChar(40), getSignature(UpdatedBy))
@@ -315,6 +331,7 @@ exports.updateAssembly = async (req, res) => {
                     UPDATE AssemblyTransactions
                     SET AssemblyDate = @AssemblyDate,
                         ItemCode = @ItemCode,
+                        SubCode = @SubCode,
                         Quantity = @Quantity,
                         Remark = @Remark,
                         UpdatedBy = @UpdatedBy

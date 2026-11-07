@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -16,8 +16,10 @@ import {
   Tooltip,
   FormControlLabel,
   Checkbox,
-  Autocomplete
+  Autocomplete,
+  Alert
 } from '@mui/material';
+import { RestartAlt as ResetIcon } from '@mui/icons-material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { 
   PictureAsPdf, 
@@ -98,6 +100,10 @@ export const formatDate = (val) => {
 
 const InvoiceWiseReceivableReport = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterPartyName = searchParams.get('partyName');
+  const filterInvoiceNo = searchParams.get('invoiceNo');
+
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -107,7 +113,7 @@ const InvoiceWiseReceivableReport = () => {
   const [viewMode, setViewMode] = useState('combined'); // 'combined', 'with_bill', 'without_bill'
 
   // Filter by Party
-  const [selectedParty, setSelectedParty] = useState(null);
+  const [selectedParty, setSelectedParty] = useState(filterPartyName || null);
 
   const partyOptions = useMemo(() => {
     const unique = [...new Set(reportData.map(r => r.partyName).filter(Boolean))];
@@ -117,12 +123,23 @@ const InvoiceWiseReceivableReport = () => {
   const [agingFilter, setAgingFilter] = useState('all'); // 'all', 'not_due', '1_30', '31_60', '61_90', 'above_90', 'overdue_only'
   const [onlyOutstanding, setOnlyOutstanding] = useState(true);
 
-  const fetchReportData = async () => {
+  const fetchReportData = async (loadAll = false) => {
+    setLoading(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/ledgers/invoice-wise-receivable`);
       if (!response.ok) throw new Error('Failed to fetch invoice-wise receivable report');
       const data = await response.json();
-      setReportData(data.map(item => ({ ...item, id: item.RowId })));
+      let mapped = data.map(item => ({ ...item, id: item.RowId }));
+      
+      if (!loadAll && (filterInvoiceNo || filterPartyName)) {
+        mapped = mapped.filter(item => {
+          const matchInv = filterInvoiceNo ? String(item.invoiceNo || '').toLowerCase() === filterInvoiceNo.toLowerCase() : true;
+          const matchParty = filterPartyName ? String(item.partyName || '').toLowerCase() === filterPartyName.toLowerCase() : true;
+          return matchInv && matchParty;
+        });
+      }
+
+      setReportData(mapped);
     } catch (error) {
       console.error('Error fetching report:', error);
     } finally {
@@ -131,8 +148,14 @@ const InvoiceWiseReceivableReport = () => {
   };
 
   useEffect(() => {
-    fetchReportData();
-  }, []);
+    fetchReportData(false);
+  }, [filterInvoiceNo, filterPartyName]);
+
+  const handleResetFilter = () => {
+    setSearchParams({});
+    setSelectedParty(null);
+    fetchReportData(true);
+  };
 
   const formatCurrency = (val, isPDF = false) => {
     const formatted = new Intl.NumberFormat('en-IN', {
@@ -543,6 +566,20 @@ const InvoiceWiseReceivableReport = () => {
           </Button>
         </Box>
       </Box>
+
+      {(filterInvoiceNo || filterPartyName) && (
+        <Alert 
+          severity="info" 
+          action={
+            <Button color="inherit" size="small" onClick={handleResetFilter} startIcon={<ResetIcon />}>
+              Show All Invoices
+            </Button>
+          }
+          sx={{ mb: 2.5, borderRadius: 2, bgcolor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe' }}
+        >
+          <strong>Single Record Alert View:</strong> Showing only record for {filterInvoiceNo ? `Invoice #${filterInvoiceNo}` : ''} {filterPartyName ? `(${filterPartyName})` : ''}.
+        </Alert>
+      )}
 
       {/* Primary KPI Cards */}
       <Grid container spacing={2} sx={{ mb: 2 }}>

@@ -41,7 +41,7 @@ exports.getDepartmentItems = async (req, res) => {
 
     if (deptName === 'stock') {
       const dbRes = await pool.request().query(`
-        SELECT ItemCode, ItemName, Unit, ClosingStock, Costing
+        SELECT ItemCode, ISNULL(SubCode, '') AS SubCode, ItemName, Unit, ClosingStock, Costing
         FROM ItemMaster
         ORDER BY ItemName ASC
       `);
@@ -49,6 +49,7 @@ exports.getDepartmentItems = async (req, res) => {
         const isWeight = (item.Unit || '').toUpperCase() === 'KG' || (item.Unit || '').toUpperCase() === 'KGS';
         return {
           ItemCode: item.ItemCode,
+          SubCode: item.SubCode || '',
           ItemName: item.ItemName,
           Unit: item.Unit,
           Costing: item.Costing,
@@ -59,9 +60,9 @@ exports.getDepartmentItems = async (req, res) => {
       return res.json(mapped);
     } else {
       const dbRes = await pool.request().query(`
-        SELECT d.ItemCode, i.ItemName, i.Unit, i.Costing, ISNULL(d.Pcs, 0) as Pcs, ISNULL(d.Weight, 0) as Weight
+        SELECT d.ItemCode, ISNULL(d.SubCode, '') AS SubCode, i.ItemName, i.Unit, i.Costing, ISNULL(d.Pcs, 0) as Pcs, ISNULL(d.Weight, 0) as Weight
         FROM DepartmentStock d
-        JOIN ItemMaster i ON d.ItemCode = i.ItemCode
+        JOIN ItemMaster i ON d.ItemCode = i.ItemCode AND ISNULL(d.SubCode, '') = ISNULL(i.SubCode, '')
         WHERE d.DeptID = ${parseInt(deptId, 10)}
         ORDER BY i.ItemName ASC
       `);
@@ -74,38 +75,39 @@ exports.getDepartmentItems = async (req, res) => {
 };
 
 // Helper to update stock for a detail row based on DeptID
-async function applyJobworkOutStock(request, deptId, itemCode, quantity, netWt, multiplier = -1) {
+async function applyJobworkOutStock(request, deptId, itemCode, subCode, quantity, netWt, multiplier = -1) {
   // multiplier = -1 means deduct stock (outward)
   // multiplier = +1 means add back stock (revert)
   const isStockDept = (!deptId || Number(deptId) === 1);
+  const safeSubCode = subCode || '';
   if (isStockDept) {
     const qtyChange = multiplier * (Number(quantity) || 0);
     const wtChange = multiplier * (Number(netWt) || 0);
     await request.query(`
       UPDATE ItemMaster
       SET ClosingStock = ISNULL(ClosingStock, 0) + (${qtyChange})
-      WHERE ItemCode = '${itemCode}' AND (UPPER(ISNULL(Unit, '')) NOT IN ('KG', 'KGS'));
+      WHERE ItemCode = '${itemCode}' AND ISNULL(SubCode, '') = '${safeSubCode}' AND (UPPER(ISNULL(Unit, '')) NOT IN ('KG', 'KGS'));
 
       UPDATE ItemMaster
       SET ClosingStock = ISNULL(ClosingStock, 0) + (${wtChange})
-      WHERE ItemCode = '${itemCode}' AND UPPER(ISNULL(Unit, '')) IN ('KG', 'KGS');
+      WHERE ItemCode = '${itemCode}' AND ISNULL(SubCode, '') = '${safeSubCode}' AND UPPER(ISNULL(Unit, '')) IN ('KG', 'KGS');
     `);
   } else {
     const pcsChange = multiplier * (Number(quantity) || 0);
     const wtChange = multiplier * (Number(netWt) || 0);
     const check = await request.query(`
-      SELECT * FROM DepartmentStock WHERE DeptID = ${deptId} AND ItemCode = '${itemCode}'
+      SELECT * FROM DepartmentStock WHERE DeptID = ${deptId} AND ItemCode = '${itemCode}' AND ISNULL(SubCode, '') = '${safeSubCode}'
     `);
     if (check.recordset.length > 0) {
       await request.query(`
         UPDATE DepartmentStock
         SET Pcs = ISNULL(Pcs, 0) + (${pcsChange}), Weight = ISNULL(Weight, 0) + (${wtChange})
-        WHERE DeptID = ${deptId} AND ItemCode = '${itemCode}'
+        WHERE DeptID = ${deptId} AND ItemCode = '${itemCode}' AND ISNULL(SubCode, '') = '${safeSubCode}'
       `);
     } else {
       await request.query(`
-        INSERT INTO DepartmentStock (DeptID, ItemCode, Pcs, Weight)
-        VALUES (${deptId}, '${itemCode}', ${pcsChange}, ${wtChange})
+        INSERT INTO DepartmentStock (DeptID, ItemCode, SubCode, Pcs, Weight)
+        VALUES (${deptId}, '${itemCode}', '${safeSubCode}', ${pcsChange}, ${wtChange})
       `);
     }
   }
@@ -130,13 +132,13 @@ exports.getJobworkOuts = async (req, res) => {
     
     // Fetch all details with ItemName and calculated AMOUNT
     const detailResult = await pool.request().query(`
-      SELECT d.*, i.ItemName,
+      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, i.ItemName,
         CASE 
           WHEN UPPER(d.UNIT) IN ('KG', 'KGS') THEN (ISNULL(d.NETWT, 0) * ISNULL(d.RATE, 0))
           ELSE (ISNULL(d.QUANTITY, 0) * ISNULL(d.RATE, 0))
         END AS AMOUNT
       FROM JobworkOutDetail d
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
     `);
 
     // Group details by JWOUTWARDID
@@ -208,6 +210,7 @@ exports.addJobworkOut = async (req, res) => {
         await detailReq
           .input('JWOUTWARDID', sql.Numeric(8,0), newJwOutwardId)
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
+          .input('SUBCODE', sql.VarChar(50), d.SUBCODE || '')
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -216,12 +219,12 @@ exports.addJobworkOut = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('PROCESS', sql.VarChar(20), d.PROCESS || null)
           .query(`
-            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, PROCESS)
-            VALUES (@JWOUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
+            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, PROCESS)
+            VALUES (@JWOUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
           `);
 
         // Deduct stock from target department (Main Stock or DepartmentStock)
-        await applyJobworkOutStock(detailReq, targetDeptId, d.ITEMCODE, d.QUANTITY, d.NETWT, -1);
+        await applyJobworkOutStock(detailReq, targetDeptId, d.ITEMCODE, d.SUBCODE, d.QUANTITY, d.NETWT, -1);
       }
 
       await transaction.commit();
@@ -263,11 +266,11 @@ exports.updateJobworkOut = async (req, res) => {
       const oldDetailsReq = new sql.Request(transaction);
       const oldDetailsRes = await oldDetailsReq
         .input('JWOUTWARDID', sql.Numeric(8,0), id)
-        .query('SELECT * FROM JobworkOutDetail WHERE JWOUTWARDID = @JWOUTWARDID');
+        .query("SELECT *, ISNULL(SUBCODE, '') AS SUBCODE FROM JobworkOutDetail WHERE JWOUTWARDID = @JWOUTWARDID");
 
       for (const oldD of oldDetailsRes.recordset) {
         const revertReq = new sql.Request(transaction);
-        await applyJobworkOutStock(revertReq, oldDeptId, oldD.ITEMCODE, oldD.QUANTITY, oldD.NETWT, +1);
+        await applyJobworkOutStock(revertReq, oldDeptId, oldD.ITEMCODE, oldD.SUBCODE, oldD.QUANTITY, oldD.NETWT, +1);
       }
 
       // 3. Delete old details
@@ -305,6 +308,7 @@ exports.updateJobworkOut = async (req, res) => {
         await detailReq
           .input('JWOUTWARDID', sql.Numeric(8,0), id)
           .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
+          .input('SUBCODE', sql.VarChar(50), d.SUBCODE || '')
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -313,11 +317,11 @@ exports.updateJobworkOut = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('PROCESS', sql.VarChar(20), d.PROCESS || null)
           .query(`
-            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, PROCESS)
-            VALUES (@JWOUTWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
+            INSERT INTO JobworkOutDetail (JWOUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, PROCESS)
+            VALUES (@JWOUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @PROCESS);
           `);
 
-        await applyJobworkOutStock(detailReq, targetDeptId, d.ITEMCODE, d.QUANTITY, d.NETWT, -1);
+        await applyJobworkOutStock(detailReq, targetDeptId, d.ITEMCODE, d.SUBCODE, d.QUANTITY, d.NETWT, -1);
       }
 
       await transaction.commit();
@@ -354,11 +358,11 @@ exports.deleteJobworkOut = async (req, res) => {
       const oldDetailsReq = new sql.Request(transaction);
       const oldDetailsRes = await oldDetailsReq
         .input('JWOUTWARDID', sql.Numeric(8,0), id)
-        .query('SELECT ITEMCODE, QUANTITY, NETWT, UNIT FROM JobworkOutDetail WHERE JWOUTWARDID = @JWOUTWARDID');
+        .query("SELECT ITEMCODE, ISNULL(SUBCODE, '') AS SUBCODE, QUANTITY, NETWT, UNIT FROM JobworkOutDetail WHERE JWOUTWARDID = @JWOUTWARDID");
       
       for (const oldD of oldDetailsRes.recordset) {
         const revertStockReq = new sql.Request(transaction);
-        await applyJobworkOutStock(revertStockReq, oldDeptId, oldD.ITEMCODE, oldD.QUANTITY, oldD.NETWT, +1);
+        await applyJobworkOutStock(revertStockReq, oldDeptId, oldD.ITEMCODE, oldD.SUBCODE, oldD.QUANTITY, oldD.NETWT, +1);
       }
 
       // 3. Delete details and header
@@ -394,6 +398,7 @@ exports.getJobworkOutReport = async (req, res) => {
         l.LedgerName, 
         ISNULL(dm.DeptName, 'Stock') AS FromDepartment,
         d.ITEMCODE, 
+        ISNULL(d.SUBCODE, '') AS SUBCODE,
         i.ItemName, 
         d.UNIT, 
         d.QUANTITY, 
@@ -409,7 +414,7 @@ exports.getJobworkOutReport = async (req, res) => {
       INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
       LEFT JOIN DepartmentMaster dm ON h.DeptID = dm.DeptID
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
       ORDER BY h.JWOUTWARDDATE DESC, h.JWOUTWARDNO DESC, d.ID ASC
     `);
     

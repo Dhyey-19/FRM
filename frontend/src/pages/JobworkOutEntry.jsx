@@ -25,6 +25,7 @@ import autoTable from 'jspdf-autotable';
 
 const emptyRow = {
   ITEMCODE: '',
+  SUBCODE: '',
   GROSSWT: '',
   NETWT: '',
   TENPCSWT: '',
@@ -164,7 +165,8 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
         if (response.ok && Array.isArray(data)) {
           const map = {};
           data.forEach(item => {
-            map[item.ItemCode] = { Pcs: item.Pcs || 0, Weight: item.Weight || 0 };
+            const k = `${item.ItemCode}_${item.SubCode || ''}`;
+            map[k] = { Pcs: item.Pcs || 0, Weight: item.Weight || 0 };
           });
           setAvailableStockMap(map);
           setDepartmentItems(data);
@@ -181,19 +183,22 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
     fetchStockForDept();
   }, [deptId]);
 
-  const getRowItemOptions = (rowItemCode) => {
+  const getRowItemOptions = (rowItemCode, rowSubCode) => {
     if (!rowItemCode) return departmentItems;
-    const exists = departmentItems.some(i => i.ItemCode === rowItemCode);
+    const safeSub = rowSubCode || '';
+    const exists = departmentItems.some(i => i.ItemCode === rowItemCode && (i.SubCode || '') === safeSub);
     if (!exists) {
-      const fallback = items.find(i => i.ItemCode === rowItemCode);
+      const fallback = items.find(i => i.ItemCode === rowItemCode && (i.SubCode || '') === safeSub);
       if (fallback) return [fallback, ...departmentItems];
     }
     return departmentItems;
   };
 
-  const getRowItemValue = (rowItemCode) => {
+  const getRowItemValue = (rowItemCode, rowSubCode) => {
     if (!rowItemCode) return null;
-    return departmentItems.find(i => i.ItemCode === rowItemCode) || items.find(i => i.ItemCode === rowItemCode) || null;
+    const safeSub = rowSubCode || '';
+    return departmentItems.find(i => i.ItemCode === rowItemCode && (i.SubCode || '') === safeSub) || 
+           items.find(i => i.ItemCode === rowItemCode && (i.SubCode || '') === safeSub) || null;
   };
 
   const handleChangePage = (event, newPage) => setPage(newPage);
@@ -285,6 +290,7 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
     if (jw.Details && jw.Details.length > 0) {
       setGridRows(jw.Details.map(d => ({
         ITEMCODE: d.ITEMCODE || '',
+        SUBCODE: d.SUBCODE || '',
         GROSSWT: d.GROSSWT !== null ? d.GROSSWT.toString() : '',
         NETWT: d.NETWT !== null ? d.NETWT.toString() : '',
         TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
@@ -353,6 +359,7 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
   const handleItemSelect = (index, item) => {
     const newRows = [...gridRows];
     newRows[index].ITEMCODE = item ? item.ItemCode : '';
+    newRows[index].SUBCODE = item ? (item.SubCode || '') : '';
     newRows[index].UNIT = item ? item.Unit : '';
     newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     setGridRows(newRows);
@@ -472,7 +479,9 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
     const detailsSource = isSaveAction ? jw.Details : (jw.Details || []);
     
     const tableRows = detailsSource.map((d, index) => {
-      const itemName = d.ItemName || items.find(item => item.ItemCode === d.ITEMCODE)?.ItemName || '';
+      const matched = items.find(item => item.ItemCode === d.ITEMCODE && (item.SubCode || '') === (d.SUBCODE || ''));
+      const itemName = d.ItemName || matched?.ItemName || '';
+      const itemCodeDisplay = d.SUBCODE ? `${d.ITEMCODE} / ${d.SUBCODE}` : d.ITEMCODE;
       const unit = (d.UNIT || '').trim().toUpperCase();
       const gross = parseFloat(d.GROSSWT) || 0;
       const net = parseFloat(d.NETWT) || 0;
@@ -481,7 +490,7 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
       const amt = (unit === 'KGS' || unit === 'KG') ? (net * rate) : (qty * rate);
       return [
         index + 1,
-        `${d.ITEMCODE} - ${itemName}`,
+        `${itemCodeDisplay} - ${itemName}`,
         d.PROCESS || '-',
         gross.toFixed(3),
         net.toFixed(3),
@@ -603,6 +612,7 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
       UPDATEDBY: username,
       Details: validRows.map(r => ({
         ...r,
+        SUBCODE: r.SUBCODE || '',
         GROSSWT: r.GROSSWT ? parseFloat(r.GROSSWT) : 0,
         NETWT: r.NETWT ? parseFloat(r.NETWT) : 0,
         TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
@@ -897,16 +907,17 @@ const JobworkOutEntry = ({ hideTitle = false, title = 'Subcontract OUT' }) => {
                   <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
                     <TableCell>
                       <Autocomplete
-                        options={getRowItemOptions(row.ITEMCODE)}
-                        isOptionEqualToValue={(option, value) => option?.ItemCode === value?.ItemCode}
+                        options={getRowItemOptions(row.ITEMCODE, row.SUBCODE)}
+                        isOptionEqualToValue={(option, value) => option?.ItemCode === value?.ItemCode && (option?.SubCode || '') === (value?.SubCode || '')}
                         getOptionLabel={(option) => {
                           if (!option) return '';
-                          const avail = availableStockMap[option.ItemCode] || { Pcs: option.Pcs || 0, Weight: option.Weight || 0 };
+                          const subStr = option.SubCode ? ` / ${option.SubCode}` : '';
+                          const avail = availableStockMap[`${option.ItemCode}_${option.SubCode || ''}`] || { Pcs: option.Pcs || 0, Weight: option.Weight || 0 };
                           const pcs = avail.Pcs !== undefined ? avail.Pcs : (option.Pcs || 0);
                           const wt = avail.Weight !== undefined ? avail.Weight : (option.Weight || 0);
-                          return `${option.ItemCode} - ${option.ItemName} [Avail: ${pcs} ${option.Unit || 'PCS'}${wt > 0 ? ` / ${wt}kg` : ''}]`;
+                          return `${option.ItemCode}${subStr} - ${option.ItemName} [Avail: ${pcs} ${option.Unit || 'PCS'}${wt > 0 ? ` / ${wt}kg` : ''}]`;
                         }}
-                        value={getRowItemValue(row.ITEMCODE)}
+                        value={getRowItemValue(row.ITEMCODE, row.SUBCODE)}
                         onChange={(e, newValue) => handleItemSelect(index, newValue)}
                         renderInput={(params) => (
                           <TextField 

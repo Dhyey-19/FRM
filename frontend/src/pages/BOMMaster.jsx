@@ -69,12 +69,14 @@ const BOMMaster = () => {
       }
       setLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bom/${selectedParent.ItemCode}`);
+        const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bom/${encodeURIComponent(selectedParent.ItemCode)}?parentSubCode=${encodeURIComponent(selectedParent.SubCode || '')}`;
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           // Map backend structure to frontend structure
           setBomItems(data.map(item => ({
             ChildItemCode: item.ChildItemCode,
+            ChildSubCode: item.ChildSubCode || '',
             Quantity: item.Quantity
           })));
         } else {
@@ -92,7 +94,7 @@ const BOMMaster = () => {
   }, [selectedParent]);
 
   const handleAddRow = () => {
-    setBomItems([...bomItems, { ChildItemCode: null, Quantity: '' }]);
+    setBomItems([...bomItems, { ChildItemCode: null, ChildSubCode: '', Quantity: '' }]);
   };
 
   const handleRemoveRow = (index) => {
@@ -104,6 +106,7 @@ const BOMMaster = () => {
   const handleItemChange = (index, newValue) => {
     const updated = [...bomItems];
     updated[index].ChildItemCode = newValue ? newValue.ItemCode : null;
+    updated[index].ChildSubCode = newValue ? (newValue.SubCode || '') : '';
     setBomItems(updated);
   };
 
@@ -132,7 +135,12 @@ const BOMMaster = () => {
 
     const payload = {
       ParentItemCode: selectedParent.ItemCode,
-      items: validItems
+      ParentSubCode: selectedParent.SubCode || '',
+      items: validItems.map(item => ({
+        ChildItemCode: item.ChildItemCode,
+        ChildSubCode: item.ChildSubCode || '',
+        Quantity: parseFloat(item.Quantity) || 0
+      }))
     };
 
     try {
@@ -163,7 +171,9 @@ const BOMMaster = () => {
       if (response.ok) {
         const exportData = data.map(b => ({
           ParentItemCode: b.ParentItemCode,
+          ParentSubCode: b.ParentSubCode || '',
           ChildItemCode: b.ChildItemCode,
+          ChildSubCode: b.ChildSubCode || '',
           Quantity: b.Quantity
         }));
         const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -235,10 +245,10 @@ const BOMMaster = () => {
             const fetchBOM = async () => {
               setLoading(true);
               try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bom/${selectedParent.ItemCode}`);
+                const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bom/${encodeURIComponent(selectedParent.ItemCode)}?parentSubCode=${encodeURIComponent(selectedParent.SubCode || '')}`);
                 if (response.ok) {
                   const data = await response.json();
-                  setBomItems(data.map(item => ({ ChildItemCode: item.ChildItemCode, Quantity: item.Quantity })));
+                  setBomItems(data.map(item => ({ ChildItemCode: item.ChildItemCode, ChildSubCode: item.ChildSubCode || '', Quantity: item.Quantity })));
                 }
               } catch (err) {} finally { setLoading(false); }
             };
@@ -299,7 +309,7 @@ const BOMMaster = () => {
         </Typography>
         <Autocomplete
           options={finishedGoods}
-          getOptionLabel={(option) => `${option.ItemCode} - ${option.ItemName}`}
+          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
           value={selectedParent}
           onChange={(event, newValue) => setSelectedParent(newValue)}
           renderInput={(params) => <TextField {...params} label="Finished Good (Items with Series)" size="small" />}
@@ -364,13 +374,13 @@ const BOMMaster = () => {
                 </TableRow>
               ) : (
                 bomItems.map((row, index) => {
-                  const selectedChild = rawMaterials.find(rm => rm.ItemCode === row.ChildItemCode) || null;
+                  const selectedChild = rawMaterials.find(rm => rm.ItemCode === row.ChildItemCode && (rm.SubCode || '') === (row.ChildSubCode || '')) || null;
                   return (
                     <TableRow hover key={index}>
                       <TableCell>
                         <Autocomplete
                           options={rawMaterials}
-                          getOptionLabel={(option) => `${option.ItemCode} - ${option.ItemName}`}
+                          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
                           value={selectedChild}
                           onChange={(e, val) => handleItemChange(index, val)}
                           renderInput={(params) => <TextField {...params} placeholder="Select Material" size="small" />}

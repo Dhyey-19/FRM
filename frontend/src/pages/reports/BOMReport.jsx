@@ -39,18 +39,18 @@ const BOMReport = () => {
     fetchBOMs();
   }, []);
 
-  const toggleGroup = (code) => {
-    setExpandedGroups(prev => ({...prev, [code]: !prev[code]}));
+  const toggleGroup = (key) => {
+    setExpandedGroups(prev => ({...prev, [key]: !prev[key]}));
   };
 
-  const handleEdit = (e, parentCode) => {
+  const handleEdit = (e, group) => {
     e.stopPropagation();
-    navigate('/dashboard/bom', { state: { editParentCode: parentCode } });
+    navigate('/dashboard/bom', { state: { editParentCode: group.ParentItemCode, editParentSubCode: group.ParentSubCode || '' } });
   };
 
-  const openDeleteConfirm = (e, parentCode) => {
+  const openDeleteConfirm = (e, group) => {
     e.stopPropagation();
-    setBomToDelete(parentCode);
+    setBomToDelete({ parentCode: group.ParentItemCode, parentSubCode: group.ParentSubCode || '' });
     setDeleteConfirmOpen(true);
   };
 
@@ -62,7 +62,7 @@ const BOMReport = () => {
   const handleDeleteBOM = async () => {
     if (bomToDelete) {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bom/${bomToDelete}`, { method: 'DELETE' });
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bom/${bomToDelete.parentCode}?parentSubCode=${encodeURIComponent(bomToDelete.parentSubCode || '')}`, { method: 'DELETE' });
         if (response.ok) {
           fetchBOMs();
           closeDeleteConfirm();
@@ -81,25 +81,29 @@ const BOMReport = () => {
       if (!response.ok) throw new Error('Failed to fetch BOM report');
       const data = await response.json();
 
-      // Group the data by ParentItemCode
+      // Group the data by ParentItemCode and ParentSubCode
       const grouped = Object.values(data.reduce((acc, row) => {
-        if (!acc[row.ParentItemCode]) {
-          acc[row.ParentItemCode] = {
+        const parentKey = `${row.ParentItemCode}__${row.ParentSubCode || ''}`;
+        if (!acc[parentKey]) {
+          acc[parentKey] = {
+            id: parentKey,
             ParentItemCode: row.ParentItemCode,
+            ParentSubCode: row.ParentSubCode || '',
             ParentItemName: row.ParentItemName,
             ParentBrandName: row.ParentBrandName || 'N/A',
             ParentTotalCost: 0,
             children: []
           };
         }
-        acc[row.ParentItemCode].children.push({
+        acc[parentKey].children.push({
           ChildItemCode: row.ChildItemCode,
+          ChildSubCode: row.ChildSubCode || '',
           ChildItemName: row.ChildItemName,
           Quantity: row.Quantity,
           ChildCosting: row.ChildCosting,
           TotalChildCost: row.TotalChildCost
         });
-        acc[row.ParentItemCode].ParentTotalCost += row.TotalChildCost;
+        acc[parentKey].ParentTotalCost += row.TotalChildCost;
         return acc;
       }, {}));
 
@@ -127,6 +131,7 @@ const BOMReport = () => {
     
     const search = searchTerm.toLowerCase();
     if (group.ParentItemCode.toLowerCase().includes(search) || 
+        (group.ParentSubCode && group.ParentSubCode.toLowerCase().includes(search)) ||
         group.ParentItemName.toLowerCase().includes(search) ||
         group.ParentBrandName.toLowerCase().includes(search)) {
       return true;
@@ -134,6 +139,7 @@ const BOMReport = () => {
     
     return group.children.some(child => 
       child.ChildItemCode.toLowerCase().includes(search) || 
+      (child.ChildSubCode && child.ChildSubCode.toLowerCase().includes(search)) ||
       child.ChildItemName.toLowerCase().includes(search)
     );
   });
@@ -179,15 +185,17 @@ const BOMReport = () => {
     const tableData = [];
     sortedBoms.forEach(group => {
       // Parent Row (Darker background)
+      const parentLabel = `${group.ParentItemCode}${group.ParentSubCode ? ` / ${group.ParentSubCode}` : ''} - ${group.ParentItemName} (Brand: ${group.ParentBrandName})`;
       tableData.push([
-        { content: `${group.ParentItemCode} - ${group.ParentItemName} (Brand: ${group.ParentBrandName})`, colSpan: 4, styles: { fillColor: [226, 232, 240], fontStyle: 'bold', textColor: [15, 59, 102] } },
+        { content: parentLabel, colSpan: 4, styles: { fillColor: [226, 232, 240], fontStyle: 'bold', textColor: [15, 59, 102] } },
         { content: group.ParentTotalCost.toFixed(2), styles: { fillColor: [226, 232, 240], fontStyle: 'bold', textColor: [15, 59, 102], halign: 'right' } }
       ]);
       
       // Child Rows
       group.children.forEach(child => {
+        const childLabel = `    ${child.ChildItemCode}${child.ChildSubCode ? ` / ${child.ChildSubCode}` : ''}`;
         tableData.push([
-          `    ${child.ChildItemCode}`, 
+          childLabel, 
           child.ChildItemName, 
           { content: child.Quantity, styles: { halign: 'right' } }, 
           { content: child.ChildCosting.toFixed(2), styles: { halign: 'right' } }, 
@@ -242,7 +250,7 @@ const BOMReport = () => {
     sortedBoms.forEach(group => {
       flatData.push({
         'Level': 'Finished Good',
-        'Code': group.ParentItemCode,
+        'Code': group.ParentSubCode ? `${group.ParentItemCode} / ${group.ParentSubCode}` : group.ParentItemCode,
         'Name': group.ParentItemName,
         'Brand': group.ParentBrandName,
         'Quantity': '',
@@ -252,7 +260,7 @@ const BOMReport = () => {
       group.children.forEach(child => {
         flatData.push({
           'Level': 'Raw Material',
-          'Code': child.ChildItemCode,
+          'Code': child.ChildSubCode ? `${child.ChildItemCode} / ${child.ChildSubCode}` : child.ChildItemCode,
           'Name': child.ChildItemName,
           'Brand': '-',
           'Quantity': child.Quantity,
@@ -395,16 +403,16 @@ const BOMReport = () => {
                   </TableRow>
                 ) : (
                   sortedBoms.map((group) => (
-                    <React.Fragment key={group.ParentItemCode}>
+                    <React.Fragment key={group.id}>
                       {/* Parent Group Header Row */}
                       <TableRow 
-                        onClick={() => toggleGroup(group.ParentItemCode)}
+                        onClick={() => toggleGroup(group.id)}
                         sx={{ backgroundColor: '#e2e8f0', '&:hover': { backgroundColor: '#cbd5e1' }, cursor: 'pointer' }}
                       >
                         <TableCell colSpan={4} sx={{ fontWeight: 'bold', color: '#0f3b66', fontSize: '0.95rem' }}>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {expandedGroups[group.ParentItemCode] ? <KeyboardArrowDown sx={{ mr: 1 }} /> : <KeyboardArrowRight sx={{ mr: 1 }} />}
-                            {group.ParentItemCode} - {group.ParentItemName} <Typography component="span" sx={{ color: '#64748b', ml: 1, fontSize: '0.85rem' }}>(Brand: {group.ParentBrandName})</Typography>
+                            {expandedGroups[group.id] ? <KeyboardArrowDown sx={{ mr: 1 }} /> : <KeyboardArrowRight sx={{ mr: 1 }} />}
+                            {group.ParentItemCode}{group.ParentSubCode ? ` / ${group.ParentSubCode}` : ''} - {group.ParentItemName} <Typography component="span" sx={{ color: '#64748b', ml: 1, fontSize: '0.85rem' }}>(Brand: {group.ParentBrandName})</Typography>
                           </Box>
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f', fontSize: '0.95rem' }}>
@@ -412,10 +420,10 @@ const BOMReport = () => {
                         </TableCell>
                         <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
-                            <IconButton color="primary" size="small" onClick={(e) => handleEdit(e, group.ParentItemCode)} disabled={!hasEditPermission()}>
+                            <IconButton color="primary" size="small" onClick={(e) => handleEdit(e, group)} disabled={!hasEditPermission()}>
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton color="error" size="small" onClick={(e) => openDeleteConfirm(e, group.ParentItemCode)} disabled={!hasDeletePermission()}>
+                            <IconButton color="error" size="small" onClick={(e) => openDeleteConfirm(e, group)} disabled={!hasDeletePermission()}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Box>
@@ -423,10 +431,10 @@ const BOMReport = () => {
                       </TableRow>
                       
                       {/* Child Rows */}
-                      {expandedGroups[group.ParentItemCode] && group.children.map((child) => (
-                        <TableRow hover key={`${group.ParentItemCode}_${child.ChildItemCode}`}>
+                      {expandedGroups[group.id] && group.children.map((child, cIdx) => (
+                        <TableRow hover key={`${group.id}_${child.ChildItemCode}_${child.ChildSubCode}_${cIdx}`}>
                           <TableCell sx={{ pl: 4, color: 'text.secondary' }}>
-                            {child.ChildItemCode}
+                            {child.ChildItemCode}{child.ChildSubCode ? ` / ${child.ChildSubCode}` : ''}
                           </TableCell>
                           <TableCell sx={{ color: 'text.secondary' }}>
                             {child.ChildItemName}

@@ -405,7 +405,7 @@ exports.getDashboardKPIs = async (req, res) => {
     // 8a. Items Below Reorder Level (Low Stock Alert)
     const reorderResult = await pool.request().query(`
       SELECT 
-        ItemCode, ItemName, ItemType, Series, Unit, Costing,
+        ItemCode, ISNULL(SubCode, '') AS SubCode, ItemName, ItemType, Series, Unit, Costing,
         ISNULL(ClosingStock, 0) AS ClosingStock,
         ISNULL(ReorderLevel, 0) AS ReorderLevel,
         (ISNULL(ReorderLevel, 0) - ISNULL(ClosingStock, 0)) AS Deficit
@@ -491,7 +491,7 @@ exports.getDashboardNotifications = async (req, res) => {
     // 1. Low stock / below reorder level items
     const reorderResult = await pool.request().query(`
       SELECT 
-        ItemCode, ItemName, ItemType, Series, Unit, Costing,
+        ItemCode, ISNULL(SubCode, '') AS SubCode, ItemName, ItemType, Series, Unit, Costing,
         ISNULL(ClosingStock, 0) AS ClosingStock,
         ISNULL(ReorderLevel, 0) AS ReorderLevel,
         (ISNULL(ReorderLevel, 0) - ISNULL(ClosingStock, 0)) AS Deficit
@@ -503,21 +503,25 @@ exports.getDashboardNotifications = async (req, res) => {
     const notifications = [];
 
     (reorderResult.recordset || []).forEach(item => {
+      const itemCodeStr = (item.ItemCode || '').trim();
+      const subCodeStr = (item.SubCode || '').trim();
+      const displayCode = subCodeStr ? `${itemCodeStr} / ${subCodeStr}` : itemCodeStr;
       notifications.push({
-        id: `reorder_${item.ItemCode}`,
+        id: `reorder_${itemCodeStr}_${subCodeStr}`,
         type: 'reorder',
         category: 'Low Stock Alert',
         severity: item.ClosingStock <= 0 ? 'critical' : 'warning',
-        title: `Low Stock: ${item.ItemName} (${item.ItemCode})`,
+        title: `Low Stock: ${item.ItemName} (${displayCode})`,
         message: `Current stock of ${item.ClosingStock} ${item.Unit} is below reorder level (${item.ReorderLevel} ${item.Unit}). Shortfall: ${item.Deficit} ${item.Unit}.`,
-        itemCode: item.ItemCode,
+        itemCode: itemCodeStr,
+        subCode: subCodeStr,
         itemName: item.ItemName,
         currentStock: item.ClosingStock,
         reorderLevel: item.ReorderLevel,
         deficit: item.Deficit,
         unit: item.Unit,
         timestamp: new Date().toISOString(),
-        actionLink: '/dashboard/items'
+        actionLink: `/dashboard/items?itemCode=${encodeURIComponent(itemCodeStr)}${subCodeStr ? `&subCode=${encodeURIComponent(subCodeStr)}` : ''}`
       });
     });
 
@@ -599,8 +603,9 @@ exports.getDashboardNotifications = async (req, res) => {
               dueDays: dueDays,
               outwardNo: inv.outwardNo,
               partyName: p.ledgerName,
+              ledgerId: ledgerId,
               timestamp: new Date().toISOString(),
-              actionLink: '/dashboard/reports/receivable'
+              actionLink: `/dashboard/reports/invoice-receivable?partyName=${encodeURIComponent(p.ledgerName)}&invoiceNo=${encodeURIComponent(inv.outwardNo)}`
             });
           }
         }
@@ -685,8 +690,9 @@ exports.getDashboardNotifications = async (req, res) => {
               dueDays: dueDays,
               inwardNo: inv.inwardNo,
               vendorName: v.ledgerName,
+              ledgerId: ledgerId,
               timestamp: new Date().toISOString(),
-              actionLink: '/dashboard/reports/payable'
+              actionLink: `/dashboard/reports/invoice-payable?vendorName=${encodeURIComponent(v.ledgerName)}&invoiceNo=${encodeURIComponent(inv.inwardNo)}`
             });
           }
         }

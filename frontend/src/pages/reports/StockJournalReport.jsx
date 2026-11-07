@@ -60,6 +60,7 @@ const StockJournalReport = () => {
     },
     { field: 'SJType', headerName: 'Type', width: 120 },
     { field: 'ItemCode', headerName: 'Item Code', width: 120 },
+    { field: 'SubCode', headerName: 'Sub Code', width: 110, valueGetter: (value, row) => row?.SubCode || '-' },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
     { field: 'Qty', headerName: 'Qty', width: 100, type: 'number' },
     { field: 'Remarks', headerName: 'Remarks', flex: 1 },
@@ -103,13 +104,14 @@ const StockJournalReport = () => {
       row.SJDate ? new Date(row.SJDate).toLocaleDateString() : '',
       row.SJType,
       row.ItemCode,
+      row.SubCode || '-',
       row.ItemName,
       row.Qty,
       row.Remarks || ''
     ]);
     
     autoTable(doc, {
-      head: [['Journal ID', 'Date', 'Type', 'Item Code', 'Item Name', 'Qty', 'Remarks']],
+      head: [['Journal ID', 'Date', 'Type', 'Item Code', 'Sub Code', 'Item Name', 'Qty', 'Remarks']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -168,6 +170,7 @@ const StockJournalReport = () => {
       'Date': row.SJDate ? new Date(row.SJDate).toLocaleDateString() : '',
       'Type': row.SJType,
       'Item Code': row.ItemCode,
+      'Sub Code': row.SubCode || '-',
       'Item Name': row.ItemName,
       'Qty': row.Qty,
       'Remarks': row.Remarks

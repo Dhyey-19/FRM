@@ -114,7 +114,12 @@ const JobworkMovementReportContent = () => {
 
       const params = new URLSearchParams();
       if (selectedParty?.id) params.append('partyId', selectedParty.id);
-      if (selectedItem?.itemCode) params.append('itemCode', selectedItem.itemCode);
+      if (selectedItem?.itemCode) {
+        params.append('itemCode', selectedItem.itemCode);
+        if (selectedItem.subCode !== undefined && selectedItem.subCode !== null) {
+          params.append('subCode', selectedItem.subCode);
+        }
+      }
       if (startDate) params.append('startDate', formatDate(startDate));
       if (endDate) params.append('endDate', formatDate(endDate));
       if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
@@ -170,9 +175,9 @@ const JobworkMovementReportContent = () => {
   };
 
   // Switch to Movement Register with pre-selected party and item
-  const handleDrilldown = (partyId, partyName, itemCode, itemName) => {
+  const handleDrilldown = (partyId, partyName, itemCode, subCode, itemName) => {
     const party = partiesList.find(p => String(p.id) === String(partyId)) || { id: partyId, name: partyName };
-    const item = itemsList.find(i => i.itemCode === itemCode) || { itemCode, itemName };
+    const item = itemsList.find(i => i.itemCode === itemCode && (i.subCode || '') === (subCode || '')) || { itemCode, subCode, itemName };
     setSelectedParty(party);
     setSelectedItem(item);
     setActiveTab(1);
@@ -186,6 +191,7 @@ const JobworkMovementReportContent = () => {
     return reportData.partyItemSummary.filter(row => 
       (row.partyName || '').toLowerCase().includes(q) ||
       (row.itemCode || '').toLowerCase().includes(q) ||
+      (row.subCode || '').toLowerCase().includes(q) ||
       (row.itemName || '').toLowerCase().includes(q)
     );
   }, [reportData, searchText]);
@@ -198,6 +204,7 @@ const JobworkMovementReportContent = () => {
     return reportData.movementTransactions.filter(row => 
       (row.partyName || '').toLowerCase().includes(q) ||
       (row.itemCode || '').toLowerCase().includes(q) ||
+      (row.subCode || '').toLowerCase().includes(q) ||
       (row.itemName || '').toLowerCase().includes(q) ||
       (row.docNo || '').toLowerCase().includes(q) ||
       (row.process || '').toLowerCase().includes(q) ||
@@ -217,6 +224,7 @@ const JobworkMovementReportContent = () => {
       'Sr. No': i + 1,
       'Job Worker (Party)': r.partyName,
       'Item Code': r.itemCode,
+      'Sub Code': r.subCode || '-',
       'Item Name': r.itemName,
       'Unit': r.unit,
       'Sent Qty (Out)': Number(r.outQty || 0),
@@ -243,6 +251,7 @@ const JobworkMovementReportContent = () => {
       'Movement Type': t.type,
       'Job Worker (Party)': t.partyName,
       'Item Code': t.itemCode,
+      'Sub Code': t.subCode || '-',
       'Item Name': t.itemName,
       'Process': t.process || '-',
       'Sent Qty (+)': (t.outQty || 0) > 0 ? t.outQty : '',
@@ -570,11 +579,12 @@ const JobworkMovementReportContent = () => {
               options={itemsList}
               getOptionLabel={(option) => {
                 if (!option) return '';
-                return `[${option.itemCode || ''}]  ${option.itemName || ''}`;
+                const codePart = `${option.itemCode || ''}${option.subCode ? ` / ${option.subCode}` : ''}`;
+                return `[${codePart}]  ${option.itemName || ''}`;
               }}
               value={selectedItem}
               onChange={(e, val) => setSelectedItem(val)}
-              isOptionEqualToValue={(option, value) => option?.itemCode === value?.itemCode}
+              isOptionEqualToValue={(option, value) => option?.itemCode === value?.itemCode && (option?.subCode || '') === (value?.subCode || '')}
               slotProps={{
                 popper: {
                   sx: {
@@ -590,10 +600,10 @@ const JobworkMovementReportContent = () => {
               renderOption={(props, option) => {
                 const { key, ...otherProps } = props;
                 return (
-                  <Box component="li" key={key || option.itemCode} {...otherProps} sx={{ py: 1, px: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                  <Box component="li" key={key || `${option.itemCode}_${option.subCode || ''}`} {...otherProps} sx={{ py: 1, px: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
                     <Box sx={{ flexGrow: 1 }}>
                       <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                        [{option.itemCode}]
+                        [{option.itemCode}{option.subCode ? ` / ${option.subCode}` : ''}]
                       </Typography>
                       <Typography variant="caption" sx={{ color: '#475569', display: 'block', fontSize: '0.78rem' }}>
                         {option.itemName}
@@ -888,7 +898,7 @@ const JobworkMovementReportContent = () => {
                     const hasPending = (row.balQty || 0) > 0 || (row.balWt || 0) > 0;
                     return (
                       <TableRow 
-                        key={`${row.ledgerId}_${row.itemCode}_${idx}`} 
+                        key={`${row.ledgerId}_${row.itemCode}_${row.subCode || ''}_${idx}`} 
                         hover
                         sx={{ 
                           '&:nth-of-type(even)': { bgcolor: '#fafafa' },
@@ -902,7 +912,7 @@ const JobworkMovementReportContent = () => {
                           {row.partyName || '-'}
                         </TableCell>
                         <TableCell sx={{ fontWeight: 800, color: '#1e293b', fontSize: '0.85rem' }}>
-                          {row.itemCode || '-'}
+                          {row.itemCode || '-'}{row.subCode ? ` / ${row.subCode}` : ''}
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.85rem', color: '#334155' }}>
                           {row.itemName || '-'}
@@ -946,7 +956,7 @@ const JobworkMovementReportContent = () => {
                               size="small"
                               variant="outlined"
                               endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
-                              onClick={() => handleDrilldown(row.ledgerId, row.partyName, row.itemCode, row.itemName)}
+                              onClick={() => handleDrilldown(row.ledgerId, row.partyName, row.itemCode, row.subCode, row.itemName)}
                               sx={{
                                 py: 0.2,
                                 px: 1,
@@ -1067,7 +1077,7 @@ const JobworkMovementReportContent = () => {
                         {/* Item Details */}
                         <TableCell>
                           <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66', fontSize: '0.82rem' }}>
-                            [{tx.itemCode || '-'}]
+                            [{tx.itemCode || '-'}{tx.subCode ? ` / ${tx.subCode}` : ''}]
                           </Typography>
                           <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.72rem' }}>
                             {tx.itemName || '-'}

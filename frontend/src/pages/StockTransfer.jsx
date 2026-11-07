@@ -25,6 +25,7 @@ import autoTable from 'jspdf-autotable';
 
 const emptyItemRow = {
   ItemCode: '',
+  SubCode: '',
   Pcs: '',
   Weight: '',
   Unit: '',
@@ -268,9 +269,9 @@ const StockTransfer = ({ user }) => {
       const fmtRate = d.Rate !== null && d.Rate !== undefined ? d.Rate.toString() : '';
       const fmtAmt = d.Amount !== null && d.Amount !== undefined ? d.Amount.toString() : '';
 
-      if (d.OutItemCode) outs.push({ ItemCode: d.OutItemCode, Pcs: d.OutPcs !== null ? d.OutPcs.toString() : '', Weight: d.OutWeight !== null ? d.OutWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
-      if (d.InItemCode) ins.push({ ItemCode: d.InItemCode, Pcs: d.InPcs !== null ? d.InPcs.toString() : '', Weight: d.InWeight !== null ? d.InWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
-      if (d.ScrapItemCode) scraps.push({ ItemCode: d.ScrapItemCode, Pcs: d.ScrapPcs !== null ? d.ScrapPcs.toString() : '', Weight: d.ScrapWeight !== null ? d.ScrapWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
+      if (d.OutItemCode) outs.push({ ItemCode: d.OutItemCode, SubCode: d.OutSubCode || '', Pcs: d.OutPcs !== null ? d.OutPcs.toString() : '', Weight: d.OutWeight !== null ? d.OutWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
+      if (d.InItemCode) ins.push({ ItemCode: d.InItemCode, SubCode: d.InSubCode || '', Pcs: d.InPcs !== null ? d.InPcs.toString() : '', Weight: d.InWeight !== null ? d.InWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
+      if (d.ScrapItemCode) scraps.push({ ItemCode: d.ScrapItemCode, SubCode: d.ScrapSubCode || '', Pcs: d.ScrapPcs !== null ? d.ScrapPcs.toString() : '', Weight: d.ScrapWeight !== null ? d.ScrapWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
       if (d.LossWeight) totalLoss += parseFloat(d.LossWeight) || 0;
       if (d.LossRate) savedLossRate = (parseFloat(d.LossRate) || 0).toFixed(2);
       if (d.LossAmount) savedLossAmount = (parseFloat(d.LossAmount) || 0).toFixed(2);
@@ -348,6 +349,7 @@ const StockTransfer = ({ user }) => {
   const handleArrayItemSelect = (setter, itemsArray, index, item) => {
     const newArr = [...itemsArray];
     newArr[index].ItemCode = item ? item.ItemCode : '';
+    newArr[index].SubCode = item ? (item.SubCode || '') : '';
     if (item && item.Unit && !newArr[index].Unit) {
       newArr[index].Unit = item.Unit;
     }
@@ -1053,9 +1055,13 @@ const StockTransfer = ({ user }) => {
                     <TableCell sx={{ width: 220, maxWidth: 240 }}>
                       <Autocomplete
                         options={availableOutItems}
-                        isOptionEqualToValue={(option, value) => option.ItemCode === value.ItemCode}
-                        getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName} (${option.Pcs || 0} Pcs | ${option.Weight || 0} Wt)` : ''}
-                        value={availableOutItems.find(i => i.ItemCode === row.ItemCode) || items.find(i => i.ItemCode === row.ItemCode) || null}
+                        isOptionEqualToValue={(option, value) => option.ItemCode === value.ItemCode && (option.SubCode || '') === (value.SubCode || '')}
+                        getOptionLabel={(option) => {
+                          if (!option) return '';
+                          const subStr = option.SubCode ? ` / ${option.SubCode}` : '';
+                          return `${option.ItemCode}${subStr} - ${option.ItemName} (${option.Pcs || 0} Pcs | ${option.Weight || 0} Wt)`;
+                        }}
+                        value={availableOutItems.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || items.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || null}
                         onChange={(e, newValue) => handleArrayItemSelect(setOutItems, outItems, index, newValue)}
                         renderInput={(params) => <TextField {...params} placeholder="Out Item" size="small" />}
                         fullWidth
@@ -1101,8 +1107,8 @@ const StockTransfer = ({ user }) => {
                     <TableCell sx={{ width: 220, maxWidth: 240 }}>
                       <Autocomplete
                         options={items}
-                        getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
-                        value={items.find(i => i.ItemCode === row.ItemCode) || null}
+                        getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                        value={items.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || null}
                         onChange={(e, newValue) => handleArrayItemSelect(setInItems, inItems, index, newValue)}
                         renderInput={(params) => <TextField {...params} placeholder="In Item" size="small" />}
                         fullWidth
@@ -1148,8 +1154,8 @@ const StockTransfer = ({ user }) => {
                     <TableCell sx={{ width: 220, maxWidth: 240 }}>
                       <Autocomplete
                         options={items.filter(i => i.ItemType && i.ItemType.toLowerCase() === 'scrap')}
-                        getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
-                        value={items.find(i => i.ItemCode === row.ItemCode) || null}
+                        getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                        value={items.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || null}
                         onChange={(e, newValue) => handleArrayItemSelect(setScrapItems, scrapItems, index, newValue)}
                         renderInput={(params) => <TextField {...params} placeholder="Scrap Item" size="small" />}
                         fullWidth

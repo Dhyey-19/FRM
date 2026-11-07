@@ -64,10 +64,13 @@ const ItemwiseOutwardReport = () => {
     
     filtered.forEach(row => {
       const itemCode = row.ITEMCODE || 'Unknown';
-      if (!itemMap.has(itemCode)) {
-        itemMap.set(itemCode, {
-          id: itemCode,
+      const subCode = row.SUBCODE || '';
+      const mapKey = `${itemCode}__${subCode}`;
+      if (!itemMap.has(mapKey)) {
+        itemMap.set(mapKey, {
+          id: mapKey,
           ITEMCODE: itemCode,
+          SUBCODE: subCode,
           ItemName: row.ItemName || 'Unknown Item',
           UNIT: row.UNIT || '-',
           QUANTITY: 0,
@@ -76,7 +79,7 @@ const ItemwiseOutwardReport = () => {
           AMOUNT: 0
         });
       }
-      const itemAgg = itemMap.get(itemCode);
+      const itemAgg = itemMap.get(mapKey);
       itemAgg.QUANTITY += parseFloat(row.QUANTITY) || 0;
       itemAgg.GROSSWT += parseFloat(row.GROSSWT) || 0;
       itemAgg.NETWT += parseFloat(row.NETWT) || 0;
@@ -88,6 +91,7 @@ const ItemwiseOutwardReport = () => {
 
   const columns = [
     { field: 'ITEMCODE', headerName: 'Item Code', width: 130 },
+    { field: 'SUBCODE', headerName: 'Sub Code', width: 110, valueGetter: (value, row) => row?.SUBCODE || '-' },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
     { field: 'UNIT', headerName: 'Unit', width: 100 },
     { field: 'QUANTITY', headerName: 'Total Qty', width: 130, type: 'number', valueFormatter: (val) => val?.toFixed(2) },
@@ -143,6 +147,7 @@ const ItemwiseOutwardReport = () => {
 
     const tableData = aggregatedData.map(row => [
       row.ITEMCODE,
+      row.SUBCODE || '-',
       row.ItemName,
       row.UNIT,
       row.QUANTITY.toFixed(2),
@@ -152,11 +157,11 @@ const ItemwiseOutwardReport = () => {
     ]);
     
     tableData.push([
-      '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), displayedTotals.totalAmount.toFixed(2)
+      '', '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), displayedTotals.totalAmount.toFixed(2)
     ]);
 
     autoTable(doc, {
-      head: [['Item Code', 'Item Name', 'Unit', 'Total Qty', 'Gross Wt', 'Net Wt', 'Total Amount']],
+      head: [['Item Code', 'Sub Code', 'Item Name', 'Unit', 'Total Qty', 'Gross Wt', 'Net Wt', 'Total Amount']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -164,10 +169,10 @@ const ItemwiseOutwardReport = () => {
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [245, 247, 249] },
       columnStyles: {
-        3: { halign: 'right' },
         4: { halign: 'right' },
         5: { halign: 'right' },
-        6: { halign: 'right' }
+        6: { halign: 'right' },
+        7: { halign: 'right' }
       },
       didParseCell: function(data) {
         if (data.row.index === tableData.length - 1) {
@@ -211,6 +216,7 @@ const ItemwiseOutwardReport = () => {
   const handleExportExcel = () => {
     const exportData = aggregatedData.map(row => ({
       'Item Code': row.ITEMCODE,
+      'Sub Code': row.SUBCODE || '-',
       'Item Name': row.ItemName,
       'Unit': row.UNIT,
       'Total Qty': row.QUANTITY,
@@ -220,6 +226,7 @@ const ItemwiseOutwardReport = () => {
     }));
     exportData.push({
       'Item Code': '',
+      'Sub Code': '',
       'Item Name': 'GRAND TOTAL',
       'Unit': '',
       'Total Qty': displayedTotals.totalQty,

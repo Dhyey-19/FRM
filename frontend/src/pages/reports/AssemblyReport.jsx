@@ -59,6 +59,7 @@ const AssemblyReport = () => {
       }
     },
     { field: 'ItemCode', headerName: 'Item Code', width: 120 },
+    { field: 'SubCode', headerName: 'Sub Code', width: 110, valueGetter: (value, row) => row?.SubCode || '-' },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
     { field: 'Quantity', headerName: 'Qty', width: 100, type: 'number' },
     { field: 'Remark', headerName: 'Remark', flex: 1 },
@@ -101,13 +102,14 @@ const AssemblyReport = () => {
       row.AssemblyNo,
       row.AssemblyDate ? new Date(row.AssemblyDate).toLocaleDateString() : '',
       row.ItemCode,
+      row.SubCode || '-',
       row.ItemName,
       row.Quantity,
       row.Remark || ''
     ]);
     
     autoTable(doc, {
-      head: [['Assembly No', 'Date', 'Item Code', 'Item Name', 'Qty', 'Remark']],
+      head: [['Assembly No', 'Date', 'Item Code', 'Sub Code', 'Item Name', 'Qty', 'Remark']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -165,6 +167,7 @@ const AssemblyReport = () => {
       'Assembly No': row.AssemblyNo,
       'Date': row.AssemblyDate ? new Date(row.AssemblyDate).toLocaleDateString() : '',
       'Item Code': row.ItemCode,
+      'Sub Code': row.SubCode || '-',
       'Item Name': row.ItemName,
       'Qty': row.Quantity,
       'Remark': row.Remark

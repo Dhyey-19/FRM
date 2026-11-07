@@ -3,13 +3,60 @@ const { sql, connectDB } = require('../config/db');
 // GET /api/items
 exports.getItems = async (req, res) => {
   try {
+    const { itemCode, subCode, category, search } = req.query;
     const pool = await connectDB();
-    const result = await pool.request()
-      .query(`
-        SELECT ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ISNULL(ReorderLevel, 0) AS ReorderLevel 
-        FROM ItemMaster 
-        ORDER BY ItemCode ASC
-      `);
+    const request = pool.request();
+    
+    let query = `
+      SELECT 
+        ItemCode, 
+        ISNULL(SubCode, '') AS SubCode, 
+        ItemName, 
+        ItemType, 
+        ISNULL(Category, 'Inhouse') AS Category, 
+        WarehouseNo, 
+        Location, 
+        Series, 
+        StdWeight, 
+        Unit, 
+        MRP, 
+        Costing, 
+        OpeningStock, 
+        ClosingStock, 
+        HSNCode, 
+        ISNULL(ReorderLevel, 0) AS ReorderLevel 
+      FROM ItemMaster
+    `;
+
+    const conditions = [];
+
+    if (itemCode) {
+      conditions.push('ItemCode = @ItemCode');
+      request.input('ItemCode', sql.VarChar(50), itemCode);
+    }
+
+    if (subCode !== undefined && subCode !== null) {
+      conditions.push('ISNULL(SubCode, \'\') = @SubCode');
+      request.input('SubCode', sql.VarChar(50), subCode.trim());
+    }
+
+    if (category && category !== 'All') {
+      conditions.push('Category = @Category');
+      request.input('Category', sql.VarChar(20), category);
+    }
+
+    if (search) {
+      conditions.push('(ItemCode LIKE @Search OR SubCode LIKE @Search OR ItemName LIKE @Search OR Series LIKE @Search OR WarehouseNo LIKE @Search OR Location LIKE @Search)');
+      request.input('Search', sql.VarChar(100), `%${search}%`);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY ItemCode ASC, SubCode ASC';
+
+    const result = await request.query(query);
     res.status(200).json(result.recordset);
   } catch (error) {
     console.error('Error fetching items:', error);
@@ -19,31 +66,60 @@ exports.getItems = async (req, res) => {
 
 // POST /api/items
 exports.createItem = async (req, res) => {
-  const { ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel } = req.body;
+  const { 
+    ItemCode, 
+    SubCode = '', 
+    ItemName, 
+    ItemType, 
+    Category = 'Inhouse', 
+    WarehouseNo = '', 
+    Location = '', 
+    Series, 
+    StdWeight, 
+    Unit, 
+    MRP, 
+    Costing, 
+    OpeningStock, 
+    ClosingStock, 
+    HSNCode, 
+    ReorderLevel 
+  } = req.body;
 
   if (!ItemCode || !ItemName || !Unit) {
     return res.status(400).json({ message: 'ItemCode, ItemName, and Unit are required' });
   }
 
+  const cleanItemCode = String(ItemCode).trim();
+  const cleanSubCode = SubCode !== undefined && SubCode !== null ? String(SubCode).trim() : '';
+  const validCategory = ['SubContract', 'Inhouse', 'BOP'].includes(Category) ? Category : 'Inhouse';
   const formattedHSN = HSNCode ? String(HSNCode).trim().slice(0, 8).toUpperCase() : null;
   const numReorderLevel = ReorderLevel !== undefined && ReorderLevel !== null && ReorderLevel !== '' ? parseFloat(ReorderLevel) : 0;
 
   try {
     const pool = await connectDB();
     
-    // Check if item already exists (ItemCode is PRIMARY KEY)
+    // Check if item already exists with composite key (ItemCode, SubCode)
     const checkItem = await pool.request()
-      .input('ItemCode', sql.VarChar(10), ItemCode)
-      .query('SELECT ItemCode FROM ItemMaster WHERE ItemCode = @ItemCode');
+      .input('ItemCode', sql.VarChar(50), cleanItemCode)
+      .input('SubCode', sql.VarChar(50), cleanSubCode)
+      .query('SELECT ItemCode, SubCode FROM ItemMaster WHERE ItemCode = @ItemCode AND ISNULL(SubCode, \'\') = @SubCode');
       
     if (checkItem.recordset.length > 0) {
-      return res.status(400).json({ message: 'ItemCode already exists' });
+      return res.status(400).json({ 
+        message: cleanSubCode 
+          ? `Item with Code "${cleanItemCode}" and SubCode "${cleanSubCode}" already exists.` 
+          : `Item with Code "${cleanItemCode}" already exists.` 
+      });
     }
 
-    const result = await pool.request()
-      .input('ItemCode', sql.VarChar(10), ItemCode)
+    await pool.request()
+      .input('ItemCode', sql.VarChar(50), cleanItemCode)
+      .input('SubCode', sql.VarChar(50), cleanSubCode)
       .input('ItemName', sql.VarChar(50), ItemName)
       .input('ItemType', sql.VarChar(15), ItemType || null)
+      .input('Category', sql.VarChar(20), validCategory)
+      .input('WarehouseNo', sql.VarChar(50), WarehouseNo || '')
+      .input('Location', sql.VarChar(100), Location || '')
       .input('Series', sql.VarChar(15), Series || null)
       .input('StdWeight', sql.Numeric(12, 3), StdWeight || null)
       .input('Unit', sql.VarChar(10), Unit || null)
@@ -54,8 +130,14 @@ exports.createItem = async (req, res) => {
       .input('HSNCode', sql.VarChar(8), formattedHSN)
       .input('ReorderLevel', sql.Numeric(12, 3), numReorderLevel)
       .query(`
-        INSERT INTO ItemMaster (ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel)
-        VALUES (@ItemCode, @ItemName, @ItemType, @Series, @StdWeight, @Unit, @MRP, @Costing, @OpeningStock, @ClosingStock, @HSNCode, @ReorderLevel)
+        INSERT INTO ItemMaster (
+          ItemCode, SubCode, ItemName, ItemType, Category, WarehouseNo, Location, 
+          Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel
+        )
+        VALUES (
+          @ItemCode, @SubCode, @ItemName, @ItemType, @Category, @WarehouseNo, @Location,
+          @Series, @StdWeight, @Unit, @MRP, @Costing, @OpeningStock, @ClosingStock, @HSNCode, @ReorderLevel
+        )
       `);
 
     res.status(201).json({ message: 'Item created successfully' });
@@ -67,36 +149,71 @@ exports.createItem = async (req, res) => {
 
 // PUT /api/items/:id
 exports.updateItem = async (req, res) => {
-  // Using original ItemCode as the ID parameter
   const { id } = req.params;
-  const { ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel } = req.body;
+  const { 
+    originalItemCode,
+    originalSubCode = '',
+    ItemCode, 
+    SubCode = '', 
+    ItemName, 
+    ItemType, 
+    Category = 'Inhouse', 
+    WarehouseNo = '', 
+    Location = '', 
+    Series, 
+    StdWeight, 
+    Unit, 
+    MRP, 
+    Costing, 
+    OpeningStock, 
+    ClosingStock, 
+    HSNCode, 
+    ReorderLevel 
+  } = req.body;
 
-  if (!ItemCode || !ItemName || !Unit) {
+  const targetOldItemCode = (originalItemCode || id || '').trim();
+  const targetOldSubCode = (originalSubCode !== undefined && originalSubCode !== null ? String(originalSubCode) : (req.query.subCode || '')).trim();
+
+  const newCleanItemCode = (ItemCode || targetOldItemCode).trim();
+  const newCleanSubCode = (SubCode !== undefined && SubCode !== null ? String(SubCode) : '').trim();
+
+  if (!newCleanItemCode || !ItemName || !Unit) {
     return res.status(400).json({ message: 'ItemCode, ItemName, and Unit are required' });
   }
 
+  const validCategory = ['SubContract', 'Inhouse', 'BOP'].includes(Category) ? Category : 'Inhouse';
   const formattedHSN = HSNCode ? String(HSNCode).trim().slice(0, 8).toUpperCase() : null;
   const numReorderLevel = ReorderLevel !== undefined && ReorderLevel !== null && ReorderLevel !== '' ? parseFloat(ReorderLevel) : 0;
 
   try {
     const pool = await connectDB();
 
-    // If they are trying to change the ItemCode, ensure the new one doesn't already exist
-    if (id !== ItemCode) {
+    // If changing ItemCode or SubCode, ensure the new composite pair doesn't conflict
+    if (targetOldItemCode !== newCleanItemCode || targetOldSubCode !== newCleanSubCode) {
       const checkItem = await pool.request()
-        .input('NewItemCode', sql.VarChar(10), ItemCode)
-        .query('SELECT ItemCode FROM ItemMaster WHERE ItemCode = @NewItemCode');
+        .input('NewItemCode', sql.VarChar(50), newCleanItemCode)
+        .input('NewSubCode', sql.VarChar(50), newCleanSubCode)
+        .query('SELECT ItemCode, SubCode FROM ItemMaster WHERE ItemCode = @NewItemCode AND ISNULL(SubCode, \'\') = @NewSubCode');
         
       if (checkItem.recordset.length > 0) {
-        return res.status(400).json({ message: 'The new ItemCode already exists' });
+        return res.status(400).json({ 
+          message: newCleanSubCode 
+            ? `An item with Code "${newCleanItemCode}" and SubCode "${newCleanSubCode}" already exists.` 
+            : `An item with Code "${newCleanItemCode}" already exists.` 
+        });
       }
     }
 
     const result = await pool.request()
-      .input('OldItemCode', sql.VarChar(10), id)
-      .input('NewItemCode', sql.VarChar(10), ItemCode)
+      .input('OldItemCode', sql.VarChar(50), targetOldItemCode)
+      .input('OldSubCode', sql.VarChar(50), targetOldSubCode)
+      .input('NewItemCode', sql.VarChar(50), newCleanItemCode)
+      .input('NewSubCode', sql.VarChar(50), newCleanSubCode)
       .input('ItemName', sql.VarChar(50), ItemName)
       .input('ItemType', sql.VarChar(15), ItemType || null)
+      .input('Category', sql.VarChar(20), validCategory)
+      .input('WarehouseNo', sql.VarChar(50), WarehouseNo || '')
+      .input('Location', sql.VarChar(100), Location || '')
       .input('Series', sql.VarChar(15), Series || null)
       .input('StdWeight', sql.Numeric(12, 3), StdWeight || null)
       .input('Unit', sql.VarChar(10), Unit || null)
@@ -109,8 +226,12 @@ exports.updateItem = async (req, res) => {
       .query(`
         UPDATE ItemMaster 
         SET ItemCode = @NewItemCode,
+            SubCode = @NewSubCode,
             ItemName = @ItemName,
             ItemType = @ItemType,
+            Category = @Category,
+            WarehouseNo = @WarehouseNo,
+            Location = @Location,
             Series = @Series,
             StdWeight = @StdWeight,
             Unit = @Unit,
@@ -120,7 +241,7 @@ exports.updateItem = async (req, res) => {
             ClosingStock = @ClosingStock,
             HSNCode = @HSNCode,
             ReorderLevel = @ReorderLevel
-        WHERE ItemCode = @OldItemCode
+        WHERE ItemCode = @OldItemCode AND ISNULL(SubCode, '') = @OldSubCode
       `);
 
     if (result.rowsAffected[0] === 0) {
@@ -137,14 +258,16 @@ exports.updateItem = async (req, res) => {
 // DELETE /api/items/:id
 exports.deleteItem = async (req, res) => {
   const { id } = req.params;
+  const subCode = (req.query.subCode || req.body?.subCode || '').trim();
 
   try {
     const pool = await connectDB();
     const result = await pool.request()
-      .input('ItemCode', sql.VarChar(10), id)
+      .input('ItemCode', sql.VarChar(50), id)
+      .input('SubCode', sql.VarChar(50), subCode)
       .query(`
         DELETE FROM ItemMaster 
-        WHERE ItemCode = @ItemCode
+        WHERE ItemCode = @ItemCode AND ISNULL(SubCode, '') = @SubCode
       `);
 
     if (result.rowsAffected[0] === 0) {
@@ -176,18 +299,38 @@ exports.bulkCreateItems = async (req, res) => {
     const request = new sql.Request(pool);
 
     for (const item of items) {
-      const { ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock } = item;
+      const { 
+        ItemCode, 
+        SubCode = '', 
+        ItemName, 
+        ItemType, 
+        Category = 'Inhouse', 
+        WarehouseNo = '', 
+        Location = '', 
+        Series, 
+        StdWeight, 
+        Unit, 
+        MRP, 
+        Costing, 
+        OpeningStock, 
+        ClosingStock 
+      } = item;
 
       if (!ItemCode || !ItemName || !Unit) {
         results.failed.push({ item, reason: `ItemCode, ItemName, and Unit are required` });
         continue;
       }
 
+      const cleanItemCode = String(ItemCode).trim();
+      const cleanSubCode = SubCode !== undefined && SubCode !== null ? String(SubCode).trim() : '';
+      const validCategory = ['SubContract', 'Inhouse', 'BOP'].includes(Category) ? Category : 'Inhouse';
+
       try {
-        // Check if exists
+        // Check if exists by composite key
         const checkItem = await request
-          .input('CheckItemCode', sql.VarChar(10), ItemCode)
-          .query('SELECT ItemCode FROM ItemMaster WHERE ItemCode = @CheckItemCode');
+          .input('CheckItemCode', sql.VarChar(50), cleanItemCode)
+          .input('CheckSubCode', sql.VarChar(50), cleanSubCode)
+          .query('SELECT ItemCode, SubCode FROM ItemMaster WHERE ItemCode = @CheckItemCode AND ISNULL(SubCode, \'\') = @CheckSubCode');
 
         request.parameters = {}; // Clear parameters
 
@@ -197,9 +340,13 @@ exports.bulkCreateItems = async (req, res) => {
         if (checkItem.recordset.length > 0) {
           // Update existing
           await request
-            .input('UpdItemCode', sql.VarChar(10), ItemCode)
+            .input('UpdItemCode', sql.VarChar(50), cleanItemCode)
+            .input('UpdSubCode', sql.VarChar(50), cleanSubCode)
             .input('UpdItemName', sql.VarChar(50), ItemName)
             .input('UpdItemType', sql.VarChar(15), ItemType || null)
+            .input('UpdCategory', sql.VarChar(20), validCategory)
+            .input('UpdWarehouseNo', sql.VarChar(50), WarehouseNo || '')
+            .input('UpdLocation', sql.VarChar(100), Location || '')
             .input('UpdSeries', sql.VarChar(15), Series || null)
             .input('UpdStdWeight', sql.Numeric(12, 3), StdWeight || null)
             .input('UpdUnit', sql.VarChar(10), Unit || null)
@@ -211,19 +358,34 @@ exports.bulkCreateItems = async (req, res) => {
             .input('UpdReorderLevel', sql.Numeric(12, 3), numReorderLevel)
             .query(`
               UPDATE ItemMaster 
-              SET ItemName = @UpdItemName, ItemType = @UpdItemType, Series = @UpdSeries, StdWeight = @UpdStdWeight, Unit = @UpdUnit,
-                  MRP = @UpdMRP, Costing = @UpdCosting, OpeningStock = @UpdOpeningStock, ClosingStock = @UpdClosingStock,
-                  HSNCode = @UpdHSNCode, ReorderLevel = @UpdReorderLevel
-              WHERE ItemCode = @UpdItemCode
+              SET ItemName = @UpdItemName, 
+                  ItemType = @UpdItemType, 
+                  Category = @UpdCategory,
+                  WarehouseNo = @UpdWarehouseNo,
+                  Location = @UpdLocation,
+                  Series = @UpdSeries, 
+                  StdWeight = @UpdStdWeight, 
+                  Unit = @UpdUnit,
+                  MRP = @UpdMRP, 
+                  Costing = @UpdCosting, 
+                  OpeningStock = @UpdOpeningStock, 
+                  ClosingStock = @UpdClosingStock,
+                  HSNCode = @UpdHSNCode, 
+                  ReorderLevel = @UpdReorderLevel
+              WHERE ItemCode = @UpdItemCode AND ISNULL(SubCode, '') = @UpdSubCode
             `);
           request.parameters = {};
           results.updated.push(item);
         } else {
           // Insert new
           await request
-            .input('InsItemCode', sql.VarChar(10), ItemCode)
+            .input('InsItemCode', sql.VarChar(50), cleanItemCode)
+            .input('InsSubCode', sql.VarChar(50), cleanSubCode)
             .input('InsItemName', sql.VarChar(50), ItemName)
             .input('InsItemType', sql.VarChar(15), ItemType || null)
+            .input('InsCategory', sql.VarChar(20), validCategory)
+            .input('InsWarehouseNo', sql.VarChar(50), WarehouseNo || '')
+            .input('InsLocation', sql.VarChar(100), Location || '')
             .input('InsSeries', sql.VarChar(15), Series || null)
             .input('InsStdWeight', sql.Numeric(12, 3), StdWeight || null)
             .input('InsUnit', sql.VarChar(10), Unit || null)
@@ -234,8 +396,14 @@ exports.bulkCreateItems = async (req, res) => {
             .input('InsHSNCode', sql.VarChar(8), formattedHSN)
             .input('InsReorderLevel', sql.Numeric(12, 3), numReorderLevel)
             .query(`
-              INSERT INTO ItemMaster (ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel)
-              VALUES (@InsItemCode, @InsItemName, @InsItemType, @InsSeries, @InsStdWeight, @InsUnit, @InsMRP, @InsCosting, @InsOpeningStock, @InsClosingStock, @InsHSNCode, @InsReorderLevel)
+              INSERT INTO ItemMaster (
+                ItemCode, SubCode, ItemName, ItemType, Category, WarehouseNo, Location,
+                Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel
+              )
+              VALUES (
+                @InsItemCode, @InsSubCode, @InsItemName, @InsItemType, @InsCategory, @InsWarehouseNo, @InsLocation,
+                @InsSeries, @InsStdWeight, @InsUnit, @InsMRP, @InsCosting, @InsOpeningStock, @InsClosingStock, @InsHSNCode, @InsReorderLevel
+              )
             `);
           request.parameters = {};
           results.added.push(item);
@@ -293,7 +461,7 @@ const extractEntryTime = (sig) => {
 // GET /api/items/stock-ledger
 exports.getItemStockLedger = async (req, res) => {
   try {
-    const { itemCode, startDate, endDate, scope = 'all', deptId } = req.query;
+    const { itemCode, subCode, startDate, endDate, scope = 'all', deptId } = req.query;
 
     if (!itemCode) {
       return res.status(400).json({ message: 'itemCode query parameter is required' });
@@ -302,13 +470,17 @@ exports.getItemStockLedger = async (req, res) => {
     const pool = await connectDB();
 
     // 1. Fetch Item Info
-    const itemRes = await pool.request()
-      .input('ItemCode', sql.VarChar(10), itemCode)
-      .query(`
-        SELECT ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock
-        FROM ItemMaster
-        WHERE ItemCode = @ItemCode
-      `);
+    const itemReq = pool.request().input('ItemCode', sql.VarChar(50), itemCode);
+    let itemQuery = `
+      SELECT ItemCode, ISNULL(SubCode, '') AS SubCode, ItemName, ItemType, Category, WarehouseNo, Location, Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock
+      FROM ItemMaster
+      WHERE ItemCode = @ItemCode
+    `;
+    if (subCode !== undefined && subCode !== null && subCode !== '') {
+      itemQuery += ' AND ISNULL(SubCode, \'\') = @SubCode';
+      itemReq.input('SubCode', sql.VarChar(50), subCode.trim());
+    }
+    const itemRes = await itemReq.query(itemQuery);
 
     if (itemRes.recordset.length === 0) {
       return res.status(404).json({ message: `Item with code "${itemCode}" not found.` });
@@ -870,16 +1042,18 @@ exports.getCombinedStockReport = async (req, res) => {
     const [itemsRes, deptRes, jwRes] = await Promise.all([
       pool.request().query(`
         SELECT 
-          ItemCode, ItemName, ItemType, Series, StdWeight, Unit, MRP, Costing, 
+          ItemCode, ISNULL(SubCode, '') AS SubCode, ItemName, ItemType, ISNULL(Category, 'Inhouse') AS Category, 
+          WarehouseNo, Location, Series, StdWeight, Unit, MRP, Costing, 
           ISNULL(ClosingStock, 0) AS MainStock 
         FROM ItemMaster 
-        ORDER BY ItemCode ASC
+        ORDER BY ItemCode ASC, SubCode ASC
       `),
       pool.request().query(`
         SELECT 
           ds.DeptID, 
           ISNULL(dm.DeptName, 'Unknown Department') AS DeptName, 
           ds.ItemCode, 
+          ISNULL(ds.SubCode, '') AS SubCode,
           ISNULL(ds.Pcs, 0) AS Pcs, 
           ISNULL(ds.Weight, 0) AS Weight 
         FROM DepartmentStock ds 
@@ -891,6 +1065,7 @@ exports.getCombinedStockReport = async (req, res) => {
           l.Id AS LedgerId,
           ISNULL(l.LedgerName, 'Unknown Job Worker') AS LedgerName,
           d.ITEMCODE AS ItemCode,
+          ISNULL(d.SUBCODE, '') AS SubCode,
           (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) AS BalQty,
           (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) AS BalNetWt
         FROM JobworkOutDetail d
@@ -900,22 +1075,24 @@ exports.getCombinedStockReport = async (req, res) => {
           SELECT 
             jwh.LEDGERID,
             jwd.OUTITEMCODE,
+            ISNULL(jwd.OUTSUBCODE, '') AS OUTSUBCODE,
             SUM(jwd.QUANTITY) AS InQty,
             SUM(jwd.NETWT) AS InNetWt
           FROM JobworkInDetail jwd
           INNER JOIN JobworkInHeader jwh ON jwd.JWINWARDID = jwh.ID
-          GROUP BY jwh.LEDGERID, jwd.OUTITEMCODE
-        ) inwards ON l.Id = inwards.LEDGERID AND d.ITEMCODE = inwards.OUTITEMCODE
-        GROUP BY l.Id, l.LedgerName, d.ITEMCODE, inwards.InQty, inwards.InNetWt
+          GROUP BY jwh.LEDGERID, jwd.OUTITEMCODE, ISNULL(jwd.OUTSUBCODE, '')
+        ) inwards ON l.Id = inwards.LEDGERID AND d.ITEMCODE = inwards.OUTITEMCODE AND ISNULL(d.SUBCODE, '') = inwards.OUTSUBCODE
+        GROUP BY l.Id, l.LedgerName, d.ITEMCODE, ISNULL(d.SUBCODE, ''), inwards.InQty, inwards.InNetWt
         HAVING (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) > 0 OR (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) > 0
       `)
     ]);
 
-    // Group DepartmentStock by ItemCode
+    // Group DepartmentStock by ItemCode and SubCode
     const deptMap = {};
     for (const row of deptRes.recordset) {
-      if (!deptMap[row.ItemCode]) deptMap[row.ItemCode] = [];
-      deptMap[row.ItemCode].push({
+      const key = `${row.ItemCode}__${row.SubCode || ''}`;
+      if (!deptMap[key]) deptMap[key] = [];
+      deptMap[key].push({
         DeptID: row.DeptID,
         DeptName: row.DeptName,
         Pcs: Number(row.Pcs || 0),
@@ -923,11 +1100,12 @@ exports.getCombinedStockReport = async (req, res) => {
       });
     }
 
-    // Group Jobwork by ItemCode
+    // Group Jobwork by ItemCode and SubCode
     const jwMap = {};
     for (const row of jwRes.recordset) {
-      if (!jwMap[row.ItemCode]) jwMap[row.ItemCode] = [];
-      jwMap[row.ItemCode].push({
+      const key = `${row.ItemCode}__${row.SubCode || ''}`;
+      if (!jwMap[key]) jwMap[key] = [];
+      jwMap[key].push({
         LedgerId: row.LedgerId,
         LedgerName: row.LedgerName,
         BalQty: Number(row.BalQty || 0),
@@ -936,8 +1114,9 @@ exports.getCombinedStockReport = async (req, res) => {
     }
 
     const combined = itemsRes.recordset.map(item => {
-      const depts = deptMap[item.ItemCode] || [];
-      const jws = jwMap[item.ItemCode] || [];
+      const itemKey = `${item.ItemCode}__${item.SubCode || ''}`;
+      const depts = deptMap[itemKey] || [];
+      const jws = jwMap[itemKey] || [];
 
       const mainStock = Number(item.MainStock || 0);
       const deptStock = depts.reduce((sum, d) => sum + d.Pcs, 0);

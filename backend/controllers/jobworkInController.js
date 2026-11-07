@@ -47,13 +47,16 @@ exports.getJobworkIns = async (req, res) => {
     // Fetch all details with ItemNames
     const detailResult = await pool.request().query(`
       SELECT d.*, 
+             ISNULL(d.OUTSUBCODE, '') AS OUTSUBCODE,
+             ISNULL(d.INSUBCODE, '') AS INSUBCODE,
+             ISNULL(d.SCRAPSUBCODE, '') AS SCRAPSUBCODE,
              ii.ItemName as InItemName,
              oi.ItemName as OutItemName,
              si.ItemName as ScrapItemName
       FROM JobworkInDetail d
-      LEFT JOIN ItemMaster ii ON d.INITEMCODE = ii.ItemCode
-      LEFT JOIN ItemMaster oi ON d.OUTITEMCODE = oi.ItemCode
-      LEFT JOIN ItemMaster si ON d.SCRAPITEMCODE = si.ItemCode
+      LEFT JOIN ItemMaster ii ON d.INITEMCODE = ii.ItemCode AND ISNULL(d.INSUBCODE, '') = ISNULL(ii.SubCode, '')
+      LEFT JOIN ItemMaster oi ON d.OUTITEMCODE = oi.ItemCode AND ISNULL(d.OUTSUBCODE, '') = ISNULL(oi.SubCode, '')
+      LEFT JOIN ItemMaster si ON d.SCRAPITEMCODE = si.ItemCode AND ISNULL(d.SCRAPSUBCODE, '') = ISNULL(si.SubCode, '')
     `);
 
     // Group details by JWINWARDID
@@ -560,8 +563,10 @@ exports.getJobworkInReport = async (req, res) => {
         h.Bill,
         l.LedgerName, 
         d.OUTITEMCODE, 
+        ISNULL(d.OUTSUBCODE, '') as OUTSUBCODE,
         oi.ItemName as OutItemName,
         d.INITEMCODE, 
+        ISNULL(d.INSUBCODE, '') as INSUBCODE,
         ii.ItemName as InItemName,
         d.GROSSWT, 
         d.NETWT, 
@@ -569,6 +574,7 @@ exports.getJobworkInReport = async (req, res) => {
         d.PROCESS,
         d.UNIT, 
         d.SCRAPITEMCODE,
+        ISNULL(d.SCRAPSUBCODE, '') as SCRAPSUBCODE,
         si.ItemName as ScrapItemName,
         d.SCRAPPCS,
         d.SCRAPWT,
@@ -577,9 +583,9 @@ exports.getJobworkInReport = async (req, res) => {
       FROM JobworkInDetail d
       INNER JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      LEFT JOIN ItemMaster oi ON d.OUTITEMCODE = oi.ItemCode
-      LEFT JOIN ItemMaster ii ON d.INITEMCODE = ii.ItemCode
-      LEFT JOIN ItemMaster si ON d.SCRAPITEMCODE = si.ItemCode
+      LEFT JOIN ItemMaster oi ON d.OUTITEMCODE = oi.ItemCode AND ISNULL(d.OUTSUBCODE, '') = ISNULL(oi.SubCode, '')
+      LEFT JOIN ItemMaster ii ON d.INITEMCODE = ii.ItemCode AND ISNULL(d.INSUBCODE, '') = ISNULL(ii.SubCode, '')
+      LEFT JOIN ItemMaster si ON d.SCRAPITEMCODE = si.ItemCode AND ISNULL(d.SCRAPSUBCODE, '') = ISNULL(si.SubCode, '')
       ORDER BY h.JWINWARDDATE DESC, h.JWINWARDNO DESC, d.ID ASC
     `);
     
@@ -595,10 +601,11 @@ exports.getJobworkStockReport = async (req, res) => {
     const pool = await connectDB();
     const result = await pool.request().query(`
       SELECT 
-        ROW_NUMBER() OVER(ORDER BY l.LedgerName, i.ItemName) AS RowId,
+        ROW_NUMBER() OVER(ORDER BY l.LedgerName, i.ItemName, d.ITEMCODE, ISNULL(d.SUBCODE, '')) AS RowId,
         l.Id AS LedgerId,
         l.LedgerName,
-        i.ItemCode,
+        d.ITEMCODE AS ItemCode,
+        ISNULL(d.SUBCODE, '') AS SubCode,
         i.ItemName,
         SUM(d.QUANTITY) AS OutQty,
         SUM(d.NETWT) AS OutNetWt,
@@ -609,20 +616,21 @@ exports.getJobworkStockReport = async (req, res) => {
       FROM JobworkOutDetail d
       INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
       LEFT JOIN (
         SELECT 
           jwh.LEDGERID,
           jwd.OUTITEMCODE,
+          ISNULL(jwd.OUTSUBCODE, '') AS OUTSUBCODE,
           SUM(jwd.QUANTITY) AS InQty,
           SUM(jwd.NETWT) AS InNetWt
         FROM JobworkInDetail jwd
         INNER JOIN JobworkInHeader jwh ON jwd.JWINWARDID = jwh.ID
-        GROUP BY jwh.LEDGERID, jwd.OUTITEMCODE
-      ) inwards ON l.Id = inwards.LEDGERID AND i.ItemCode = inwards.OUTITEMCODE
-      GROUP BY l.Id, l.LedgerName, i.ItemCode, i.ItemName, inwards.InQty, inwards.InNetWt
+        GROUP BY jwh.LEDGERID, jwd.OUTITEMCODE, ISNULL(jwd.OUTSUBCODE, '')
+      ) inwards ON l.Id = inwards.LEDGERID AND d.ITEMCODE = inwards.OUTITEMCODE AND ISNULL(d.SUBCODE, '') = inwards.OUTSUBCODE
+      GROUP BY l.Id, l.LedgerName, d.ITEMCODE, ISNULL(d.SUBCODE, ''), i.ItemName, inwards.InQty, inwards.InNetWt
       HAVING (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) > 0 OR (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) > 0
-      ORDER BY l.LedgerName, i.ItemName
+      ORDER BY l.LedgerName, i.ItemName, d.ITEMCODE, ISNULL(d.SUBCODE, '')
     `);
     
     res.status(200).json(result.recordset);
@@ -630,6 +638,7 @@ exports.getJobworkStockReport = async (req, res) => {
     console.error('Error fetching jobwork stock report:', error);
     res.status(500).json({ message: 'Server error' });
   }
+};
 };
 
 // Helper to parse entry timestamp from CreatedBy signature
@@ -669,9 +678,10 @@ const extractEntryTime = (sig) => {
 // GET /api/jobwork-ins/movement-report
 exports.getJobworkMovementReport = async (req, res) => {
   try {
-    const { partyId, ledgerId, itemCode, startDate, endDate, status = 'all' } = req.query;
+    const { partyId, ledgerId, itemCode, subCode, startDate, endDate, status = 'all' } = req.query;
     const targetLedgerId = partyId || ledgerId ? Number(partyId || ledgerId) : null;
     const targetItemCode = itemCode && itemCode !== 'all' ? String(itemCode).trim() : null;
+    const targetSubCode = subCode !== undefined && subCode !== null && subCode !== 'all' ? String(subCode).trim() : null;
 
     const pool = await connectDB();
 
@@ -688,6 +698,7 @@ exports.getJobworkMovementReport = async (req, res) => {
         h.LEDGERID as LedgerId,
         l.LedgerName as PartyName,
         d.ITEMCODE as ItemCode,
+        ISNULL(d.SUBCODE, '') as SubCode,
         i.ItemName,
         ISNULL(i.Unit, d.UNIT) as Unit,
         d.PROCESS as Process,
@@ -704,10 +715,11 @@ exports.getJobworkMovementReport = async (req, res) => {
       FROM JobworkOutDetail d
       INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
       WHERE 1=1
         ${targetLedgerId ? 'AND h.LEDGERID = @TargetLedgerId' : ''}
         ${targetItemCode ? 'AND d.ITEMCODE = @TargetItemCode' : ''}
+        ${targetSubCode !== null ? 'AND ISNULL(d.SUBCODE, \'\') = @TargetSubCode' : ''}
 
       UNION ALL
 
@@ -722,6 +734,7 @@ exports.getJobworkMovementReport = async (req, res) => {
         h.LEDGERID as LedgerId,
         l.LedgerName as PartyName,
         d.OUTITEMCODE as ItemCode,
+        ISNULL(d.OUTSUBCODE, '') as SubCode,
         i.ItemName,
         ISNULL(i.Unit, d.UNIT) as Unit,
         d.PROCESS as Process,
@@ -738,15 +751,17 @@ exports.getJobworkMovementReport = async (req, res) => {
       FROM JobworkInDetail d
       INNER JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      LEFT JOIN ItemMaster i ON d.OUTITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.OUTITEMCODE = i.ItemCode AND ISNULL(d.OUTSUBCODE, '') = ISNULL(i.SubCode, '')
       WHERE 1=1
         ${targetLedgerId ? 'AND h.LEDGERID = @TargetLedgerId' : ''}
         ${targetItemCode ? 'AND d.OUTITEMCODE = @TargetItemCode' : ''}
+        ${targetSubCode !== null ? 'AND ISNULL(d.OUTSUBCODE, \'\') = @TargetSubCode' : ''}
     `;
 
     const request = pool.request();
     if (targetLedgerId) request.input('TargetLedgerId', sql.Numeric(10, 0), targetLedgerId);
     if (targetItemCode) request.input('TargetItemCode', sql.VarChar(10), targetItemCode);
+    if (targetSubCode !== null) request.input('TargetSubCode', sql.VarChar(50), targetSubCode);
 
     const result = await request.query(query);
     const allRecords = result.recordset || [];
@@ -760,13 +775,14 @@ exports.getJobworkMovementReport = async (req, res) => {
       if (r.LedgerId && !partiesMap.has(r.LedgerId)) {
         partiesMap.set(r.LedgerId, { id: r.LedgerId, name: r.PartyName || `Party #${r.LedgerId}` });
       }
-      if (r.ItemCode && !itemsMap.has(r.ItemCode)) {
-        itemsMap.set(r.ItemCode, { itemCode: r.ItemCode, itemName: r.ItemName || r.ItemCode, unit: r.Unit || 'PCS' });
+      const itemKey = `${r.ItemCode}__${r.SubCode || ''}`;
+      if (r.ItemCode && !itemsMap.has(itemKey)) {
+        itemsMap.set(itemKey, { itemCode: r.ItemCode, subCode: r.SubCode || '', itemName: r.ItemName || r.ItemCode, unit: r.Unit || 'PCS' });
       }
     });
 
     // If query was filtered, also fetch all available jobwork parties and items for dropdowns
-    if (targetLedgerId || targetItemCode) {
+    if (targetLedgerId || targetItemCode || targetSubCode !== null) {
       const pRes = await pool.request().query(`
         SELECT DISTINCT l.Id as id, l.LedgerName as name
         FROM JobworkOutHeader h
@@ -782,17 +798,18 @@ exports.getJobworkMovementReport = async (req, res) => {
       });
 
       const iRes = await pool.request().query(`
-        SELECT DISTINCT i.ItemCode as itemCode, i.ItemName as itemName, i.Unit as unit
+        SELECT DISTINCT i.ItemCode as itemCode, ISNULL(i.SubCode, '') as subCode, i.ItemName as itemName, i.Unit as unit
         FROM JobworkOutDetail d
-        INNER JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+        INNER JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
         UNION
-        SELECT DISTINCT i.ItemCode as itemCode, i.ItemName as itemName, i.Unit as unit
+        SELECT DISTINCT i.ItemCode as itemCode, ISNULL(i.SubCode, '') as subCode, i.ItemName as itemName, i.Unit as unit
         FROM JobworkInDetail d
-        INNER JOIN ItemMaster i ON d.OUTITEMCODE = i.ItemCode
+        INNER JOIN ItemMaster i ON d.OUTITEMCODE = i.ItemCode AND ISNULL(d.OUTSUBCODE, '') = ISNULL(i.SubCode, '')
         ORDER BY itemCode ASC
       `);
       iRes.recordset.forEach(i => {
-        if (!itemsMap.has(i.itemCode)) itemsMap.set(i.itemCode, i);
+        const key = `${i.itemCode}__${i.subCode || ''}`;
+        if (!itemsMap.has(key)) itemsMap.set(key, i);
       });
     }
 

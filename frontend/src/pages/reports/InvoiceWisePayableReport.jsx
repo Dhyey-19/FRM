@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -21,7 +21,8 @@ import {
   Tooltip,
   FormControlLabel,
   Checkbox,
-  Autocomplete
+  Autocomplete,
+  Alert
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { 
@@ -34,7 +35,8 @@ import {
   MoneyOff,
   ArrowBack,
   AccessTime,
-  Payment as PaymentIcon
+  Payment as PaymentIcon,
+  RestartAlt as ResetIcon
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -104,6 +106,10 @@ export const formatDate = (val) => {
 
 const InvoiceWisePayableReport = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterVendorName = searchParams.get('vendorName');
+  const filterInvoiceNo = searchParams.get('invoiceNo');
+
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -115,7 +121,7 @@ const InvoiceWisePayableReport = () => {
   const [viewMode, setViewMode] = useState('combined'); // 'combined', 'with_bill', 'without_bill'
 
   // Filter by Vendor
-  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [selectedVendor, setSelectedVendor] = useState(filterVendorName || null);
 
   const vendorOptions = useMemo(() => {
     const unique = [...new Set(reportData.map(r => r.vendorName).filter(Boolean))];
@@ -125,12 +131,23 @@ const InvoiceWisePayableReport = () => {
   const [agingFilter, setAgingFilter] = useState('all'); // 'all', 'not_due', '1_30', '31_60', '61_90', 'above_90', 'overdue_only'
   const [onlyOutstanding, setOnlyOutstanding] = useState(true);
 
-  const fetchReportData = async () => {
+  const fetchReportData = async (loadAll = false) => {
+    setLoading(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/ledgers/invoice-wise-payable`);
       if (!response.ok) throw new Error('Failed to fetch invoice-wise payable report');
       const data = await response.json();
-      setReportData(data.map(item => ({ ...item, id: item.RowId })));
+      let mapped = data.map(item => ({ ...item, id: item.RowId }));
+
+      if (!loadAll && (filterInvoiceNo || filterVendorName)) {
+        mapped = mapped.filter(item => {
+          const matchInv = filterInvoiceNo ? String(item.invoiceNo || '').toLowerCase() === filterInvoiceNo.toLowerCase() : true;
+          const matchVendor = filterVendorName ? String(item.vendorName || '').toLowerCase() === filterVendorName.toLowerCase() : true;
+          return matchInv && matchVendor;
+        });
+      }
+
+      setReportData(mapped);
     } catch (error) {
       console.error('Error fetching report:', error);
     } finally {
@@ -139,8 +156,14 @@ const InvoiceWisePayableReport = () => {
   };
 
   useEffect(() => {
-    fetchReportData();
-  }, []);
+    fetchReportData(false);
+  }, [filterInvoiceNo, filterVendorName]);
+
+  const handleResetFilter = () => {
+    setSearchParams({});
+    setSelectedVendor(null);
+    fetchReportData(true);
+  };
 
   const formatCurrency = (val, isPDF = false) => {
     const formatted = new Intl.NumberFormat('en-IN', {
@@ -585,6 +608,20 @@ const InvoiceWisePayableReport = () => {
           </Button>
         </Box>
       </Box>
+
+      {(filterInvoiceNo || filterVendorName) && (
+        <Alert 
+          severity="info" 
+          action={
+            <Button color="inherit" size="small" onClick={handleResetFilter} startIcon={<ResetIcon />}>
+              Show All Invoices
+            </Button>
+          }
+          sx={{ mb: 2.5, borderRadius: 2, bgcolor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe' }}
+        >
+          <strong>Single Record Alert View:</strong> Showing only record for {filterInvoiceNo ? `Invoice #${filterInvoiceNo}` : ''} {filterVendorName ? `(${filterVendorName})` : ''}.
+        </Alert>
+      )}
 
       {/* Primary KPI Cards */}
       <Grid container spacing={2} sx={{ mb: 2 }}>

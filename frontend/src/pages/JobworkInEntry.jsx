@@ -25,11 +25,14 @@ import autoTable from 'jspdf-autotable';
 
 const emptyRow = {
   OUTITEMCODE: '',
+  OUTSUBCODE: '',
   INITEMCODE: '',
+  INSUBCODE: '',
   GROSSWT: '',
   NETWT: '',
   TENPCSWT: '',
   SCRAPITEMCODE: '',
+  SCRAPSUBCODE: '',
   SCRAPPCS: '',
   SCRAPWT: '',
   QUANTITY: '',
@@ -76,9 +79,10 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
 
-  const getItemBalance = (itemCode, specificOutwardNo = null) => {
+  const getItemBalance = (itemCode, subCode = '', specificOutwardNo = null) => {
     const targetOutwardNo = specificOutwardNo || jwOutwardNo;
     if (!targetOutwardNo) return { qty: 0, wt: 0 };
+    const safeSub = subCode || '';
 
     if (targetOutwardNo === 'All') {
       let outwardQty = 0;
@@ -86,7 +90,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       jobworkOuts.filter(jw => jw.LEDGERID === ledgerId).forEach(jw => {
         if (jw.Details) {
           jw.Details.forEach(d => {
-            if (d.ITEMCODE === itemCode) {
+            if (d.ITEMCODE === itemCode && (d.SUBCODE || '') === safeSub) {
               outwardQty += parseFloat(d.QUANTITY) || 0;
               outwardNetWt += parseFloat(d.NETWT) || 0;
             }
@@ -99,7 +103,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       jwInwards.filter(jw => jw.LEDGERID === ledgerId && jw.ID !== editingId).forEach(inward => {
         if (inward.Details) {
           inward.Details.forEach(d => {
-            if (d.OUTITEMCODE === itemCode) {
+            if (d.OUTITEMCODE === itemCode && (d.OUTSUBCODE || '') === safeSub) {
               receivedQty += parseFloat(d.QUANTITY) || 0;
               receivedNetWt += parseFloat(d.NETWT) || 0;
             }
@@ -116,7 +120,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === targetOutwardNo);
     if (!selectedOutward || !selectedOutward.Details) return { qty: 0, wt: 0 };
     
-    const detail = selectedOutward.Details.find(d => d.ITEMCODE === itemCode);
+    const detail = selectedOutward.Details.find(d => d.ITEMCODE === itemCode && (d.SUBCODE || '') === safeSub);
     if (!detail) return { qty: 0, wt: 0 };
     
     const outwardQty = parseFloat(detail.QUANTITY) || 0;
@@ -128,7 +132,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       if (inward.JWOUTWARDNO === targetOutwardNo && inward.ID !== editingId) {
         if (inward.Details) {
           inward.Details.forEach(d => {
-            if (d.OUTITEMCODE === itemCode) {
+            if (d.OUTITEMCODE === itemCode && (d.OUTSUBCODE || '') === safeSub) {
               receivedQty += parseFloat(d.QUANTITY) || 0;
               receivedNetWt += parseFloat(d.NETWT) || 0;
             }
@@ -146,30 +150,30 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
   const getOutItemOptions = () => {
     if (!jwOutwardNo) return [];
     if (jwOutwardNo === 'All') {
-      const outItemCodes = new Set();
+      const outItemKeys = new Set();
       const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
       allOutwards.forEach(jw => {
         if (jw.Details) {
           jw.Details.forEach(d => {
-            const bal = getItemBalance(d.ITEMCODE, 'All');
+            const bal = getItemBalance(d.ITEMCODE, d.SUBCODE || '', 'All');
             if (bal.qty > 0 || bal.wt > 0) {
-              outItemCodes.add(d.ITEMCODE);
+              outItemKeys.add(`${d.ITEMCODE}_${d.SUBCODE || ''}`);
             }
           });
         }
       });
-      return items.filter(i => outItemCodes.has(i.ItemCode));
+      return items.filter(i => outItemKeys.has(`${i.ItemCode}_${i.SubCode || ''}`));
     }
     const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
     if (!selectedOutward || !selectedOutward.Details) return [];
-    const outItemCodes = new Set();
+    const outItemKeys = new Set();
     selectedOutward.Details.forEach(d => {
-      const bal = getItemBalance(d.ITEMCODE, jwOutwardNo);
+      const bal = getItemBalance(d.ITEMCODE, d.SUBCODE || '', jwOutwardNo);
       if (bal.qty > 0 || bal.wt > 0) {
-        outItemCodes.add(d.ITEMCODE);
+        outItemKeys.add(`${d.ITEMCODE}_${d.SUBCODE || ''}`);
       }
     });
-    return items.filter(i => outItemCodes.has(i.ItemCode));
+    return items.filter(i => outItemKeys.has(`${i.ItemCode}_${i.SubCode || ''}`));
   };
 
   const fetchJwInwards = async () => {
@@ -343,11 +347,14 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     if (jw.Details && jw.Details.length > 0) {
       setGridRows(jw.Details.map(d => ({
         OUTITEMCODE: d.OUTITEMCODE || '',
+        OUTSUBCODE: d.OUTSUBCODE || '',
         INITEMCODE: d.INITEMCODE || '',
+        INSUBCODE: d.INSUBCODE || '',
         GROSSWT: d.GROSSWT !== null ? d.GROSSWT.toString() : '',
         NETWT: d.NETWT !== null ? d.NETWT.toString() : '',
         TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
         SCRAPITEMCODE: d.SCRAPITEMCODE || '',
+        SCRAPSUBCODE: d.SCRAPSUBCODE || '',
         SCRAPPCS: d.SCRAPPCS !== null ? d.SCRAPPCS.toString() : '',
         SCRAPWT: d.SCRAPWT !== null ? d.SCRAPWT.toString() : '',
         QUANTITY: d.QUANTITY !== null ? d.QUANTITY.toString() : '',
@@ -405,18 +412,21 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
   const handleItemSelect = (index, field, item) => {
     const newRows = [...gridRows];
     newRows[index][field] = item ? item.ItemCode : '';
+    const subField = field === 'OUTITEMCODE' ? 'OUTSUBCODE' : (field === 'INITEMCODE' ? 'INSUBCODE' : 'SCRAPSUBCODE');
+    newRows[index][subField] = item ? (item.SubCode || '') : '';
     
     if (field === 'OUTITEMCODE') {
       newRows[index].INITEMCODE = item ? item.ItemCode : '';
+      newRows[index].INSUBCODE = item ? (item.SubCode || '') : '';
       if (jwOutwardNo && item) {
         let outwardDetail = null;
         if (jwOutwardNo === 'All') {
           const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
           for (let jw of allOutwards) {
             if (jw.Details) {
-              const det = jw.Details.find(d => d.ITEMCODE === item.ItemCode);
+              const det = jw.Details.find(d => d.ITEMCODE === item.ItemCode && (d.SUBCODE || '') === (item.SubCode || ''));
               if (det) {
-                const bal = getItemBalance(item.ItemCode, jw.JWOUTWARDNO);
+                const bal = getItemBalance(item.ItemCode, item.SubCode || '', jw.JWOUTWARDNO);
                 if (bal.qty > 0 || bal.wt > 0) {
                   outwardDetail = det;
                   break;
@@ -426,7 +436,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
           }
         } else {
           const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
-          outwardDetail = selectedOutward?.Details?.find(d => d.ITEMCODE === item.ItemCode);
+          outwardDetail = selectedOutward?.Details?.find(d => d.ITEMCODE === item.ItemCode && (d.SUBCODE || '') === (item.SubCode || ''));
         }
         if (outwardDetail) {
           newRows[index].PROCESS = outwardDetail.PROCESS || '';
@@ -557,9 +567,13 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     const detailsSource = isSaveAction ? jw.Details : (jw.Details || []);
     
     const tableRows = detailsSource.map((d, index) => {
-      const outName = items.find(item => item.ItemCode === d.OUTITEMCODE)?.ItemName || d.OUTITEMCODE;
-      const inName = items.find(item => item.ItemCode === d.INITEMCODE)?.ItemName || d.INITEMCODE;
-      const scrapName = items.find(item => item.ItemCode === d.SCRAPITEMCODE)?.ItemName || d.SCRAPITEMCODE || '-';
+      const outMatched = items.find(item => item.ItemCode === d.OUTITEMCODE && (item.SubCode || '') === (d.OUTSUBCODE || ''));
+      const inMatched = items.find(item => item.ItemCode === d.INITEMCODE && (item.SubCode || '') === (d.INSUBCODE || ''));
+      const scrapMatched = items.find(item => item.ItemCode === d.SCRAPITEMCODE && (item.SubCode || '') === (d.SCRAPSUBCODE || ''));
+
+      const outName = outMatched ? `${d.OUTITEMCODE}${d.OUTSUBCODE ? ` / ${d.OUTSUBCODE}` : ''} - ${outMatched.ItemName}` : (d.OUTITEMCODE || '-');
+      const inName = inMatched ? `${d.INITEMCODE}${d.INSUBCODE ? ` / ${d.INSUBCODE}` : ''} - ${inMatched.ItemName}` : (d.INITEMCODE || '-');
+      const scrapName = scrapMatched ? `${d.SCRAPITEMCODE}${d.SCRAPSUBCODE ? ` / ${d.SCRAPSUBCODE}` : ''} - ${scrapMatched.ItemName}` : (d.SCRAPITEMCODE || '-');
       const net = parseFloat(d.NETWT) || 0;
       const qty = parseFloat(d.QUANTITY) || 0;
       const scrapPcs = parseFloat(d.SCRAPPCS) || 0;
@@ -695,10 +709,13 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       UPDATEDBY: username,
       Details: validRows.map(r => ({
         ...r,
+        OUTSUBCODE: r.OUTSUBCODE || '',
+        INSUBCODE: r.INSUBCODE || '',
         GROSSWT: r.GROSSWT ? parseFloat(r.GROSSWT) : 0,
         NETWT: r.NETWT ? parseFloat(r.NETWT) : 0,
         TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
         SCRAPITEMCODE: r.SCRAPITEMCODE || null,
+        SCRAPSUBCODE: r.SCRAPSUBCODE || '',
         SCRAPPCS: r.SCRAPPCS ? parseFloat(r.SCRAPPCS) : 0,
         SCRAPWT: r.SCRAPWT ? parseFloat(r.SCRAPWT) : 0,
         QUANTITY: r.QUANTITY ? parseFloat(r.QUANTITY) : 0,
@@ -957,10 +974,11 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
                           options={getOutItemOptions()}
                           getOptionLabel={(option) => {
                             if (!option) return '';
-                            const bal = getItemBalance(option.ItemCode);
-                            return `${option.ItemCode} - ${option.ItemName} (Bal: Qty: ${bal.qty.toFixed(2)}, Wt: ${bal.wt.toFixed(3)})`;
+                            const subStr = option.SubCode ? ` / ${option.SubCode}` : '';
+                            const bal = getItemBalance(option.ItemCode, option.SubCode || '');
+                            return `${option.ItemCode}${subStr} - ${option.ItemName} (Bal: Qty: ${bal.qty.toFixed(2)}, Wt: ${bal.wt.toFixed(3)})`;
                           }}
-                          value={getOutItemOptions().find(i => i.ItemCode === row.OUTITEMCODE) || null}
+                          value={getOutItemOptions().find(i => i.ItemCode === row.OUTITEMCODE && (i.SubCode || '') === (row.OUTSUBCODE || '')) || null}
                           onChange={(e, newValue) => handleItemSelect(index, 'OUTITEMCODE', newValue)}
                           renderInput={(params) => <TextField {...params} placeholder={jwOutwardNo ? "Select Item" : "Select Challan"} size="small" />}
                           disabled={!jwOutwardNo}
@@ -972,8 +990,8 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
                       <TableCell>
                         <Autocomplete
                           options={items}
-                          getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
-                          value={items.find(i => i.ItemCode === row.INITEMCODE) || null}
+                          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                          value={items.find(i => i.ItemCode === row.INITEMCODE && (i.SubCode || '') === (row.INSUBCODE || '')) || null}
                           onChange={(e, newValue) => handleItemSelect(index, 'INITEMCODE', newValue)}
                           renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
                           fullWidth
@@ -1039,8 +1057,8 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
                       <TableCell colSpan={2}>
                         <Autocomplete
                           options={items.filter(item => (item.ItemType || '').toLowerCase() === 'scrap')}
-                          getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
-                          value={items.find(i => i.ItemCode === row.SCRAPITEMCODE) || null}
+                          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                          value={items.find(i => i.ItemCode === row.SCRAPITEMCODE && (i.SubCode || '') === (row.SCRAPSUBCODE || '')) || null}
                           onChange={(e, newValue) => handleItemSelect(index, 'SCRAPITEMCODE', newValue)}
                           renderInput={(params) => <TextField {...params} label="Scrap Item" size="small" InputLabelProps={{ shrink: true }} />}
                           fullWidth

@@ -147,10 +147,10 @@ const StockReportContent = () => {
     setOrderBy(property);
   };
 
-  const toggleRowExpansion = (itemCode) => {
+  const toggleRowExpansion = (itemKey) => {
     setExpandedRows(prev => ({
       ...prev,
-      [itemCode]: !prev[itemCode]
+      [itemKey]: !prev[itemKey]
     }));
   };
 
@@ -161,7 +161,8 @@ const StockReportContent = () => {
     }
     const newMap = {};
     sortedData.forEach(row => {
-      newMap[row.ItemCode] = true;
+      const key = `${row.ItemCode}__${row.SubCode || ''}`;
+      newMap[key] = true;
     });
     setExpandedRows(newMap);
   };
@@ -281,12 +282,13 @@ const StockReportContent = () => {
         const search = searchTerm.toLowerCase();
         if (search) {
           const matchesCode = (row.ItemCode || '').toLowerCase().includes(search);
+          const matchesSubCode = (row.SubCode || '').toLowerCase().includes(search);
           const matchesName = (row.ItemName || '').toLowerCase().includes(search);
           const matchesType = (row.ItemType || '').toLowerCase().includes(search);
           const matchesSeries = (row.Series || '').toLowerCase().includes(search);
           const matchesDept = (row.Departments || []).some(d => (d.DeptName || '').toLowerCase().includes(search));
           const matchesJw = (row.Jobworkers || []).some(j => (j.LedgerName || '').toLowerCase().includes(search));
-          if (!matchesCode && !matchesName && !matchesType && !matchesSeries && !matchesDept && !matchesJw) return false;
+          if (!matchesCode && !matchesSubCode && !matchesName && !matchesType && !matchesSeries && !matchesDept && !matchesJw) return false;
         }
 
         return true;
@@ -301,6 +303,7 @@ const StockReportContent = () => {
         if (!search) return true;
         return (
           row.ItemCode?.toLowerCase().includes(search) || 
+          row.SubCode?.toLowerCase().includes(search) || 
           row.ItemName?.toLowerCase().includes(search) ||
           row.ItemType?.toLowerCase().includes(search) ||
           row.Series?.toLowerCase().includes(search)
@@ -316,6 +319,7 @@ const StockReportContent = () => {
         return (
           row.DeptName?.toLowerCase().includes(search) || 
           row.ItemCode?.toLowerCase().includes(search) ||
+          row.SubCode?.toLowerCase().includes(search) ||
           row.ItemName?.toLowerCase().includes(search)
         );
       }
@@ -329,6 +333,7 @@ const StockReportContent = () => {
         return (
           row.LedgerName?.toLowerCase().includes(search) || 
           row.ItemCode?.toLowerCase().includes(search) ||
+          row.SubCode?.toLowerCase().includes(search) ||
           row.ItemName?.toLowerCase().includes(search)
         );
       }
@@ -460,10 +465,11 @@ const StockReportContent = () => {
     let head = [];
 
     if (reportType === 'combined') {
-      head = [['Code', 'Item Name', 'Type', 'Unit', 'Main Stock', 'Dept Stock', 'Jobwork Stock', 'Combined Total', 'Total Wt (KG)', 'Valuation (Rs.)']];
+      head = [['Code', 'Sub Code', 'Item Name', 'Type', 'Unit', 'Main Stock', 'Dept Stock', 'Jobwork Stock', 'Combined Total', 'Total Wt (KG)', 'Valuation (Rs.)']];
       sortedData.forEach(row => {
         tableData.push([
           row.ItemCode,
+          row.SubCode || '-',
           row.ItemName || '-',
           row.ItemType || '-',
           row.Unit || 'PCS',
@@ -477,7 +483,7 @@ const StockReportContent = () => {
       });
       if (sortedData.length > 0) {
         tableData.push([
-          { content: 'Total:', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
+          { content: 'Total:', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
           { content: Number(totals.mainStock || 0), styles: { fontStyle: 'bold', textColor: [30, 64, 175] } },
           { content: Number(totals.deptStock || 0), styles: { fontStyle: 'bold', textColor: [13, 148, 136] } },
           { content: Number(totals.jwStock || 0), styles: { fontStyle: 'bold', textColor: [217, 119, 6] } },
@@ -487,10 +493,11 @@ const StockReportContent = () => {
         ]);
       }
     } else if (reportType === 'item') {
-      head = [['Code', 'Name', 'Type', 'Series', 'Unit', 'MRP', 'Costing', 'Opening', 'Closing']];
+      head = [['Code', 'Sub Code', 'Name', 'Type', 'Series', 'Unit', 'MRP', 'Costing', 'Opening', 'Closing']];
       sortedData.forEach(row => {
         tableData.push([
           row.ItemCode, 
+          row.SubCode || '-',
           row.ItemName, 
           row.ItemType || '-', 
           row.Series || '-', 
@@ -503,17 +510,18 @@ const StockReportContent = () => {
       });
       if (sortedData.length > 0) {
         tableData.push([
-          { content: 'Total:', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
+          { content: 'Total:', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
           { content: totals.totalOpening, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
           { content: totals.totalClosing, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } }
         ]);
       }
     } else if (reportType === 'department') {
-      head = [['Department', 'Code', 'Item Name', 'Unit', 'Costing (Rs.)', 'Pcs', 'Weight (KG)', 'Valuation (Rs.)']];
+      head = [['Department', 'Code', 'Sub Code', 'Item Name', 'Unit', 'Costing (Rs.)', 'Pcs', 'Weight (KG)', 'Valuation (Rs.)']];
       sortedData.forEach(row => {
         tableData.push([
           row.DeptName, 
           row.ItemCode, 
+          row.SubCode || '-',
           row.ItemName || '-', 
           row.Unit || '-',
           Number(row.Costing || 0).toFixed(2),
@@ -524,7 +532,7 @@ const StockReportContent = () => {
       });
       if (sortedData.length > 0) {
         tableData.push([
-          { content: 'Total:', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
+          { content: 'Total:', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
           { content: totals.totalPcs, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
           { content: totals.totalWeight.toFixed(3), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
           { content: totals.totalValuation.toFixed(2), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } }
@@ -532,11 +540,12 @@ const StockReportContent = () => {
       }
     } else {
       // Job Work Stock
-      head = [['Job Worker (Vendor)', 'Item Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt']];
+      head = [['Job Worker (Vendor)', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt']];
       sortedData.forEach(row => {
         tableData.push([
           row.LedgerName,
           row.ItemCode,
+          row.SubCode || '-',
           row.ItemName || '-',
           Number(row.OutQty || 0),
           Number(row.OutNetWt || 0).toFixed(3),
@@ -611,6 +620,7 @@ const StockReportContent = () => {
 
         flatData.push({
           'Code': row.ItemCode,
+          'Sub Code': row.SubCode || '-',
           'Item Name': row.ItemName,
           'Type': row.ItemType || '-',
           'Series': row.Series || '-',
@@ -629,6 +639,7 @@ const StockReportContent = () => {
       if (sortedData.length > 0) {
         flatData.push({
           'Code': 'Total:',
+          'Sub Code': '',
           'Item Name': '',
           'Type': '',
           'Series': '',
@@ -648,6 +659,7 @@ const StockReportContent = () => {
       sortedData.forEach(row => {
         flatData.push({
           'Code': row.ItemCode,
+          'Sub Code': row.SubCode || '-',
           'Item Name': row.ItemName,
           'Type': row.ItemType || '-',
           'Series': row.Series || '-',
@@ -660,7 +672,7 @@ const StockReportContent = () => {
       });
       if (sortedData.length > 0) {
         flatData.push({
-          'Code': '', 'Item Name': '', 'Type': '', 'Series': '', 'Unit': '', 'MRP': '', 'Costing': 'Total:',
+          'Code': '', 'Sub Code': '', 'Item Name': '', 'Type': '', 'Series': '', 'Unit': '', 'MRP': '', 'Costing': 'Total:',
           'Opening Stock': totals.totalOpening,
           'Closing Stock': totals.totalClosing
         });
@@ -670,6 +682,7 @@ const StockReportContent = () => {
         flatData.push({
           'Department': row.DeptName,
           'Code': row.ItemCode,
+          'Sub Code': row.SubCode || '-',
           'Item Name': row.ItemName || '-',
           'Unit': row.Unit || '-',
           'Costing': Number(row.Costing || 0),
@@ -680,7 +693,7 @@ const StockReportContent = () => {
       });
       if (sortedData.length > 0) {
         flatData.push({
-          'Department': '', 'Code': '', 'Item Name': 'Total:', 'Unit': '', 'Costing': '',
+          'Department': '', 'Code': '', 'Sub Code': '', 'Item Name': 'Total:', 'Unit': '', 'Costing': '',
           'Pcs': totals.totalPcs,
           'Weight': totals.totalWeight,
           'Valuation': totals.totalValuation
@@ -692,6 +705,7 @@ const StockReportContent = () => {
         flatData.push({
           'Job Worker': row.LedgerName,
           'Code': row.ItemCode,
+          'Sub Code': row.SubCode || '-',
           'Item Name': row.ItemName,
           'Sent Qty': Number(row.OutQty || 0),
           'Sent Wt (KG)': Number(row.OutNetWt || 0),
@@ -705,6 +719,7 @@ const StockReportContent = () => {
         flatData.push({
           'Job Worker': 'Total:',
           'Code': '',
+          'Sub Code': '',
           'Item Name': '',
           'Sent Qty': totals.totalOutQty,
           'Sent Wt (KG)': totals.totalOutWt,
@@ -1193,11 +1208,12 @@ const StockReportContent = () => {
                   </TableRow>
                 ) : (
                   sortedData.map((row, index) => {
-                    const isExpanded = !!expandedRows[row.ItemCode];
+                    const rowKey = `${row.ItemCode}__${row.SubCode || ''}`;
+                    const isExpanded = !!expandedRows[rowKey];
                     const hasSubBreakdown = (row.Departments?.length > 0) || (row.Jobworkers?.length > 0);
 
                     return (
-                      <React.Fragment key={row.RowId || `${row.LedgerId}_${row.ItemCode}` || row.ItemCode || index}>
+                      <React.Fragment key={row.RowId || `${row.LedgerId || ''}_${rowKey}_${index}`}>
                         <TableRow 
                           hover 
                           sx={{ 
@@ -1212,7 +1228,7 @@ const StockReportContent = () => {
                                 {hasSubBreakdown ? (
                                   <IconButton
                                     size="small"
-                                    onClick={() => toggleRowExpansion(row.ItemCode)}
+                                    onClick={() => toggleRowExpansion(rowKey)}
                                     sx={{ p: 0.3, color: isExpanded ? '#0F3B66' : '#94a3b8' }}
                                     title={isExpanded ? "Collapse location breakdown" : "Expand department & jobworker details"}
                                   >
@@ -1234,10 +1250,10 @@ const StockReportContent = () => {
                                   fontSize: '0.84rem',
                                   '&:hover': { color: '#F88A01' }
                                 }}
-                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}`)}
+                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}&subCode=${encodeURIComponent(row.SubCode || '')}`)}
                                 title="Click to view Item Stock Ledger"
                               >
-                                {row.ItemCode}
+                                {row.ItemCode}{row.SubCode ? ` / ${row.SubCode}` : ''}
                               </TableCell>
 
                               {/* Item Name */}
@@ -1280,7 +1296,7 @@ const StockReportContent = () => {
                                   <Tooltip title={`Present in ${(row.Departments || []).length} Department(s). Click arrow to view details.`}>
                                     <Box 
                                       component="span" 
-                                      onClick={() => toggleRowExpansion(row.ItemCode)}
+                                      onClick={() => toggleRowExpansion(rowKey)}
                                       sx={{ 
                                         fontWeight: 700, 
                                         color: (row.DeptStock || 0) < 0 ? '#dc2626' : '#0f766e', 
@@ -1306,7 +1322,7 @@ const StockReportContent = () => {
                                   <Tooltip title={`With ${(row.Jobworkers || []).length} Job Worker(s). Click arrow to view details.`}>
                                     <Box 
                                       component="span" 
-                                      onClick={() => toggleRowExpansion(row.ItemCode)}
+                                      onClick={() => toggleRowExpansion(rowKey)}
                                       sx={{ 
                                         fontWeight: 700, 
                                         color: (row.JwStock || 0) < 0 ? '#dc2626' : '#c2410c', 
@@ -1364,10 +1380,10 @@ const StockReportContent = () => {
                                   textUnderlineOffset: 3,
                                   '&:hover': { color: '#F88A01' }
                                 }}
-                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}`)}
+                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}&subCode=${encodeURIComponent(row.SubCode || '')}`)}
                                 title="Click to view Item Stock Ledger statement"
                               >
-                                {row.ItemCode}
+                                {row.ItemCode}{row.SubCode ? ` / ${row.SubCode}` : ''}
                               </TableCell>
                               <TableCell>{row.ItemName}</TableCell>
                               <TableCell>{row.ItemType || '-'}</TableCell>
@@ -1403,10 +1419,10 @@ const StockReportContent = () => {
                                   textUnderlineOffset: 3,
                                   '&:hover': { color: '#F88A01' }
                                 }}
-                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}`)}
+                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}&subCode=${encodeURIComponent(row.SubCode || '')}`)}
                                 title="Click to view Item Stock Ledger statement"
                               >
-                                {row.ItemCode}
+                                {row.ItemCode}{row.SubCode ? ` / ${row.SubCode}` : ''}
                               </TableCell>
                               <TableCell>{row.ItemName || '-'}</TableCell>
                               <TableCell>{row.Unit || '-'}</TableCell>
@@ -1454,10 +1470,10 @@ const StockReportContent = () => {
                                   textUnderlineOffset: 3,
                                   '&:hover': { color: '#F88A01' }
                                 }}
-                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}`)}
+                                onClick={() => navigate(`/dashboard/reports/item-ledger?itemCode=${encodeURIComponent(row.ItemCode)}&subCode=${encodeURIComponent(row.SubCode || '')}`)}
                                 title="Click to view Item Stock Ledger"
                               >
-                                {row.ItemCode}
+                                {row.ItemCode}{row.SubCode ? ` / ${row.SubCode}` : ''}
                               </TableCell>
                               <TableCell>{row.ItemName || '-'}</TableCell>
                               <TableCell align="right" sx={{ color: '#2563eb', fontWeight: 600 }}>{Number(row.OutQty || 0).toLocaleString()}</TableCell>

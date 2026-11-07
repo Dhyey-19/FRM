@@ -85,8 +85,12 @@ const ItemStockLedgerReport = () => {
     if (items.length > 0 && !selectedItem) {
       const searchParams = new URLSearchParams(location.search);
       const queryItemCode = searchParams.get('itemCode') || location.state?.itemCode;
+      const querySubCode = searchParams.get('subCode') || location.state?.subCode || '';
       if (queryItemCode) {
-        const found = items.find(i => String(i.ItemCode).toLowerCase() === String(queryItemCode).toLowerCase());
+        const found = items.find(i => 
+          String(i.ItemCode).toLowerCase() === String(queryItemCode).toLowerCase() &&
+          String(i.SubCode || '').toLowerCase() === String(querySubCode).toLowerCase()
+        );
         if (found) {
           setSelectedItem(found);
           // If came from query link, allow All Time view by default
@@ -121,7 +125,7 @@ const ItemStockLedgerReport = () => {
         return `${y}-${m}-${d}`;
       };
 
-      let url = `${baseUrl}/items/stock-ledger?itemCode=${encodeURIComponent(selectedItem.ItemCode)}&scope=${scope}`;
+      let url = `${baseUrl}/items/stock-ledger?itemCode=${encodeURIComponent(selectedItem.ItemCode)}&subCode=${encodeURIComponent(selectedItem.SubCode || '')}&scope=${scope}`;
       if (startDate) url += `&startDate=${formatDate(startDate)}`;
       if (endDate) url += `&endDate=${formatDate(endDate)}`;
 
@@ -704,11 +708,11 @@ const ItemStockLedgerReport = () => {
               getOptionLabel={(option) => {
                 if (!option) return '';
                 if (typeof option === 'string') return option;
-                return `[${option.ItemCode || ''}]  ${option.ItemName || ''}`;
+                return `[${option.ItemCode || ''}${option.SubCode ? ` / ${option.SubCode}` : ''}]  ${option.ItemName || ''}`;
               }}
               value={selectedItem}
               onChange={(e, val) => setSelectedItem(val)}
-              isOptionEqualToValue={(option, value) => option?.ItemCode === value?.ItemCode}
+              isOptionEqualToValue={(option, value) => option?.ItemCode === value?.ItemCode && (option?.SubCode || '') === (value?.SubCode || '')}
               slotProps={{
                 popper: {
                   sx: {

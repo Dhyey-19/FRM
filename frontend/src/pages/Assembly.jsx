@@ -110,6 +110,7 @@ const Assembly = ({ user }) => {
             AssemblyNo: assemblyNo,
             AssemblyDate: assemblyDate,
             ItemCode: selectedItem.ItemCode,
+            SubCode: selectedItem.SubCode || '',
             Quantity: parseFloat(quantity),
             Remark: remark,
             CreatedBy: user?.username || user?.Username || 'Admin',
@@ -152,15 +153,18 @@ const Assembly = ({ user }) => {
         if (!selectedItem) return [];
         const q = parseFloat(quantity) || 0;
         const parentCode = String(selectedItem.ItemCode).trim().toLowerCase();
+        const parentSub = String(selectedItem.SubCode || '').trim().toLowerCase();
         
         return bomList
-            .filter(b => String(b.ParentItemCode).trim().toLowerCase() === parentCode)
+            .filter(b => String(b.ParentItemCode).trim().toLowerCase() === parentCode && String(b.ParentSubCode || '').trim().toLowerCase() === parentSub)
             .map(b => {
                 const childCode = String(b.ChildItemCode).trim().toLowerCase();
-                const itemObj = items.find(i => String(i.ItemCode).trim().toLowerCase() === childCode);
+                const childSub = String(b.ChildSubCode || '').trim().toLowerCase();
+                const itemObj = items.find(i => String(i.ItemCode).trim().toLowerCase() === childCode && String(i.SubCode || '').trim().toLowerCase() === childSub);
                 return {
                     ChildItemCode: b.ChildItemCode,
-                    ChildItemName: itemObj ? itemObj.ItemName : 'Unknown',
+                    ChildSubCode: b.ChildSubCode || '',
+                    ChildItemName: itemObj ? itemObj.ItemName : (b.ChildItemName || 'Unknown'),
                     BOMQuantity: b.Quantity,
                     RequiredQuantity: b.Quantity * q,
                     CurrentStock: itemObj ? itemObj.ClosingStock : 0
@@ -177,7 +181,10 @@ const Assembly = ({ user }) => {
         setQuantity(row.Quantity);
         setRemark(row.Remark || '');
         
-        const parentItem = items.find(i => String(i.ItemCode).trim().toLowerCase() === String(row.ItemCode).trim().toLowerCase());
+        const parentItem = items.find(i => 
+            String(i.ItemCode).trim().toLowerCase() === String(row.ItemCode).trim().toLowerCase() &&
+            String(i.SubCode || '').trim().toLowerCase() === String(row.SubCode || '').trim().toLowerCase()
+        );
         setSelectedItem(parentItem || null);
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -275,7 +282,7 @@ const Assembly = ({ user }) => {
                         <Autocomplete
                             fullWidth
                             options={items.filter(item => item.ItemType && item.ItemType.toLowerCase() === 'finished')}
-                            getOptionLabel={(option) => option ? `${option.ItemCode} - ${option.ItemName}` : ''}
+                            getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
                             value={selectedItem}
                             onChange={(e, newValue) => setSelectedItem(newValue)}
                             renderInput={(params) => <TextField {...params} label="Select Parent Item" size="small" required />}
@@ -314,7 +321,7 @@ const Assembly = ({ user }) => {
                                         const isShort = row.CurrentStock < row.RequiredQuantity;
                                         return (
                                             <TableRow key={index} sx={{ backgroundColor: isShort ? '#ffebee' : 'inherit' }}>
-                                                <TableCell>{row.ChildItemCode} - {row.ChildItemName}</TableCell>
+                                                <TableCell>{row.ChildItemCode}{row.ChildSubCode ? ` / ${row.ChildSubCode}` : ''} - {row.ChildItemName}</TableCell>
                                                 <TableCell align="right">{row.BOMQuantity}</TableCell>
                                                 <TableCell align="right">{row.RequiredQuantity}</TableCell>
                                                 <TableCell align="right">{row.CurrentStock}</TableCell>
@@ -388,7 +395,7 @@ const Assembly = ({ user }) => {
                                 {todayAssemblies.map((row) => (
                                     <TableRow key={row.Id}>
                                         <TableCell>{row.AssemblyNo}</TableCell>
-                                        <TableCell>{row.ItemCode} - {row.ItemName}</TableCell>
+                                        <TableCell>{row.ItemCode}{row.SubCode ? ` / ${row.SubCode}` : ''} - {row.ItemName}</TableCell>
                                         <TableCell align="right">{row.Quantity}</TableCell>
                                         <TableCell align="center">
 

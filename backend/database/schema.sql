@@ -102,9 +102,13 @@ CREATE TABLE IF NOT EXISTS "Assets" (
 
 -- Table: ItemMaster
 CREATE TABLE IF NOT EXISTS "ItemMaster" (
-    "ItemCode" VARCHAR(10) PRIMARY KEY NOT NULL,
+    "ItemCode" VARCHAR(50) NOT NULL,
+    "SubCode" VARCHAR(50) NOT NULL DEFAULT '',
     "ItemName" VARCHAR(50) NOT NULL,
     "ItemType" VARCHAR(15),
+    "Category" VARCHAR(20) DEFAULT 'Inhouse',
+    "WarehouseNo" VARCHAR(50),
+    "Location" VARCHAR(100),
     "Series" VARCHAR(15),
     "StdWeight" DECIMAL(12, 3),
     "Costing" DECIMAL(10, 0) DEFAULT 0,
@@ -113,7 +117,8 @@ CREATE TABLE IF NOT EXISTS "ItemMaster" (
     "OpeningStock" DECIMAL(12, 3),
     "ClosingStock" DECIMAL(12, 3),
     "HSNCode" VARCHAR(8),
-    "ReorderLevel" DECIMAL(12, 3) DEFAULT 0
+    "ReorderLevel" DECIMAL(12, 3) DEFAULT 0,
+    PRIMARY KEY ("ItemCode", "SubCode")
 );
 
 -- Table: LedgerMaster
@@ -151,33 +156,34 @@ CREATE TABLE IF NOT EXISTS "AssemblyTransactions" (
     "Id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "AssemblyNo" DECIMAL(8, 0) NOT NULL,
     "AssemblyDate" DATE NOT NULL,
-    "ItemCode" VARCHAR(10) NOT NULL,
+    "ItemCode" VARCHAR(50) NOT NULL,
+    "SubCode" VARCHAR(50) DEFAULT '',
     "Quantity" DECIMAL(8, 0) NOT NULL,
     "Remark" VARCHAR(50),
     "CreatedBy" VARCHAR(40),
-    "UpdatedBy" VARCHAR(40),
-    FOREIGN KEY ("ItemCode") REFERENCES "ItemMaster" ("ItemCode")
+    "UpdatedBy" VARCHAR(40)
 );
 
 -- Table: BOM_Master
 CREATE TABLE IF NOT EXISTS "BOM_Master" (
-    "ParentItemCode" VARCHAR(10) NOT NULL,
-    "ChildItemCode" VARCHAR(10) NOT NULL,
+    "ParentItemCode" VARCHAR(50) NOT NULL,
+    "ParentSubCode" VARCHAR(50) NOT NULL DEFAULT '',
+    "ChildItemCode" VARCHAR(50) NOT NULL,
+    "ChildSubCode" VARCHAR(50) NOT NULL DEFAULT '',
     "Quantity" DECIMAL(5, 3) NOT NULL DEFAULT 0,
-    PRIMARY KEY ("ParentItemCode", "ChildItemCode"),
-    FOREIGN KEY ("ChildItemCode") REFERENCES "ItemMaster" ("ItemCode"),
-    FOREIGN KEY ("ParentItemCode") REFERENCES "ItemMaster" ("ItemCode")
+    PRIMARY KEY ("ParentItemCode", "ParentSubCode", "ChildItemCode", "ChildSubCode")
 );
 
 -- Table: DepartmentStock
 CREATE TABLE IF NOT EXISTS "DepartmentStock" (
     "DeptID" INTEGER NOT NULL,
-    "ItemCode" VARCHAR(10) NOT NULL,
+    "ItemCode" VARCHAR(50) NOT NULL,
+    "SubCode" VARCHAR(50) NOT NULL DEFAULT '',
     "Pcs" DECIMAL(10, 3) NOT NULL DEFAULT 0,
     "Weight" DECIMAL(10, 3) NOT NULL DEFAULT 0,
-    PRIMARY KEY ("DeptID", "ItemCode"),
-    FOREIGN KEY ("ItemCode") REFERENCES "ItemMaster" ("ItemCode"),
+    PRIMARY KEY ("DeptID", "ItemCode", "SubCode"),
     FOREIGN KEY ("DeptID") REFERENCES "DepartmentMaster" ("DeptID")
+);
 );
 
 -- Table: InwardHeader
@@ -205,7 +211,8 @@ CREATE TABLE IF NOT EXISTS "InwardHeader" (
 CREATE TABLE IF NOT EXISTS "InwardDetail" (
     "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
     "INWARDID" DECIMAL(8, 0) NOT NULL,
-    "ITEMCODE" VARCHAR(10) NOT NULL,
+    "ITEMCODE" VARCHAR(50) NOT NULL,
+    "SUBCODE" VARCHAR(50) DEFAULT '',
     "GROSSWT" DECIMAL(10, 3),
     "NETWT" DECIMAL(10, 3),
     "QUANTITY" DECIMAL(10, 2),
@@ -213,8 +220,7 @@ CREATE TABLE IF NOT EXISTS "InwardDetail" (
     "RATE" DECIMAL(10, 2),
     "AMOUNT" DECIMAL(12, 2),
     "TENPCSWT" DECIMAL(10, 3),
-    FOREIGN KEY ("INWARDID") REFERENCES "InwardHeader" ("ID"),
-    FOREIGN KEY ("ITEMCODE") REFERENCES "ItemMaster" ("ItemCode")
+    FOREIGN KEY ("INWARDID") REFERENCES "InwardHeader" ("ID")
 );
 
 -- Table: JobworkInHeader
@@ -237,11 +243,14 @@ CREATE TABLE IF NOT EXISTS "JobworkInHeader" (
 CREATE TABLE IF NOT EXISTS "JobworkInDetail" (
     "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
     "JWINWARDID" DECIMAL(8, 0) NOT NULL,
-    "OUTITEMCODE" VARCHAR(10) NOT NULL,
-    "INITEMCODE" VARCHAR(10) NOT NULL,
+    "OUTITEMCODE" VARCHAR(50) NOT NULL,
+    "OUTSUBCODE" VARCHAR(50) DEFAULT '',
+    "INITEMCODE" VARCHAR(50) NOT NULL,
+    "INSUBCODE" VARCHAR(50) DEFAULT '',
     "GROSSWT" DECIMAL(10, 3),
     "NETWT" DECIMAL(10, 3),
-    "SCRAPITEMCODE" VARCHAR(10),
+    "SCRAPITEMCODE" VARCHAR(50),
+    "SCRAPSUBCODE" VARCHAR(50) DEFAULT '',
     "SCRAPPCS" DECIMAL(5, 2),
     "SCRAPWT" DECIMAL(10, 3),
     "QUANTITY" DECIMAL(10, 2),
@@ -250,10 +259,7 @@ CREATE TABLE IF NOT EXISTS "JobworkInDetail" (
     "RATE" DECIMAL(10, 2),
     "AMOUNT" DECIMAL(12, 2),
     "TENPCSWT" DECIMAL(10, 3),
-    FOREIGN KEY ("OUTITEMCODE") REFERENCES "ItemMaster" ("ItemCode"),
-    FOREIGN KEY ("SCRAPITEMCODE") REFERENCES "ItemMaster" ("ItemCode"),
-    FOREIGN KEY ("JWINWARDID") REFERENCES "JobworkInHeader" ("ID"),
-    FOREIGN KEY ("INITEMCODE") REFERENCES "ItemMaster" ("ItemCode")
+    FOREIGN KEY ("JWINWARDID") REFERENCES "JobworkInHeader" ("ID")
 );
 
 -- Table: JobworkOutHeader
@@ -275,7 +281,8 @@ CREATE TABLE IF NOT EXISTS "JobworkOutHeader" (
 CREATE TABLE IF NOT EXISTS "JobworkOutDetail" (
     "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
     "JWOUTWARDID" DECIMAL(8, 0) NOT NULL,
-    "ITEMCODE" VARCHAR(10) NOT NULL,
+    "ITEMCODE" VARCHAR(50) NOT NULL,
+    "SUBCODE" VARCHAR(50) DEFAULT '',
     "GROSSWT" DECIMAL(10, 3),
     "NETWT" DECIMAL(10, 3),
     "QUANTITY" DECIMAL(10, 2),
@@ -283,8 +290,7 @@ CREATE TABLE IF NOT EXISTS "JobworkOutDetail" (
     "RATE" DECIMAL(10, 2),
     "PROCESS" VARCHAR(20),
     "TENPCSWT" DECIMAL(10, 3),
-    FOREIGN KEY ("JWOUTWARDID") REFERENCES "JobworkOutHeader" ("ID"),
-    FOREIGN KEY ("ITEMCODE") REFERENCES "ItemMaster" ("ItemCode")
+    FOREIGN KEY ("JWOUTWARDID") REFERENCES "JobworkOutHeader" ("ID")
 );
 
 -- Table: OutwardHeader
@@ -314,7 +320,8 @@ CREATE TABLE IF NOT EXISTS "OutwardHeader" (
 CREATE TABLE IF NOT EXISTS "OutwardDetail" (
     "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
     "OUTWARDID" DECIMAL(8, 0) NOT NULL,
-    "ITEMCODE" VARCHAR(10) NOT NULL,
+    "ITEMCODE" VARCHAR(50) NOT NULL,
+    "SUBCODE" VARCHAR(50) DEFAULT '',
     "GROSSWT" DECIMAL(10, 3),
     "NETWT" DECIMAL(10, 3),
     "QUANTITY" DECIMAL(10, 2),
@@ -323,8 +330,7 @@ CREATE TABLE IF NOT EXISTS "OutwardDetail" (
     "AMOUNT" DECIMAL(12, 2),
     "DISCOUNT" DECIMAL(5, 2) DEFAULT 0,
     "TENPCSWT" DECIMAL(10, 3),
-    FOREIGN KEY ("OUTWARDID") REFERENCES "OutwardHeader" ("ID"),
-    FOREIGN KEY ("ITEMCODE") REFERENCES "ItemMaster" ("ItemCode")
+    FOREIGN KEY ("OUTWARDID") REFERENCES "OutwardHeader" ("ID")
 );
 
 -- Table: StockJournal
@@ -332,12 +338,12 @@ CREATE TABLE IF NOT EXISTS "StockJournal" (
     "SJID" INTEGER PRIMARY KEY AUTOINCREMENT,
     "SJDate" DATE NOT NULL,
     "SJType" VARCHAR(15) NOT NULL,
-    "ItemCode" VARCHAR(10) NOT NULL,
+    "ItemCode" VARCHAR(50) NOT NULL,
+    "SubCode" VARCHAR(50) DEFAULT '',
     "Qty" DECIMAL(10, 3) NOT NULL,
     "Remarks" VARCHAR(50),
     "CreatedBy" VARCHAR(40) NOT NULL,
-    "UpdatedBy" VARCHAR(40),
-    FOREIGN KEY ("ItemCode") REFERENCES "ItemMaster" ("ItemCode")
+    "UpdatedBy" VARCHAR(40)
 );
 
 -- Table: StockTransfer
@@ -347,13 +353,16 @@ CREATE TABLE IF NOT EXISTS "StockTransfer" (
     "MoveDate" DATE NOT NULL,
     "FromDeptID" INTEGER NOT NULL,
     "ToDeptID" INTEGER NOT NULL,
-    "OutItemCode" VARCHAR(10),
+    "OutItemCode" VARCHAR(50),
+    "OutSubCode" VARCHAR(50) DEFAULT '',
     "OutPcs" DECIMAL(10, 3) DEFAULT 0,
     "OutWeight" DECIMAL(10, 3) DEFAULT 0,
-    "InItemCode" VARCHAR(10),
+    "InItemCode" VARCHAR(50),
+    "InSubCode" VARCHAR(50) DEFAULT '',
     "InPcs" DECIMAL(10, 3) DEFAULT 0,
     "InWeight" DECIMAL(10, 3) DEFAULT 0,
-    "ScrapItemCode" VARCHAR(10),
+    "ScrapItemCode" VARCHAR(50),
+    "ScrapSubCode" VARCHAR(50) DEFAULT '',
     "ScrapPcs" DECIMAL(8, 3) DEFAULT 0,
     "ScrapWeight" DECIMAL(8, 3) DEFAULT 0,
     "LossWeight" DECIMAL(8, 3) DEFAULT 0,
@@ -367,10 +376,7 @@ CREATE TABLE IF NOT EXISTS "StockTransfer" (
     "Unit" VARCHAR(20),
     "ManualChallanNo" VARCHAR(50),
     FOREIGN KEY ("ToDeptID") REFERENCES "DepartmentMaster" ("DeptID"),
-    FOREIGN KEY ("FromDeptID") REFERENCES "DepartmentMaster" ("DeptID"),
-    FOREIGN KEY ("ScrapItemCode") REFERENCES "ItemMaster" ("ItemCode"),
-    FOREIGN KEY ("InItemCode") REFERENCES "ItemMaster" ("ItemCode"),
-    FOREIGN KEY ("OutItemCode") REFERENCES "ItemMaster" ("ItemCode")
+    FOREIGN KEY ("FromDeptID") REFERENCES "DepartmentMaster" ("DeptID")
 );
 
 -- Table: VoucherEntry

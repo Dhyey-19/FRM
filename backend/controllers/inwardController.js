@@ -30,23 +30,37 @@ exports.getNextInwardNo = async (req, res) => {
 
 exports.getInwards = async (req, res) => {
   try {
+    const { inwardNo, id } = req.query;
     const pool = await connectDB();
-    // Fetch all InwardHeaders with LedgerName
-    const headerResult = await pool.request().query(`
+    const headerReq = pool.request();
+    let headerQuery = `
       SELECT h.*, l.LedgerName 
       FROM InwardHeader h
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+    `;
+
+    if (inwardNo) {
+      headerQuery += ' WHERE h.INWARDNO = @InwardNo';
+      headerReq.input('InwardNo', sql.VarChar(50), inwardNo.trim());
+    } else if (id) {
+      headerQuery += ' WHERE h.ID = @HeaderId';
+      headerReq.input('HeaderId', sql.Numeric(8, 0), id);
+    }
+
+    headerQuery += `
       ORDER BY 
         CASE WHEN TRY_CAST(h.INWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
         TRY_CAST(h.INWARDNO AS INT) DESC,
         h.INWARDNO DESC
-    `);
+    `;
+
+    const headerResult = await headerReq.query(headerQuery);
     
-    // Fetch all InwardDetails
+    // Fetch InwardDetails
     const detailResult = await pool.request().query(`
-      SELECT d.*, i.ItemName
+      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, i.ItemName
       FROM InwardDetail d
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
     `);
 
     // Group details by InwardId
@@ -81,6 +95,7 @@ exports.getInwardReport = async (req, res) => {
         h.INWARDDATE, 
         l.LedgerName, 
         d.ITEMCODE, 
+        ISNULL(d.SUBCODE, '') AS SUBCODE,
         i.ItemName, 
         d.UNIT, 
         d.QUANTITY, 
@@ -91,7 +106,7 @@ exports.getInwardReport = async (req, res) => {
       FROM InwardDetail d
       INNER JOIN InwardHeader h ON d.INWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
-      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode
+      LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
       ORDER BY 
         CASE WHEN TRY_CAST(h.INWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
         TRY_CAST(h.INWARDNO AS INT) DESC,
@@ -162,9 +177,11 @@ exports.addInward = async (req, res) => {
         }
         
         const detailReq = new sql.Request(transaction);
+        const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
         await detailReq
           .input('INWARDID', sql.Numeric(8,0), newInwardId)
-          .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
+          .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
+          .input('SUBCODE', sql.VarChar(50), subCodeVal)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -173,8 +190,8 @@ exports.addInward = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
@@ -182,7 +199,7 @@ exports.addInward = async (req, res) => {
                 WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
-            WHERE ItemCode = @ITEMCODE;
+            WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
           `);
       }
 
@@ -300,12 +317,13 @@ exports.updateInward = async (req, res) => {
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, QUANTITY, NETWT, UNIT FROM InwardDetail WHERE INWARDID = @INWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM InwardDetail WHERE INWARDID = @INWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
           await revertItemReq
-            .input('OLD_ITEMCODE', sql.VarChar(10), oldD.ITEMCODE)
+            .input('OLD_ITEMCODE', sql.VarChar(50), oldD.ITEMCODE)
+            .input('OLD_SUBCODE', sql.VarChar(50), (oldD.SUBCODE || '').trim())
             .input('OLD_QUANTITY', sql.Numeric(10,2), oldD.QUANTITY)
             .input('OLD_NETWT', sql.Numeric(10,3), oldD.NETWT || 0)
             .input('OLD_UNIT', sql.VarChar(10), oldD.UNIT || '')
@@ -316,7 +334,7 @@ exports.updateInward = async (req, res) => {
                   WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @OLD_NETWT
                   ELSE @OLD_QUANTITY
                 END
-              WHERE ItemCode = @OLD_ITEMCODE;
+              WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
             `);
         }
       }
@@ -357,9 +375,11 @@ exports.updateInward = async (req, res) => {
         }
         
         const detailReq = new sql.Request(transaction);
+        const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
         await detailReq
           .input('INWARDID', sql.Numeric(8,0), id)
-          .input('ITEMCODE', sql.VarChar(10), d.ITEMCODE)
+          .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
+          .input('SUBCODE', sql.VarChar(50), subCodeVal)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -368,8 +388,8 @@ exports.updateInward = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
@@ -377,7 +397,8 @@ exports.updateInward = async (req, res) => {
                 WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @NETWT
                 ELSE @QUANTITY
               END
-            WHERE ItemCode = @ITEMCODE;
+            WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
+          `);
           `);
       }
 
@@ -479,12 +500,13 @@ exports.deleteInward = async (req, res) => {
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, QUANTITY, NETWT, UNIT FROM InwardDetail WHERE INWARDID = @INWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM InwardDetail WHERE INWARDID = @INWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
           await revertItemReq
-            .input('OLD_ITEMCODE', sql.VarChar(10), oldD.ITEMCODE)
+            .input('OLD_ITEMCODE', sql.VarChar(50), oldD.ITEMCODE)
+            .input('OLD_SUBCODE', sql.VarChar(50), (oldD.SUBCODE || '').trim())
             .input('OLD_QUANTITY', sql.Numeric(10,2), oldD.QUANTITY)
             .input('OLD_NETWT', sql.Numeric(10,3), oldD.NETWT || 0)
             .input('OLD_UNIT', sql.VarChar(10), oldD.UNIT || '')
@@ -495,7 +517,7 @@ exports.deleteInward = async (req, res) => {
                   WHEN UPPER(Unit) IN ('KG', 'KGS') THEN @OLD_NETWT
                   ELSE @OLD_QUANTITY
                 END
-              WHERE ItemCode = @OLD_ITEMCODE;
+              WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
             `);
         }
       }

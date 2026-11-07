@@ -74,6 +74,7 @@ const OutwardReport = () => {
     },
     { field: 'LedgerName', headerName: 'Ledger Name', width: 180 },
     { field: 'ITEMCODE', headerName: 'Item Code', width: 110 },
+    { field: 'SUBCODE', headerName: 'Sub Code', width: 95, valueGetter: (value, row) => row?.SUBCODE || '-' },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
     { field: 'UNIT', headerName: 'Unit', width: 80 },
     { field: 'QUANTITY', headerName: 'Qty', width: 80, type: 'number' },
@@ -163,6 +164,7 @@ const OutwardReport = () => {
       row.OUTWARDDATE ? new Date(row.OUTWARDDATE).toLocaleDateString() : '',
       row.LedgerName || '',
       row.ITEMCODE,
+      row.SUBCODE || '-',
       row.ItemName,
       row.UNIT || '',
       row.QUANTITY,
@@ -174,11 +176,11 @@ const OutwardReport = () => {
     ]);
     
     tableData.push([
-      '', '', '', '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), '', '', displayedTotals.totalAmount.toFixed(2)
+      '', '', '', '', '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), '', '', displayedTotals.totalAmount.toFixed(2)
     ]);
 
     autoTable(doc, {
-      head: [['Outward No', 'Date', 'Ledger', 'Item Code', 'Item Name', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Disc %', 'Amount']],
+      head: [['Outward No', 'Date', 'Ledger', 'Item Code', 'Sub Code', 'Item Name', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Disc %', 'Amount']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -231,6 +233,7 @@ const OutwardReport = () => {
       'Date': row.OUTWARDDATE ? new Date(row.OUTWARDDATE).toLocaleDateString() : '',
       'Ledger Name': row.LedgerName,
       'Item Code': row.ITEMCODE,
+      'Sub Code': row.SUBCODE || '-',
       'Item Name': row.ItemName,
       'Unit': row.UNIT,
       'Qty': row.QUANTITY,
@@ -246,6 +249,7 @@ const OutwardReport = () => {
       'Date': '',
       'Ledger Name': '',
       'Item Code': '',
+      'Sub Code': '',
       'Item Name': 'GRAND TOTAL',
       'Unit': '',
       'Qty': displayedTotals.totalQty,

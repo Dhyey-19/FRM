@@ -40,7 +40,7 @@ const ItemReport = () => {
         return 0;
       });
       
-      setItems(sortedData.map(item => ({ ...item, id: item.ItemCode }))); // DataGrid requires 'id'
+      setItems(sortedData.map(item => ({ ...item, id: `${item.ItemCode}__${item.SubCode || ''}` }))); // DataGrid requires unique 'id'
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -49,13 +49,17 @@ const ItemReport = () => {
   };
 
   const columns = [
-    { field: 'ItemCode', headerName: 'Item Code', width: 150 },
+    { field: 'ItemCode', headerName: 'Item Code', width: 130 },
+    { field: 'SubCode', headerName: 'Sub Code', width: 120, valueGetter: (value, row) => row?.SubCode || '-' },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
-    { field: 'Series', headerName: 'Series Name', width: 200 },
+    { field: 'Category', headerName: 'Category', width: 130, valueGetter: (value, row) => row?.Category || 'Inhouse' },
+    { field: 'Series', headerName: 'Series Name', width: 160 },
+    { field: 'WarehouseNo', headerName: 'Warehouse No', width: 130, valueGetter: (value, row) => row?.WarehouseNo || '-' },
+    { field: 'Location', headerName: 'Location', width: 140, valueGetter: (value, row) => row?.Location || '-' },
   ];
 
   const handleExportPDF = (action = 'download') => {
-    const doc = new jsPDF();
+    const doc = new jsPDF('landscape');
     
     // Add Company Header
     doc.setFontSize(20);
@@ -73,16 +77,24 @@ const ItemReport = () => {
     // Line separator
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    doc.line(14, 40, 196, 40);
+    doc.line(14, 40, 283, 40);
 
-    const tableData = items.map(row => [row.ItemCode, row.ItemName, row.Series]);
+    const tableData = items.map(row => [
+      row.ItemCode, 
+      row.SubCode || '-', 
+      row.ItemName, 
+      row.Category || 'Inhouse', 
+      row.Series || '-', 
+      row.WarehouseNo || '-', 
+      row.Location || '-'
+    ]);
     
     autoTable(doc, {
-      head: [['Item Code', 'Item Name', 'Series Name']],
+      head: [['Item Code', 'Sub Code', 'Item Name', 'Category', 'Series Name', 'Warehouse No', 'Location']],
       body: tableData,
       startY: 45,
       theme: 'grid',
-      styles: { fontSize: 10, cellPadding: 4, halign: 'center' },
+      styles: { fontSize: 9, cellPadding: 3, halign: 'center' },
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [245, 247, 249] },
       margin: { top: 45 }
@@ -120,7 +132,15 @@ const ItemReport = () => {
   };
 
   const handleExportExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(items.map(i => ({ 'Item Code': i.ItemCode, 'Item Name': i.ItemName, 'Series Name': i.Series })));
+    const worksheet = XLSX.utils.json_to_sheet(items.map(i => ({
+      'Item Code': i.ItemCode,
+      'Sub Code': i.SubCode || '-',
+      'Item Name': i.ItemName,
+      'Category': i.Category || 'Inhouse',
+      'Series Name': i.Series || '-',
+      'Warehouse No': i.WarehouseNo || '-',
+      'Location': i.Location || '-'
+    })));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Items');
     XLSX.writeFile(workbook, 'item_report.xlsx');
