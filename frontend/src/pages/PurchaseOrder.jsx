@@ -6,13 +6,15 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
   Autocomplete, Grid, Divider, MenuItem, Select, FormControl, InputLabel, Chip,
-  LinearProgress, Tooltip, ToggleButtonGroup, ToggleButton
+  LinearProgress, Tooltip, ToggleButtonGroup, ToggleButton,
+  FormControlLabel, Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon,
   Visibility as ViewIcon, Close as CloseIcon, Print as PrintIcon,
   Assignment as OrderIcon, CheckCircle as CheckCircleIcon, HourglassEmpty as HourglassIcon,
-  LocalShipping as ShippingIcon, Refresh as RefreshIcon
+  LocalShipping as ShippingIcon, Refresh as RefreshIcon, FlashOn as FlashOnIcon,
+  ReceiptLong as PIIcon, DoneAll as DoneAllIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import PdfPreviewModal from '../components/common/PdfPreviewModal';
@@ -72,6 +74,18 @@ const PurchaseOrder = () => {
   const [orderToDelete, setOrderToDelete] = useState(null);
 
   const [companyProfile, setCompanyProfile] = useState(null);
+
+  // Stock Availability & Shortage States
+  const [stockAvailability, setStockAvailability] = useState([]);
+  const [shortageModalOpen, setShortageModalOpen] = useState(false);
+  const [shortageVendorId, setShortageVendorId] = useState(null);
+  const [shortageRows, setShortageRows] = useState([]);
+  const [shortagePiNo, setShortagePiNo] = useState('');
+  const [shortageDeliveryDate, setShortageDeliveryDate] = useState('');
+  const [shortageDirectStock, setShortageDirectStock] = useState(false);
+  const [shortageError, setShortageError] = useState('');
+  const [savingShortagePI, setSavingShortagePI] = useState(false);
+  const [shortageSuccessMsg, setShortageSuccessMsg] = useState('');
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -135,12 +149,182 @@ const PurchaseOrder = () => {
     }
   };
 
+  const fetchStockAvailability = async (excludeId) => {
+    try {
+      let url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/purchase-orders/stock-availability`;
+      if (excludeId) {
+        url += `?excludePoId=${excludeId}`;
+      }
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setStockAvailability(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching stock availability:', err);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
     fetchLedgers();
     fetchItems();
     fetchCompanyProfile();
+    fetchStockAvailability();
   }, [filterParamPoNo]);
+
+  // Map of stock availability by ItemCode__SubCode
+  const stockMap = useMemo(() => {
+    const map = {};
+    for (const s of stockAvailability) {
+      const key = `${s.ItemCode}__${(s.SubCode || '').trim()}`;
+      map[key] = {
+        CurrentStock: parseFloat(s.CurrentStock) || 0,
+        CommittedQty: parseFloat(s.CommittedQty) || 0,
+        AvailableStock: parseFloat(s.AvailableStock) || 0,
+        ItemName: s.ItemName || '',
+        Unit: s.Unit || ''
+      };
+    }
+    return map;
+  }, [stockAvailability]);
+
+  // Compute live missing / shortage items for current gridRows
+  const shortageAnalysis = useMemo(() => {
+    const missing = [];
+    gridRows.forEach(r => {
+      if (!r.ITEMCODE) return;
+      const qty = parseFloat(r.QUANTITY) || 0;
+      if (qty <= 0) return;
+      const key = `${r.ITEMCODE}__${(r.SUBCODE || '').trim()}`;
+      const stock = stockMap[key] || { CurrentStock: 0, CommittedQty: 0, AvailableStock: 0 };
+      const demand = (stock.CommittedQty || 0) + qty;
+      const shortage = Math.max(0, demand - (stock.CurrentStock || 0));
+
+      if (shortage > 0) {
+        const it = items.find(x => x.ItemCode === r.ITEMCODE && (x.SubCode || '') === (r.SUBCODE || ''));
+        const rate = parseFloat(r.RATE) || (it?.Costing ? parseFloat(it.Costing) : 0);
+        missing.push({
+          ITEMCODE: r.ITEMCODE,
+          SUBCODE: r.SUBCODE || '',
+          ItemName: it?.ItemName || stock.ItemName || '',
+          currentStock: stock.CurrentStock,
+          committedQty: stock.CommittedQty,
+          availableStock: stock.AvailableStock,
+          orderQty: qty,
+          shortageQty: shortage,
+          requiredQty: shortage, // user can edit this to any number of quantity
+          unit: r.UNIT || it?.Unit || 'PCS',
+          rate: rate,
+          amount: (shortage * rate).toFixed(2)
+        });
+      }
+    });
+    return missing;
+  }, [gridRows, stockMap, items]);
+
+  // Handlers for Shortage Performa Invoice Modal
+  const handleOpenShortageModal = async () => {
+    setShortageError('');
+    setShortageSuccessMsg('');
+    setShortageVendorId(null);
+    setShortageDeliveryDate(deliveryDate || '');
+    setShortageDirectStock(false);
+    setShortageRows(shortageAnalysis.map(item => ({ ...item })));
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/performa-invoices/next-no`);
+      if (res.ok) {
+        const data = await res.json();
+        setShortagePiNo(data.nextNo || 'PI-1');
+      } else {
+        setShortagePiNo('PI-1');
+      }
+    } catch {
+      setShortagePiNo('PI-1');
+    }
+
+    setShortageModalOpen(true);
+  };
+
+  const handleShortageRowChange = (index, field, value) => {
+    const updated = [...shortageRows];
+    updated[index][field] = value;
+    if (field === 'requiredQty' || field === 'rate') {
+      const q = parseFloat(updated[index].requiredQty) || 0;
+      const r = parseFloat(updated[index].rate) || 0;
+      updated[index].amount = (q * r).toFixed(2);
+    }
+    setShortageRows(updated);
+  };
+
+  const handleSaveShortagePI = async () => {
+    if (!shortageVendorId) {
+      setShortageError('Please select a Supplier / Vendor for this Performa Invoice.');
+      return;
+    }
+    if (!shortagePiNo.trim()) {
+      setShortageError('Please enter a valid Performa Invoice number.');
+      return;
+    }
+    const validRows = shortageRows.filter(r => r.ITEMCODE && parseFloat(r.requiredQty) > 0);
+    if (validRows.length === 0) {
+      setShortageError('Please ensure at least one item has Required Quantity > 0.');
+      return;
+    }
+
+    setSavingShortagePI(true);
+    setShortageError('');
+
+    try {
+      const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+      const username = localUser.Username || localUser.username || 'System';
+
+      const payload = {
+        PINO: shortagePiNo.trim(),
+        PIDATE: todayDate,
+        LEDGERID: shortageVendorId,
+        CUSTOMERPOID: editingId || null,
+        CUSTOMERPONO: poNo || null,
+        DELIVERYDATE: shortageDeliveryDate || null,
+        STATUS: shortageDirectStock ? 'Completed' : 'Ordered',
+        updateStockDirectly: shortageDirectStock,
+        REMARK: `Created from Customer PO ${poNo} for shortage fulfillment`,
+        CREATEDBY: username,
+        UPDATEDBY: username,
+        Details: validRows.map(r => ({
+          ITEMCODE: r.ITEMCODE,
+          SUBCODE: r.SUBCODE || '',
+          QUANTITY: parseFloat(r.requiredQty) || 0,
+          UNIT: r.unit || 'PCS',
+          RATE: parseFloat(r.rate) || 0,
+          AMOUNT: parseFloat(r.amount) || ((parseFloat(r.requiredQty) || 0) * (parseFloat(r.rate) || 0))
+        }))
+      };
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/performa-invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setShortageError(data.message || 'Failed to create Performa Invoice');
+        return;
+      }
+
+      setShortageModalOpen(false);
+      setShortageSuccessMsg(`Performa Invoice ${shortagePiNo} created successfully! ${shortageDirectStock ? 'Stock has been directly updated in inventory.' : 'Items ordered from supplier.'}`);
+      await fetchStockAvailability(editingId);
+      await fetchOrders();
+    } catch (err) {
+      console.error('Error creating PI from shortage:', err);
+      setShortageError(err.message || 'Server error creating Performa Invoice');
+    } finally {
+      setSavingShortagePI(false);
+    }
+  };
 
   // Handle row calculations
   const calculateRowAmount = (row) => {
@@ -184,12 +368,15 @@ const PurchaseOrder = () => {
   // Open dialog for new PO
   const handleOpenNewDialog = async () => {
     setDialogError('');
+    setShortageSuccessMsg('');
     setEditingId(null);
     setPoDate(todayDate);
     setDeliveryDate('');
     setLedgerId(null);
     setRemark('');
     setGridRows([{ ...emptyRow }]);
+
+    fetchStockAvailability();
 
     // Fetch next PO Number
     try {
@@ -210,12 +397,15 @@ const PurchaseOrder = () => {
   // Open dialog for editing PO
   const handleEditOrder = (order) => {
     setDialogError('');
+    setShortageSuccessMsg('');
     setEditingId(order.ID);
     setPoNo(order.PONO || '');
     setPoDate(order.PODATE ? order.PODATE.split('T')[0] : todayDate);
     setDeliveryDate(order.DELIVERYDATE ? order.DELIVERYDATE.split('T')[0] : '');
     setLedgerId(order.LEDGERID);
     setRemark(order.REMARK || '');
+
+    fetchStockAvailability(order.ID);
 
     if (order.Details && order.Details.length > 0) {
       setGridRows(order.Details.map(d => ({
@@ -857,16 +1047,53 @@ const PurchaseOrder = () => {
               </Button>
             </Box>
 
+            {shortageSuccessMsg && (
+              <Alert severity="success" sx={{ mb: 2 }} onClose={() => setShortageSuccessMsg('')}>
+                {shortageSuccessMsg}
+              </Alert>
+            )}
+
+            {shortageAnalysis.length > 0 && (
+              <Alert
+                severity="warning"
+                variant="outlined"
+                icon={<HourglassIcon sx={{ color: '#d97706' }} />}
+                action={
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    size="small"
+                    startIcon={<FlashOnIcon />}
+                    onClick={handleOpenShortageModal}
+                    sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 1.5, boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)' }}
+                  >
+                    ⚡ Create Performa Invoice ({shortageAnalysis.length} Missing)
+                  </Button>
+                }
+                sx={{ mb: 2, bgcolor: '#fffbeb', borderColor: '#fde68a', alignItems: 'center' }}
+              >
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#92400e' }}>
+                    Stock Shortage: {shortageAnalysis.length} item(s) cannot be fulfilled from current stock!
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#b45309' }}>
+                    Considering current stock and existing active customer PO commitments, you need to order missing quantities.
+                  </Typography>
+                </Box>
+              </Alert>
+            )}
+
             <TableContainer sx={{ maxHeight: '35vh' }}>
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700, width: '40%' }}>Item (Code / SubCode / Name)</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: '12%' }} align="right">Quantity</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: '12%' }}>Unit</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: '14%' }} align="right">Rate (₹)</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: '14%' }} align="right">Amount (₹)</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: '8%' }} align="center">Action</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: '32%' }}>Item (Code / SubCode / Name)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: '10%' }} align="right">Quantity</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: '22%' }} align="center">Stock & Shortage</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: '8%' }}>Unit</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: '12%' }} align="right">Rate (₹)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: '12%' }} align="right">Amount (₹)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: '4%' }} align="center">Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -874,6 +1101,13 @@ const PurchaseOrder = () => {
                     const selectedItem = items.find(
                       it => it.ItemCode === row.ITEMCODE && (it.SubCode || '') === (row.SUBCODE || '')
                     );
+
+                    const key = `${row.ITEMCODE}__${(row.SUBCODE || '').trim()}`;
+                    const stock = stockMap[key] || { CurrentStock: 0, CommittedQty: 0, AvailableStock: 0 };
+                    const qty = parseFloat(row.QUANTITY) || 0;
+                    const demand = (stock.CommittedQty || 0) + qty;
+                    const shortage = Math.max(0, demand - (stock.CurrentStock || 0));
+                    const isShortage = shortage > 0 && qty > 0;
 
                     return (
                       <TableRow key={idx}>
@@ -902,6 +1136,56 @@ const PurchaseOrder = () => {
                             inputProps={{ min: 0, step: 'any', style: { textAlign: 'right' } }}
                             fullWidth
                           />
+                        </TableCell>
+                        <TableCell align="center">
+                          {row.ITEMCODE ? (
+                            <Tooltip
+                              title={
+                                <Box sx={{ p: 0.5 }}>
+                                  <Typography variant="caption" sx={{ display: 'block', fontWeight: 600 }}>
+                                    In-Hand Physical Stock: {stock.CurrentStock} {row.UNIT || ''}
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ display: 'block' }}>
+                                    Other Pending POs: {stock.CommittedQty} {row.UNIT || ''}
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ display: 'block', color: stock.AvailableStock >= qty ? '#4ade80' : '#f87171' }}>
+                                    Net Available: {stock.AvailableStock} {row.UNIT || ''}
+                                  </Typography>
+                                  {isShortage && (
+                                    <Typography variant="caption" sx={{ display: 'block', color: '#fca5a5', fontWeight: 700, mt: 0.5 }}>
+                                      ⚠️ Shortage: {shortage.toFixed(2)} {row.UNIT || ''}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              }
+                              arrow
+                            >
+                              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                                {isShortage ? (
+                                  <Chip
+                                    size="small"
+                                    color="error"
+                                    label={`Missing: ${shortage.toFixed(2)}`}
+                                    sx={{ fontWeight: 700, fontSize: '0.72rem', height: 22 }}
+                                  />
+                                ) : qty > 0 ? (
+                                  <Chip
+                                    size="small"
+                                    color="success"
+                                    variant="outlined"
+                                    label={`In Stock (${stock.AvailableStock})`}
+                                    sx={{ fontWeight: 600, fontSize: '0.72rem', height: 22 }}
+                                  />
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Stock: {stock.CurrentStock}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Tooltip>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">-</Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           <TextField
@@ -1124,8 +1408,171 @@ const PurchaseOrder = () => {
         pdfUrl={previewUrl}
         title="Purchase Order PDF"
       />
+
+      {/* Shortage Performa Invoice Modal */}
+      <Dialog
+        open={shortageModalOpen}
+        onClose={() => { if (!savingShortagePI) setShortageModalOpen(false); }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ backgroundColor: '#d97706', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            ⚡ Create Performa Invoice for Missing Items
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#fef3c7', display: 'block' }}>
+            Customer PO Reference: {poNo}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2.5, backgroundColor: '#f8fafc' }}>
+          {shortageError && <Alert severity="error" sx={{ mb: 2 }}>{shortageError}</Alert>}
+
+          <Paper sx={{ p: 2, mb: 2, border: '1px solid #e2e8f0', borderRadius: 1.5, boxShadow: 'none' }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Performa Invoice No"
+                  value={shortagePiNo}
+                  onChange={(e) => setShortagePiNo(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Autocomplete
+                  options={ledgers}
+                  getOptionLabel={(option) => option.LedgerName || ''}
+                  value={ledgers.find(l => l.Id === shortageVendorId) || null}
+                  onChange={(e, val) => setShortageVendorId(val ? val.Id : null)}
+                  renderInput={(params) => <TextField {...params} label="Select Supplier / Vendor" size="small" required fullWidth />}
+                  fullWidth
+                  slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="date"
+                  label="Expected Delivery Date"
+                  value={shortageDeliveryDate}
+                  onChange={(e) => setShortageDeliveryDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={shortageDirectStock}
+                      onChange={(e) => setShortageDirectStock(e.target.checked)}
+                      color="success"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: shortageDirectStock ? '#16a34a' : 'text.primary' }}>
+                      ⚡ Update Stock Directly (mark received immediately)
+                    </Typography>
+                  }
+                  sx={{ mt: 0.5 }}
+                />
+              </Grid>
+            </Grid>
+          </Paper>
+
+          <Paper sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5, overflow: 'hidden' }}>
+            <TableContainer sx={{ maxHeight: '40vh' }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>Item Description</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">In Hand</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Committed</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Shortage</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right" sx={{ width: 130 }}>Order Qty</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Unit</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Rate (₹)</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Amount (₹)</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {shortageRows.map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {row.ITEMCODE}{row.SUBCODE ? ` (${row.SUBCODE})` : ''}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {row.ItemName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">{row.currentStock}</TableCell>
+                      <TableCell align="right">{row.committedQty}</TableCell>
+                      <TableCell align="right" sx={{ color: '#d97706', fontWeight: 700 }}>
+                        {row.shortageQty.toFixed(2)}
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={row.requiredQty}
+                          onChange={(e) => handleShortageRowChange(idx, 'requiredQty', e.target.value)}
+                          inputProps={{ min: 0, step: 'any', style: { textAlign: 'right', fontWeight: 700 } }}
+                          fullWidth
+                        />
+                      </TableCell>
+                      <TableCell>{row.unit}</TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={row.rate}
+                          onChange={(e) => handleShortageRowChange(idx, 'rate', e.target.value)}
+                          inputProps={{ min: 0, step: 'any', style: { textAlign: 'right' } }}
+                          sx={{ width: 90 }}
+                        />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>
+                        ₹{row.amount}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 3 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Total Items to Order: <strong>{shortageRows.length}</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Total Qty: <strong>{shortageRows.reduce((s, r) => s + (parseFloat(r.requiredQty) || 0), 0).toFixed(2)}</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                Total Amount: <strong>₹{shortageRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              </Typography>
+            </Box>
+          </Paper>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
+          <Button onClick={() => setShortageModalOpen(false)} color="inherit" disabled={savingShortagePI}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleSaveShortagePI}
+            disabled={savingShortagePI}
+            sx={{ fontWeight: 600, textTransform: 'none' }}
+          >
+            {savingShortagePI ? 'Creating Performa Invoice...' : 'Create & Place Order'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
 export default PurchaseOrder;
+

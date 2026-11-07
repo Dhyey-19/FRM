@@ -19,7 +19,8 @@ import {
   QrCode2 as QrCodeIcon,
   ManageAccounts as UserAccessIcon,
   NotificationsActive as NotificationsActiveIcon,
-  Assignment as POIcon
+  Assignment as POIcon,
+  ReceiptLong as PIIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -61,6 +62,7 @@ export const MENU_STRUCTURE = [
     icon: <TransactionIcon />,
     children: [
       { title: 'Purchase Order', path: '/dashboard/purchase-orders', icon: <POIcon /> },
+      { title: 'Performa Invoice', path: '/dashboard/performa-invoices', icon: <PIIcon /> },
       { title: 'Purchase', path: '/dashboard/inwards', icon: <ListIcon /> },
       { title: 'Sales', path: '/dashboard/outwards', icon: <ListIcon /> },
       { title: 'Sub-Contract', path: '/dashboard/subcontract', icon: <ListIcon /> },

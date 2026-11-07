@@ -38,6 +38,52 @@ exports.getNextPONo = async (req, res) => {
   }
 };
 
+// GET /api/purchase-orders/stock-availability
+exports.getStockAvailability = async (req, res) => {
+  try {
+    const { excludePoId } = req.query;
+    const pool = await connectDB();
+    const reqInstance = pool.request();
+    let query = `
+      SELECT 
+        i.ItemCode,
+        ISNULL(i.SubCode, '') AS SubCode,
+        i.ItemName,
+        i.Category,
+        i.Unit,
+        ISNULL(i.ClosingStock, 0) AS CurrentStock,
+        ISNULL(po.PendingQty, 0) AS CommittedQty,
+        (ISNULL(i.ClosingStock, 0) - ISNULL(po.PendingQty, 0)) AS AvailableStock
+      FROM ItemMaster i
+      LEFT JOIN (
+        SELECT 
+          d.ITEMCODE,
+          ISNULL(d.SUBCODE, '') AS SUBCODE,
+          SUM(d.PENDINGQTY) AS PendingQty
+        FROM PurchaseOrderDetail d
+        INNER JOIN PurchaseOrderHeader h ON d.POID = h.ID
+        WHERE UPPER(h.STATUS) IN ('PENDING', 'PARTIALLY FULFILLED')
+    `;
+
+    if (excludePoId) {
+      query += ' AND h.ID <> @ExcludePoId';
+      reqInstance.input('ExcludePoId', sql.Numeric(8, 0), excludePoId);
+    }
+
+    query += `
+        GROUP BY d.ITEMCODE, ISNULL(d.SUBCODE, '')
+      ) po ON i.ItemCode = po.ITEMCODE AND ISNULL(i.SubCode, '') = po.SUBCODE
+      ORDER BY i.ItemCode, ISNULL(i.SubCode, '')
+    `;
+
+    const result = await reqInstance.query(query);
+    res.status(200).json(result.recordset || []);
+  } catch (error) {
+    console.error('Error fetching stock availability:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // GET /api/purchase-orders
 exports.getPurchaseOrders = async (req, res) => {
   try {
@@ -626,3 +672,4 @@ exports.deletePurchaseOrder = async (req, res) => {
     res.status(500).json({ message: error.message || 'Server error' });
   }
 };
+

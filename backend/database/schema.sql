@@ -1,6 +1,6 @@
 -- =====================================================================
 -- FRM - Factory Resource Manager Local Database Schema (SQLite)
--- Total Tables: 26
+-- Total Tables: 28
 -- =====================================================================
 
 PRAGMA foreign_keys = ON;
@@ -185,6 +185,42 @@ CREATE TABLE IF NOT EXISTS "DepartmentStock" (
     FOREIGN KEY ("DeptID") REFERENCES "DepartmentMaster" ("DeptID")
 );
 
+-- Table: PerformaInvoiceHeader
+CREATE TABLE IF NOT EXISTS "PerformaInvoiceHeader" (
+    "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "PINO" VARCHAR(50) NOT NULL UNIQUE,
+    "PIDATE" DATE NOT NULL,
+    "LEDGERID" DECIMAL(10, 0) NOT NULL,
+    "CUSTOMERPOID" INTEGER,
+    "CUSTOMERPONO" VARCHAR(50),
+    "DELIVERYDATE" DATE,
+    "STATUS" VARCHAR(25) NOT NULL DEFAULT 'Draft',
+    "TOTALQTY" DECIMAL(12, 3) DEFAULT 0,
+    "TOTALAMOUNT" DECIMAL(12, 2) DEFAULT 0,
+    "REMARK" VARCHAR(255),
+    "CREATEDBY" VARCHAR(40) NOT NULL,
+    "UPDATEDBY" VARCHAR(40),
+    "CREATEDAT" DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("LEDGERID") REFERENCES "LedgerMaster" ("Id"),
+    FOREIGN KEY ("CUSTOMERPOID") REFERENCES "PurchaseOrderHeader" ("ID")
+);
+
+-- Table: PerformaInvoiceDetail
+CREATE TABLE IF NOT EXISTS "PerformaInvoiceDetail" (
+    "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "PIID" INTEGER NOT NULL,
+    "ITEMCODE" VARCHAR(50) NOT NULL,
+    "SUBCODE" VARCHAR(50) DEFAULT '',
+    "QUANTITY" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    "RECEIVEDQTY" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    "PENDINGQTY" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    "UNIT" VARCHAR(10),
+    "RATE" DECIMAL(10, 2) DEFAULT 0,
+    "AMOUNT" DECIMAL(12, 2) DEFAULT 0,
+    "REMARK" VARCHAR(100),
+    FOREIGN KEY ("PIID") REFERENCES "PerformaInvoiceHeader" ("ID")
+);
+
 -- Table: InwardHeader
 CREATE TABLE IF NOT EXISTS "InwardHeader" (
     "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,8 +238,11 @@ CREATE TABLE IF NOT EXISTS "InwardHeader" (
     "REMARK" VARCHAR(100),
     "CREATEDBY" VARCHAR(40) NOT NULL,
     "UPDATEDBY" VARCHAR(40),
+    "PIID" INTEGER,
+    "PINO" VARCHAR(50),
     CONSTRAINT "UQ_InwardHeader_INWARDNO" UNIQUE ("INWARDNO"),
-    FOREIGN KEY ("LEDGERID") REFERENCES "LedgerMaster" ("Id")
+    FOREIGN KEY ("LEDGERID") REFERENCES "LedgerMaster" ("Id"),
+    FOREIGN KEY ("PIID") REFERENCES "PerformaInvoiceHeader" ("ID")
 );
 
 -- Table: InwardDetail
@@ -219,7 +258,9 @@ CREATE TABLE IF NOT EXISTS "InwardDetail" (
     "RATE" DECIMAL(10, 2),
     "AMOUNT" DECIMAL(12, 2),
     "TENPCSWT" DECIMAL(10, 3),
-    FOREIGN KEY ("INWARDID") REFERENCES "InwardHeader" ("ID")
+    "PIDETAILID" INTEGER,
+    FOREIGN KEY ("INWARDID") REFERENCES "InwardHeader" ("ID"),
+    FOREIGN KEY ("PIDETAILID") REFERENCES "PerformaInvoiceDetail" ("ID")
 );
 
 -- Table: JobworkInHeader

@@ -224,6 +224,39 @@ function transformQuery(sqlText) {
   return q;
 }
 
+function splitSqlStatements(sqlText) {
+  const statements = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < sqlText.length; i++) {
+    const char = sqlText[i];
+    if (char === "'" && !inDoubleQuote) {
+      if (inSingleQuote && sqlText[i + 1] === "'") {
+        current += "''";
+        i++;
+        continue;
+      }
+      inSingleQuote = !inSingleQuote;
+    } else if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    }
+
+    if (char === ';' && !inSingleQuote && !inDoubleQuote) {
+      const trimmed = current.trim();
+      if (trimmed) statements.push(trimmed);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  const last = current.trim();
+  if (last) statements.push(last);
+  return statements;
+}
+
 class Request {
   constructor(parent) {
     this.parent = parent;
@@ -245,7 +278,7 @@ class Request {
 
   async query(sqlText) {
     const db = await getDatabase();
-    const transformed = transformQuery(sqlText);
+    const rawStatements = splitSqlStatements(sqlText);
 
     // Prepare parameters: sql.js supports ':key', '@key', '$key'
     const params = {};
@@ -256,47 +289,59 @@ class Request {
       params['$' + cleanKey] = v;
     }
 
-    const isReturning = /\bRETURNING\b/i.test(transformed);
-    const isSelect = /^\s*(SELECT|WITH|PRAGMA)\b/i.test(transformed);
+    let lastRecordset = [];
+    const allRecordsets = [];
+    let totalRowsAffected = 0;
+    let didModify = false;
 
-    try {
-      const stmt = db.prepare(transformed);
-      stmt.bind(params);
+    for (const rawStmt of rawStatements) {
+      const transformed = transformQuery(rawStmt);
+      const isReturning = /\bRETURNING\b/i.test(transformed);
+      const isSelect = /^\s*(SELECT|WITH|PRAGMA)\b/i.test(transformed);
 
-      if (isSelect || isReturning) {
-        const rows = [];
-        while (stmt.step()) {
-          rows.push(stmt.getAsObject());
+      try {
+        const stmt = db.prepare(transformed);
+        stmt.bind(params);
+
+        if (isSelect || isReturning) {
+          const rows = [];
+          while (stmt.step()) {
+            rows.push(stmt.getAsObject());
+          }
+          stmt.free();
+
+          if (isReturning) {
+            didModify = true;
+          }
+
+          lastRecordset = rows;
+          allRecordsets.push(rows);
+          totalRowsAffected += rows.length;
+        } else {
+          stmt.step();
+          stmt.free();
+          const changes = db.getRowsModified();
+          totalRowsAffected += changes;
+          didModify = true;
         }
-        stmt.free();
-
-        if (isReturning) {
-          saveToDisk();
-        }
-
-        return {
-          recordset: rows,
-          recordsets: [rows],
-          rowsAffected: [rows.length]
-        };
-      } else {
-        stmt.step();
-        stmt.free();
-        const changes = db.getRowsModified();
-        saveToDisk();
-        return {
-          recordset: [],
-          recordsets: [[]],
-          rowsAffected: [changes]
-        };
+      } catch (err) {
+        console.error('[SQLite Adapter Error] Query Failed:', err.message);
+        console.error('Original SQL Statement:', rawStmt);
+        console.error('Transformed SQL:', transformed);
+        console.error('Parameters:', params);
+        throw err;
       }
-    } catch (err) {
-      console.error('[SQLite Adapter Error] Query Failed:', err.message);
-      console.error('Original SQL:', sqlText);
-      console.error('Transformed SQL:', transformed);
-      console.error('Parameters:', params);
-      throw err;
     }
+
+    if (didModify) {
+      saveToDisk();
+    }
+
+    return {
+      recordset: lastRecordset,
+      recordsets: allRecordsets,
+      rowsAffected: [totalRowsAffected]
+    };
   }
 }
 

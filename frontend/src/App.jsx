@@ -23,6 +23,7 @@ import BankReconciliation from './pages/BankReconciliation';
 import InwardEntry from './pages/InwardEntry';
 import OutwardEntry from './pages/OutwardEntry';
 import PurchaseOrder from './pages/PurchaseOrder';
+import PerformaInvoice from './pages/PerformaInvoice';
 import StockTransfer from './pages/StockTransfer';
 import Assembly from './pages/Assembly';
 import StockJournal from './pages/StockJournal';
@@ -157,6 +158,8 @@ function App() {
             <Route path="purchase" element={<Navigate to="/dashboard/inwards" replace />} />
             <Route path="purchase-orders" element={<PurchaseOrder />} />
             <Route path="purchase-order" element={<Navigate to="/dashboard/purchase-orders" replace />} />
+            <Route path="performa-invoices" element={<PerformaInvoice />} />
+            <Route path="performa-invoice" element={<Navigate to="/dashboard/performa-invoices" replace />} />
             <Route path="outwards" element={<OutwardEntry />} />
             <Route path="sales" element={<Navigate to="/dashboard/outwards" replace />} />
             <Route path="subcontract" element={<Subcontract />} />

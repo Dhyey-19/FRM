@@ -21,6 +21,7 @@ import autoTable from 'jspdf-autotable';
 const emptyRow = {
   ITEMCODE: '',
   SUBCODE: '',
+  PIDETAILID: null,
   GROSSWT: '',
   NETWT: '',
   TENPCSWT: '',
@@ -75,6 +76,68 @@ const InwardEntry = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
+
+  // Performa Invoice Linkage States
+  const [piList, setPiList] = useState([]);
+  const [selectedPiId, setSelectedPiId] = useState(null);
+  const [selectedPiNo, setSelectedPiNo] = useState('');
+
+  const fetchPIsForVendor = async (vendorId, currentPiId = null) => {
+    if (!vendorId) {
+      setPiList([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/performa-invoices?ledgerId=${vendorId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        const filtered = list.filter(p => {
+          const st = (p.STATUS || '').toLowerCase();
+          return st !== 'completed' || (currentPiId && p.ID === currentPiId);
+        });
+        setPiList(filtered);
+      }
+    } catch (err) {
+      console.error('Error fetching PIs for vendor:', err);
+    }
+  };
+
+  const handleLedgerChange = (newLedgerId) => {
+    setLedgerId(newLedgerId);
+    setSelectedPiId(null);
+    setSelectedPiNo('');
+    if (newLedgerId) {
+      fetchPIsForVendor(newLedgerId);
+    } else {
+      setPiList([]);
+    }
+  };
+
+  const handleLoadItemsFromPI = () => {
+    const selectedPI = piList.find(p => p.ID === selectedPiId);
+    if (!selectedPI || !selectedPI.Details || selectedPI.Details.length === 0) return;
+
+    const newRows = selectedPI.Details.map(d => {
+      const pend = parseFloat(d.PENDINGQTY);
+      const qty = (pend > 0 ? pend : parseFloat(d.QUANTITY)) || 0;
+      const rate = parseFloat(d.RATE) || 0;
+      const amt = (qty * rate).toFixed(2);
+      return {
+        ITEMCODE: d.ITEMCODE || '',
+        SUBCODE: d.SUBCODE || '',
+        PIDETAILID: d.ID,
+        GROSSWT: '',
+        NETWT: '',
+        TENPCSWT: '',
+        QUANTITY: String(qty),
+        UNIT: d.UNIT || '',
+        RATE: String(rate || ''),
+        AMOUNT: String(amt || '')
+      };
+    });
+    setGridRows(newRows);
+  };
 
 
 
@@ -274,6 +337,9 @@ const InwardEntry = () => {
 
     setInwardDate(new Date().toISOString().split('T')[0]);
     setLedgerId(null);
+    setSelectedPiId(null);
+    setSelectedPiNo('');
+    setPiList([]);
     setBill(true);
     setExpense('');
     setSgst('');
@@ -293,6 +359,13 @@ const InwardEntry = () => {
     setInwardNo(Inward.INWARDNO || '');
     setInwardDate(Inward.INWARDDATE ? Inward.INWARDDATE.split('T')[0] : new Date().toISOString().split('T')[0]);
     setLedgerId(Inward.LEDGERID);
+    setSelectedPiId(Inward.PIID || null);
+    setSelectedPiNo(Inward.PINO || '');
+    if (Inward.LEDGERID) {
+      fetchPIsForVendor(Inward.LEDGERID, Inward.PIID);
+    } else {
+      setPiList([]);
+    }
     setBill(Inward.Bill !== false);
     setExpense(Inward.EXPENSE || '');
     setSgst(Inward.SGST || '');
@@ -307,6 +380,7 @@ const InwardEntry = () => {
       setGridRows(Inward.Details.map(d => ({
         ITEMCODE: d.ITEMCODE || '',
         SUBCODE: d.SUBCODE || '',
+        PIDETAILID: d.PIDETAILID || null,
         GROSSWT: d.GROSSWT || '',
         NETWT: d.NETWT || '',
         TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
@@ -677,6 +751,8 @@ const InwardEntry = () => {
       INWARDNO: trimmedNo,
       INWARDDATE: InwardDate,
       LEDGERID: ledgerId,
+      PIID: selectedPiId || null,
+      PINO: selectedPiNo || null,
       Bill: bill ? 1 : 0,
       EXPENSE: expense ? parseFloat(expense) : 0,
       SGST: sgst ? parseFloat(sgst) : 0,
@@ -691,6 +767,7 @@ const InwardEntry = () => {
       Details: validRows.map(r => ({
         ...r,
         SUBCODE: r.SUBCODE || '',
+        PIDETAILID: r.PIDETAILID || null,
         GROSSWT: parseFloat(r.GROSSWT) || 0,
         NETWT: parseFloat(r.NETWT) || 0,
         TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
@@ -848,6 +925,7 @@ const InwardEntry = () => {
                     Inward No
                   </TableSortLabel>
                 </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>PI Reference</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger</TableCell>
@@ -863,6 +941,19 @@ const InwardEntry = () => {
                     <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
                       {row.INWARDNO}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {row.PINO ? (
+                      <Chip 
+                        size="small" 
+                        label={`PI: ${row.PINO}`}
+                        color="secondary"
+                        variant="outlined"
+                        sx={{ fontSize: '0.72rem', height: 22, fontWeight: 700 }}
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">-</Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Chip 
@@ -924,28 +1015,57 @@ const InwardEntry = () => {
           {/* Header Section */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={3} md={1.5}>
+              <Grid item xs={12} sm={3} md={1.2}>
                 <FormControlLabel
                   control={<Checkbox checked={bill} onChange={(e) => setBill(e.target.checked)} />}
                   label="Bill"
                 />
               </Grid>
-              <Grid item xs={12} sm={4.5} md={2.5}>
+              <Grid item xs={12} sm={4.5} md={2}>
                 <TextField fullWidth label="Inward No" size="small" value={InwardNo} onChange={(e) => setInwardNo(e.target.value)} required />
               </Grid>
-              <Grid item xs={12} sm={4.5} md={2.5}>
+              <Grid item xs={12} sm={4.5} md={2}>
                 <TextField fullWidth label="Date" type="date" size="small" value={InwardDate} onChange={(e) => setInwardDate(e.target.value)} InputLabelProps={{ shrink: true }} required />
               </Grid>
-              <Grid item xs={12} sm={12} md={5.5}>
+              <Grid item xs={12} sm={6} md={3.8}>
                 <Autocomplete
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
                   value={ledgers.find(l => l.Id === ledgerId) || null}
-                  onChange={(e, newValue) => setLedgerId(newValue ? newValue.Id : null)}
-                  renderInput={(params) => <TextField {...params} label="Ledger" size="small" required fullWidth />}
+                  onChange={(e, newValue) => handleLedgerChange(newValue ? newValue.Id : null)}
+                  renderInput={(params) => <TextField {...params} label="Supplier / Ledger" size="small" required fullWidth />}
                   fullWidth
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
                 />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Autocomplete
+                    options={piList}
+                    getOptionLabel={(option) => option ? `${option.PINO} (${option.Details ? option.Details.length : 0} items)` : ''}
+                    value={piList.find(p => p.ID === selectedPiId) || null}
+                    onChange={(e, val) => {
+                      setSelectedPiId(val ? val.ID : null);
+                      setSelectedPiNo(val ? val.PINO : '');
+                    }}
+                    renderInput={(params) => <TextField {...params} label="Performa Invoice (Optional)" size="small" fullWidth />}
+                    fullWidth
+                    disabled={!ledgerId || piList.length === 0}
+                    slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                  />
+                  {selectedPiId && (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      color="primary"
+                      onClick={handleLoadItemsFromPI}
+                      sx={{ whiteSpace: 'nowrap', textTransform: 'none', fontWeight: 600, px: 1.5, height: 38 }}
+                      title="Load items from Performa Invoice"
+                    >
+                      Load
+                    </Button>
+                  )}
+                </Box>
               </Grid>
             </Grid>
           </Paper>

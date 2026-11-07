@@ -58,7 +58,7 @@ exports.getInwards = async (req, res) => {
     
     // Fetch InwardDetails
     const detailResult = await pool.request().query(`
-      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, i.ItemName
+      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, d.PIDETAILID, i.ItemName
       FROM InwardDetail d
       LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
     `);
@@ -93,9 +93,12 @@ exports.getInwardReport = async (req, res) => {
         d.ID as RowId,
         h.INWARDNO, 
         h.INWARDDATE, 
+        h.PIID,
+        h.PINO,
         l.LedgerName, 
         d.ITEMCODE, 
         ISNULL(d.SUBCODE, '') AS SUBCODE,
+        d.PIDETAILID,
         i.ItemName, 
         d.UNIT, 
         d.QUANTITY, 
@@ -122,7 +125,7 @@ exports.getInwardReport = async (req, res) => {
 };
 
 exports.addInward = async (req, res) => {
-  const { Bill, INWARDNO, INWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
+  const { Bill, INWARDNO, INWARDDATE, LEDGERID, PIID, PINO, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
 
   if (!INWARDNO || !INWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'InwardNo, Date, Ledger, and at least one detail row are required' });
@@ -152,6 +155,8 @@ exports.addInward = async (req, res) => {
         .input('INWARDNO', sql.VarChar(10), INWARDNO)
         .input('INWARDDATE', sql.Date, INWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
+        .input('PIID', sql.Numeric(8,0), PIID || null)
+        .input('PINO', sql.VarChar(50), PINO || null)
         .input('EXPENSE', sql.Numeric(10,2), EXPENSE || 0)
         .input('SGST', sql.Numeric(10,2), SGST || 0)
         .input('CGST', sql.Numeric(10,2), CGST || 0)
@@ -163,9 +168,9 @@ exports.addInward = async (req, res) => {
         .input('CREATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .input('UPDATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .query(`
-          INSERT INTO InwardHeader (Bill, INWARDNO, INWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
+          INSERT INTO InwardHeader (Bill, INWARDNO, INWARDDATE, LEDGERID, PIID, PINO, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
           OUTPUT INSERTED.ID
-          VALUES (@Bill, @INWARDNO, @INWARDDATE, @LEDGERID, @EXPENSE, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
+          VALUES (@Bill, @INWARDNO, @INWARDDATE, @LEDGERID, @PIID, @PINO, @EXPENSE, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
         `);
 
       const newInwardId = headerRes.recordset[0].ID;
@@ -176,12 +181,31 @@ exports.addInward = async (req, res) => {
           throw new Error('Item Code is required for all detail rows');
         }
         
-        const detailReq = new sql.Request(transaction);
         const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
+        let piDetailId = d.PIDETAILID || d.PiDetailId || null;
+
+        // If not specified directly but PIID is given, attempt to match PI detail
+        if (!piDetailId && PIID) {
+          const matchReq = new sql.Request(transaction);
+          const matchRes = await matchReq
+            .input('PIID', sql.Numeric(8,0), PIID)
+            .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE.trim())
+            .input('SUBCODE', sql.VarChar(50), subCodeVal)
+            .query(`
+              SELECT TOP 1 ID FROM PerformaInvoiceDetail
+              WHERE PIID = @PIID AND ITEMCODE = @ITEMCODE AND ISNULL(SUBCODE, '') = @SUBCODE AND PENDINGQTY > 0
+            `);
+          if (matchRes.recordset.length > 0) {
+            piDetailId = matchRes.recordset[0].ID;
+          }
+        }
+
+        const detailReq = new sql.Request(transaction);
         await detailReq
           .input('INWARDID', sql.Numeric(8,0), newInwardId)
           .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
           .input('SUBCODE', sql.VarChar(50), subCodeVal)
+          .input('PIDETAILID', sql.Numeric(8,0), piDetailId || null)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -190,9 +214,16 @@ exports.addInward = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, SUBCODE, PIDETAILID, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @SUBCODE, @PIDETAILID, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+          `);
 
+        await new sql.Request(transaction)
+          .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
+          .input('SUBCODE', sql.VarChar(50), subCodeVal)
+          .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
+          .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
+          .query(`
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
               CASE 
@@ -201,6 +232,45 @@ exports.addInward = async (req, res) => {
               END
             WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
           `);
+
+        // If linked to Performa Invoice Detail, update received/pending quantities
+        if (piDetailId) {
+          const qtyVal = parseFloat(d.QUANTITY) || 0;
+          await new sql.Request(transaction)
+            .input('PIDETAILID', sql.Numeric(8,0), piDetailId)
+            .input('QTY', sql.Numeric(10,2), qtyVal)
+            .query(`
+              UPDATE PerformaInvoiceDetail
+              SET RECEIVEDQTY = ISNULL(RECEIVEDQTY, 0) + @QTY,
+                  PENDINGQTY = CASE WHEN (ISNULL(PENDINGQTY, 0) - @QTY) < 0 THEN 0 ELSE (ISNULL(PENDINGQTY, 0) - @QTY) END
+              WHERE ID = @PIDETAILID;
+            `);
+        }
+      }
+
+      // Re-evaluate Performa Invoice status if PIID provided
+      if (PIID) {
+        const checkPiRes = await new sql.Request(transaction)
+          .input('PIID', sql.Numeric(8,0), PIID)
+          .query(`
+            SELECT ISNULL(SUM(PENDINGQTY), 0) AS TotalPending, ISNULL(SUM(RECEIVEDQTY), 0) AS TotalReceived
+            FROM PerformaInvoiceDetail
+            WHERE PIID = @PIID
+          `);
+        if (checkPiRes.recordset.length > 0) {
+          const totalPending = parseFloat(checkPiRes.recordset[0].TotalPending) || 0;
+          const totalReceived = parseFloat(checkPiRes.recordset[0].TotalReceived) || 0;
+          let piStatus = 'Ordered';
+          if (totalPending <= 0 && totalReceived > 0) {
+            piStatus = 'Completed';
+          } else if (totalReceived > 0) {
+            piStatus = 'Partially Received';
+          }
+          await new sql.Request(transaction)
+            .input('PIID', sql.Numeric(8,0), PIID)
+            .input('STATUS', sql.VarChar(25), piStatus)
+            .query('UPDATE PerformaInvoiceHeader SET STATUS = @STATUS WHERE ID = @PIID');
+        }
       }
 
       // 5. Generate Voucher and Update Ledgers
@@ -235,7 +305,12 @@ exports.addInward = async (req, res) => {
         .query(`
           INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
           VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
+        `);
 
+      await new sql.Request(transaction)
+        .input('LedgerId', sql.Numeric(10,0), purchaseLedgerId)
+        .input('Amount', sql.Numeric(10,2), TOTALAMOUNT || 0)
+        .query(`
           UPDATE LedgerMaster 
           SET ClosingBalance = ISNULL(ClosingBalance, 0) + @Amount
           WHERE Id = @LedgerId;
@@ -256,7 +331,12 @@ exports.addInward = async (req, res) => {
         .query(`
           INSERT INTO VoucherEntry (VoucherNo, VoucherType, VoucherDate, Mode, LedgerId, Amount, Through, Remark, Bill, CreatedBy, UpdatedBy)
           VALUES (@VoucherNo, 'Purchase', @VoucherDate, @Mode, @LedgerId, @Amount, @Through, @Remark, @Bill, @CreatedBy, @UpdatedBy);
+        `);
 
+      await new sql.Request(transaction)
+        .input('LedgerId', sql.Numeric(10,0), LEDGERID)
+        .input('Amount', sql.Numeric(10,2), TOTALAMOUNT || 0)
+        .query(`
           UPDATE LedgerMaster 
           SET ClosingBalance = ISNULL(ClosingBalance, 0) - @Amount
           WHERE Id = @LedgerId;
@@ -276,7 +356,7 @@ exports.addInward = async (req, res) => {
 
 exports.updateInward = async (req, res) => {
   const { id } = req.params;
-  const { Bill, INWARDNO, INWARDDATE, LEDGERID, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
+  const { Bill, INWARDNO, INWARDDATE, LEDGERID, PIID, PINO, EXPENSE, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
 
   if (!INWARDNO || !INWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'InwardNo, Date, Ledger, and at least one detail row are required' });
@@ -300,12 +380,14 @@ exports.updateInward = async (req, res) => {
     await transaction.begin();
 
     try {
-      // 1. Reverse previous ledger and item stock updates
+      // 1. Reverse previous ledger and item stock updates, plus revert previous Performa Invoice details
       const oldDataReq = new sql.Request(transaction);
-      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, INWARDNO FROM InwardHeader WHERE ID = @ID');
-      
+      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, INWARDNO, PIID FROM InwardHeader WHERE ID = @ID');
+      let oldPiId = null;
+
       if (oldHeaderRes.recordset.length > 0) {
         const oldHeader = oldHeaderRes.recordset[0];
+        oldPiId = oldHeader.PIID;
         
         const revertVoucherReq = new sql.Request(transaction);
         await revertVoucherReq
@@ -326,7 +408,7 @@ exports.updateInward = async (req, res) => {
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM InwardDetail WHERE INWARDID = @INWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT, PIDETAILID FROM InwardDetail WHERE INWARDID = @INWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
@@ -345,6 +427,20 @@ exports.updateInward = async (req, res) => {
                 END
               WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
             `);
+
+          // Revert Performa Invoice received quantity if linked
+          if (oldD.PIDETAILID) {
+            const oldQty = parseFloat(oldD.QUANTITY) || 0;
+            await new sql.Request(transaction)
+              .input('PIDETAILID', sql.Numeric(8,0), oldD.PIDETAILID)
+              .input('QTY', sql.Numeric(10,2), oldQty)
+              .query(`
+                UPDATE PerformaInvoiceDetail
+                SET RECEIVEDQTY = CASE WHEN (ISNULL(RECEIVEDQTY, 0) - @QTY) < 0 THEN 0 ELSE (ISNULL(RECEIVEDQTY, 0) - @QTY) END,
+                    PENDINGQTY = ISNULL(PENDINGQTY, 0) + @QTY
+                WHERE ID = @PIDETAILID;
+              `);
+          }
         }
       }
 
@@ -360,6 +456,8 @@ exports.updateInward = async (req, res) => {
         .input('INWARDNO', sql.VarChar(10), INWARDNO)
         .input('INWARDDATE', sql.Date, INWARDDATE)
         .input('LEDGERID', sql.Numeric(10,0), LEDGERID)
+        .input('PIID', sql.Numeric(8,0), PIID || null)
+        .input('PINO', sql.VarChar(50), PINO || null)
         .input('EXPENSE', sql.Numeric(10,2), EXPENSE || 0)
         .input('SGST', sql.Numeric(10,2), SGST || 0)
         .input('CGST', sql.Numeric(10,2), CGST || 0)
@@ -372,6 +470,7 @@ exports.updateInward = async (req, res) => {
         .query(`
           UPDATE InwardHeader 
           SET Bill = @Bill, INWARDNO = @INWARDNO, INWARDDATE = @INWARDDATE, LEDGERID = @LEDGERID, 
+              PIID = @PIID, PINO = @PINO,
               EXPENSE = @EXPENSE, SGST = @SGST, CGST = @CGST, IGST = @IGST, GSTPER = @GSTPER, ROUNDOFF = @ROUNDOFF, 
               TOTALAMOUNT = @TOTALAMOUNT, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY
           WHERE ID = @ID
@@ -383,12 +482,30 @@ exports.updateInward = async (req, res) => {
           throw new Error('Item Code is required for all detail rows');
         }
         
-        const detailReq = new sql.Request(transaction);
         const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
+        let piDetailId = d.PIDETAILID || d.PiDetailId || null;
+
+        if (!piDetailId && PIID) {
+          const matchReq = new sql.Request(transaction);
+          const matchRes = await matchReq
+            .input('PIID', sql.Numeric(8,0), PIID)
+            .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE.trim())
+            .input('SUBCODE', sql.VarChar(50), subCodeVal)
+            .query(`
+              SELECT TOP 1 ID FROM PerformaInvoiceDetail
+              WHERE PIID = @PIID AND ITEMCODE = @ITEMCODE AND ISNULL(SUBCODE, '') = @SUBCODE AND PENDINGQTY > 0
+            `);
+          if (matchRes.recordset.length > 0) {
+            piDetailId = matchRes.recordset[0].ID;
+          }
+        }
+
+        const detailReq = new sql.Request(transaction);
         await detailReq
           .input('INWARDID', sql.Numeric(8,0), id)
           .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
           .input('SUBCODE', sql.VarChar(50), subCodeVal)
+          .input('PIDETAILID', sql.Numeric(8,0), piDetailId || null)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -397,8 +514,8 @@ exports.updateInward = async (req, res) => {
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
           .query(`
-            INSERT INTO InwardDetail (INWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
-            VALUES (@INWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
+            INSERT INTO InwardDetail (INWARDID, ITEMCODE, SUBCODE, PIDETAILID, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, AMOUNT)
+            VALUES (@INWARDID, @ITEMCODE, @SUBCODE, @PIDETAILID, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @AMOUNT);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) + 
@@ -408,6 +525,48 @@ exports.updateInward = async (req, res) => {
               END
             WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
           `);
+
+        if (piDetailId) {
+          const qtyVal = parseFloat(d.QUANTITY) || 0;
+          await new sql.Request(transaction)
+            .input('PIDETAILID', sql.Numeric(8,0), piDetailId)
+            .input('QTY', sql.Numeric(10,2), qtyVal)
+            .query(`
+              UPDATE PerformaInvoiceDetail
+              SET RECEIVEDQTY = ISNULL(RECEIVEDQTY, 0) + @QTY,
+                  PENDINGQTY = CASE WHEN (ISNULL(PENDINGQTY, 0) - @QTY) < 0 THEN 0 ELSE (ISNULL(PENDINGQTY, 0) - @QTY) END
+              WHERE ID = @PIDETAILID;
+            `);
+        }
+      }
+
+      // Re-evaluate affected Performa Invoice statuses
+      const affectedPiIds = new Set();
+      if (oldPiId) affectedPiIds.add(oldPiId);
+      if (PIID) affectedPiIds.add(PIID);
+
+      for (const affectedId of affectedPiIds) {
+        const checkPiRes = await new sql.Request(transaction)
+          .input('PIID', sql.Numeric(8,0), affectedId)
+          .query(`
+            SELECT ISNULL(SUM(PENDINGQTY), 0) AS TotalPending, ISNULL(SUM(RECEIVEDQTY), 0) AS TotalReceived
+            FROM PerformaInvoiceDetail
+            WHERE PIID = @PIID
+          `);
+        if (checkPiRes.recordset.length > 0) {
+          const totalPending = parseFloat(checkPiRes.recordset[0].TotalPending) || 0;
+          const totalReceived = parseFloat(checkPiRes.recordset[0].TotalReceived) || 0;
+          let piStatus = 'Ordered';
+          if (totalPending <= 0 && totalReceived > 0) {
+            piStatus = 'Completed';
+          } else if (totalReceived > 0) {
+            piStatus = 'Partially Received';
+          }
+          await new sql.Request(transaction)
+            .input('PIID', sql.Numeric(8,0), affectedId)
+            .input('STATUS', sql.VarChar(25), piStatus)
+            .query('UPDATE PerformaInvoiceHeader SET STATUS = @STATUS WHERE ID = @PIID');
+        }
       }
 
       // 5. Generate Voucher and Update Ledgers
@@ -491,12 +650,14 @@ exports.deleteInward = async (req, res) => {
     await transaction.begin();
 
     try {
-      // 1. Reverse previous ledger and item stock updates
+      // 1. Reverse previous ledger and item stock updates, plus revert Performa Invoice quantities
       const oldDataReq = new sql.Request(transaction);
-      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, INWARDNO FROM InwardHeader WHERE ID = @ID');
-      
+      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, INWARDNO, PIID FROM InwardHeader WHERE ID = @ID');
+      let oldPiId = null;
+
       if (oldHeaderRes.recordset.length > 0) {
         const oldHeader = oldHeaderRes.recordset[0];
+        oldPiId = oldHeader.PIID;
         
         const revertVoucherReq = new sql.Request(transaction);
         await revertVoucherReq
@@ -517,7 +678,7 @@ exports.deleteInward = async (req, res) => {
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM InwardDetail WHERE INWARDID = @INWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('INWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT, PIDETAILID FROM InwardDetail WHERE INWARDID = @INWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
@@ -536,6 +697,20 @@ exports.deleteInward = async (req, res) => {
                 END
               WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
             `);
+
+          // Revert Performa Invoice detail received quantity
+          if (oldD.PIDETAILID) {
+            const oldQty = parseFloat(oldD.QUANTITY) || 0;
+            await new sql.Request(transaction)
+              .input('PIDETAILID', sql.Numeric(8,0), oldD.PIDETAILID)
+              .input('QTY', sql.Numeric(10,2), oldQty)
+              .query(`
+                UPDATE PerformaInvoiceDetail
+                SET RECEIVEDQTY = CASE WHEN (ISNULL(RECEIVEDQTY, 0) - @QTY) < 0 THEN 0 ELSE (ISNULL(RECEIVEDQTY, 0) - @QTY) END,
+                    PENDINGQTY = ISNULL(PENDINGQTY, 0) + @QTY
+                WHERE ID = @PIDETAILID;
+              `);
+          }
         }
       }
 
@@ -547,6 +722,31 @@ exports.deleteInward = async (req, res) => {
           DELETE FROM InwardDetail WHERE INWARDID = @ID;
           DELETE FROM InwardHeader WHERE ID = @ID;
         `);
+
+      // Re-evaluate Performa Invoice status if old PI existed
+      if (oldPiId) {
+        const checkPiRes = await new sql.Request(transaction)
+          .input('PIID', sql.Numeric(8,0), oldPiId)
+          .query(`
+            SELECT ISNULL(SUM(PENDINGQTY), 0) AS TotalPending, ISNULL(SUM(RECEIVEDQTY), 0) AS TotalReceived
+            FROM PerformaInvoiceDetail
+            WHERE PIID = @PIID
+          `);
+        if (checkPiRes.recordset.length > 0) {
+          const totalPending = parseFloat(checkPiRes.recordset[0].TotalPending) || 0;
+          const totalReceived = parseFloat(checkPiRes.recordset[0].TotalReceived) || 0;
+          let piStatus = 'Ordered';
+          if (totalPending <= 0 && totalReceived > 0) {
+            piStatus = 'Completed';
+          } else if (totalReceived > 0) {
+            piStatus = 'Partially Received';
+          }
+          await new sql.Request(transaction)
+            .input('PIID', sql.Numeric(8,0), oldPiId)
+            .input('STATUS', sql.VarChar(25), piStatus)
+            .query('UPDATE PerformaInvoiceHeader SET STATUS = @STATUS WHERE ID = @PIID');
+        }
+      }
 
       await transaction.commit();
       res.status(200).json({ message: 'Inward deleted successfully' });
