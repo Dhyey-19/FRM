@@ -22,6 +22,7 @@ import VoucherEntry from './pages/VoucherEntry';
 import BankReconciliation from './pages/BankReconciliation';
 import InwardEntry from './pages/InwardEntry';
 import OutwardEntry from './pages/OutwardEntry';
+import PurchaseOrder from './pages/PurchaseOrder';
 import StockTransfer from './pages/StockTransfer';
 import Assembly from './pages/Assembly';
 import StockJournal from './pages/StockJournal';
@@ -50,6 +51,7 @@ import JobworkOutReport from './pages/reports/JobworkOutReport';
 import JobworkInReport from './pages/reports/JobworkInReport';
 import JobworkMovementReport from './pages/reports/JobworkMovementReport';
 import ItemStockLedgerReport from './pages/reports/ItemStockLedgerReport';
+import PendingPOReport from './pages/reports/PendingPOReport';
 import NotificationLogs from './pages/NotificationLogs';
 import ErrorBoundary from './components/common/ErrorBoundary';
 function AuthApp() {
@@ -153,6 +155,8 @@ function App() {
             <Route path="bank-reconciliation" element={<BankReconciliation />} />
             <Route path="inwards" element={<InwardEntry />} />
             <Route path="purchase" element={<Navigate to="/dashboard/inwards" replace />} />
+            <Route path="purchase-orders" element={<PurchaseOrder />} />
+            <Route path="purchase-order" element={<Navigate to="/dashboard/purchase-orders" replace />} />
             <Route path="outwards" element={<OutwardEntry />} />
             <Route path="sales" element={<Navigate to="/dashboard/outwards" replace />} />
             <Route path="subcontract" element={<Subcontract />} />
@@ -171,6 +175,7 @@ function App() {
             <Route path="reports/account-ledger" element={<AccountLedgerReport />} />
             <Route path="reports/assembly" element={<AssemblyReport />} />
             <Route path="reports/stock-journal" element={<StockJournalReport />} />
+            <Route path="reports/pending-po" element={<PendingPOReport />} />
             <Route path="reports/inward" element={<InwardReport />} />
             <Route path="reports/outward" element={<OutwardReport />} />
             <Route path="reports/itemwise-outward" element={<ItemwiseOutwardReport />} />

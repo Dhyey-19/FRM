@@ -1,6 +1,6 @@
 -- =====================================================================
 -- FRM - Factory Resource Manager Local Database Schema (SQLite)
--- Total Tables: 24
+-- Total Tables: 26
 -- =====================================================================
 
 PRAGMA foreign_keys = ON;
@@ -184,7 +184,6 @@ CREATE TABLE IF NOT EXISTS "DepartmentStock" (
     PRIMARY KEY ("DeptID", "ItemCode", "SubCode"),
     FOREIGN KEY ("DeptID") REFERENCES "DepartmentMaster" ("DeptID")
 );
-);
 
 -- Table: InwardHeader
 CREATE TABLE IF NOT EXISTS "InwardHeader" (
@@ -293,6 +292,39 @@ CREATE TABLE IF NOT EXISTS "JobworkOutDetail" (
     FOREIGN KEY ("JWOUTWARDID") REFERENCES "JobworkOutHeader" ("ID")
 );
 
+-- Table: PurchaseOrderHeader
+CREATE TABLE IF NOT EXISTS "PurchaseOrderHeader" (
+    "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "PONO" VARCHAR(50) NOT NULL UNIQUE,
+    "PODATE" DATE NOT NULL,
+    "LEDGERID" DECIMAL(10, 0) NOT NULL,
+    "DELIVERYDATE" DATE,
+    "STATUS" VARCHAR(25) NOT NULL DEFAULT 'Pending',
+    "TOTALQTY" DECIMAL(12, 3) DEFAULT 0,
+    "TOTALAMOUNT" DECIMAL(12, 2) DEFAULT 0,
+    "REMARK" VARCHAR(255),
+    "CREATEDBY" VARCHAR(40) NOT NULL,
+    "UPDATEDBY" VARCHAR(40),
+    "CREATEDAT" DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("LEDGERID") REFERENCES "LedgerMaster" ("Id")
+);
+
+-- Table: PurchaseOrderDetail
+CREATE TABLE IF NOT EXISTS "PurchaseOrderDetail" (
+    "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "POID" INTEGER NOT NULL,
+    "ITEMCODE" VARCHAR(50) NOT NULL,
+    "SUBCODE" VARCHAR(50) DEFAULT '',
+    "QUANTITY" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    "DELIVEREDQTY" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    "PENDINGQTY" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    "UNIT" VARCHAR(10),
+    "RATE" DECIMAL(10, 2) DEFAULT 0,
+    "AMOUNT" DECIMAL(12, 2) DEFAULT 0,
+    "REMARK" VARCHAR(100),
+    FOREIGN KEY ("POID") REFERENCES "PurchaseOrderHeader" ("ID")
+);
+
 -- Table: OutwardHeader
 CREATE TABLE IF NOT EXISTS "OutwardHeader" (
     "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -312,8 +344,11 @@ CREATE TABLE IF NOT EXISTS "OutwardHeader" (
     "UPDATEDBY" VARCHAR(40),
     "CDPER" DECIMAL(5, 2) DEFAULT 0,
     "CDAMOUNT" DECIMAL(12, 2) DEFAULT 0,
+    "POID" INTEGER,
+    "PONO" VARCHAR(50),
     CONSTRAINT "UQ_OutwardHeader_OUTWARDNO" UNIQUE ("OUTWARDNO"),
-    FOREIGN KEY ("LEDGERID") REFERENCES "LedgerMaster" ("Id")
+    FOREIGN KEY ("LEDGERID") REFERENCES "LedgerMaster" ("Id"),
+    FOREIGN KEY ("POID") REFERENCES "PurchaseOrderHeader" ("ID")
 );
 
 -- Table: OutwardDetail
@@ -330,7 +365,9 @@ CREATE TABLE IF NOT EXISTS "OutwardDetail" (
     "AMOUNT" DECIMAL(12, 2),
     "DISCOUNT" DECIMAL(5, 2) DEFAULT 0,
     "TENPCSWT" DECIMAL(10, 3),
-    FOREIGN KEY ("OUTWARDID") REFERENCES "OutwardHeader" ("ID")
+    "PODETAILID" INTEGER,
+    FOREIGN KEY ("OUTWARDID") REFERENCES "OutwardHeader" ("ID"),
+    FOREIGN KEY ("PODETAILID") REFERENCES "PurchaseOrderDetail" ("ID")
 );
 
 -- Table: StockJournal

@@ -28,7 +28,8 @@ const emptyRow = {
   UNIT: '',
   RATE: '',
   DISCOUNT: '',
-  AMOUNT: ''
+  AMOUNT: '',
+  PODETAILID: null
 };
 
 const OutwardEntry = () => {
@@ -71,6 +72,12 @@ const OutwardEntry = () => {
   const [roundOff, setRoundOff] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [remark, setRemark] = useState('');
+  
+  // Purchase Order Linkage State
+  const [ledgerPOs, setLedgerPOs] = useState([]);
+  const [selectedPoId, setSelectedPoId] = useState(null);
+  const [selectedPo, setSelectedPo] = useState(null);
+  const [loadingPOs, setLoadingPOs] = useState(false);
   
   const [gridRows, setGridRows] = useState([{ ...emptyRow }]);
   
@@ -136,6 +143,35 @@ const OutwardEntry = () => {
       if (response.ok && data) setCompanyProfile(data);
     } catch (error) {
       console.error('Error fetching company profile:', error);
+    }
+  };
+
+  const fetchPOsForLedger = async (lId, currentPoId = null) => {
+    if (!lId) {
+      setLedgerPOs([]);
+      setSelectedPoId(null);
+      setSelectedPo(null);
+      return;
+    }
+    setLoadingPOs(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/purchase-orders?ledgerId=${lId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const poList = Array.isArray(data) ? data : [];
+        setLedgerPOs(poList);
+        if (currentPoId) {
+          const matched = poList.find(p => p.ID === currentPoId || p.ID === parseInt(currentPoId, 10));
+          if (matched) {
+            setSelectedPoId(matched.ID);
+            setSelectedPo(matched);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching POs for ledger:', err);
+    } finally {
+      setLoadingPOs(false);
     }
   };
 
@@ -318,6 +354,9 @@ const OutwardEntry = () => {
 
     setOutwardDate(new Date().toISOString().split('T')[0]);
     setLedgerId(null);
+    setLedgerPOs([]);
+    setSelectedPoId(null);
+    setSelectedPo(null);
     setBill(true);
     setExpense('');
     setCdPer('');
@@ -339,6 +378,13 @@ const OutwardEntry = () => {
     setOutwardNo(outward.OUTWARDNO || '');
     setOutwardDate(outward.OUTWARDDATE ? outward.OUTWARDDATE.split('T')[0] : new Date().toISOString().split('T')[0]);
     setLedgerId(outward.LEDGERID);
+    if (outward.LEDGERID) {
+      fetchPOsForLedger(outward.LEDGERID, outward.POID);
+    } else {
+      setLedgerPOs([]);
+      setSelectedPoId(null);
+      setSelectedPo(null);
+    }
     setBill(outward.Bill !== false);
     setExpense(outward.EXPENSE || '');
     setCdPer(outward.CDPER !== undefined && outward.CDPER !== null && outward.CDPER !== 0 ? String(outward.CDPER) : '');
@@ -362,7 +408,8 @@ const OutwardEntry = () => {
         UNIT: d.UNIT || '',
         RATE: d.RATE || '',
         DISCOUNT: d.DISCOUNT !== undefined && d.DISCOUNT !== null && d.DISCOUNT !== 0 ? String(d.DISCOUNT) : '',
-        AMOUNT: d.AMOUNT || ''
+        AMOUNT: d.AMOUNT || '',
+        PODETAILID: d.PODETAILID || null
       })));
     } else {
       setGridRows([{ ...emptyRow }]);
@@ -427,6 +474,11 @@ const OutwardEntry = () => {
     const newId = newValue ? newValue.Id : null;
     setLedgerId(newId);
     
+    // Fetch active POs for this ledger
+    fetchPOsForLedger(newId);
+    setSelectedPoId(null);
+    setSelectedPo(null);
+    
     if (newValue) {
       // Pre-fill CD %
       if (newValue.CD !== undefined && newValue.CD !== null && newValue.CD !== '') {
@@ -450,6 +502,62 @@ const OutwardEntry = () => {
         }));
       }
     }
+  };
+
+  const handlePoChange = (e, newPo) => {
+    setSelectedPo(newPo || null);
+    setSelectedPoId(newPo ? newPo.ID : null);
+    
+    // If the grid only has 1 empty row, automatically import items from PO!
+    if (newPo && newPo.Details && newPo.Details.length > 0) {
+      const isBlank = gridRows.length === 1 && !gridRows[0].ITEMCODE;
+      if (isBlank) {
+        const pendingItems = newPo.Details.filter(d => (parseFloat(d.PENDINGQTY) || 0) > 0);
+        const sourceItems = pendingItems.length > 0 ? pendingItems : newPo.Details;
+        const imported = sourceItems.map(d => {
+          const row = {
+            ITEMCODE: d.ITEMCODE || '',
+            SUBCODE: d.SUBCODE || '',
+            GROSSWT: '',
+            NETWT: '',
+            TENPCSWT: '',
+            QUANTITY: String(d.PENDINGQTY > 0 ? d.PENDINGQTY : d.QUANTITY),
+            UNIT: d.UNIT || '',
+            RATE: d.RATE ? String(d.RATE) : '',
+            DISCOUNT: '',
+            AMOUNT: '',
+            PODETAILID: d.ID || null
+          };
+          row.AMOUNT = calculateRowAmount(row);
+          return row;
+        });
+        setGridRows(imported);
+      }
+    }
+  };
+
+  const handleImportPoItems = () => {
+    if (!selectedPo || !selectedPo.Details || selectedPo.Details.length === 0) return;
+    const pendingItems = selectedPo.Details.filter(d => (parseFloat(d.PENDINGQTY) || 0) > 0);
+    const sourceItems = pendingItems.length > 0 ? pendingItems : selectedPo.Details;
+    const imported = sourceItems.map(d => {
+      const row = {
+        ITEMCODE: d.ITEMCODE || '',
+        SUBCODE: d.SUBCODE || '',
+        GROSSWT: '',
+        NETWT: '',
+        TENPCSWT: '',
+        QUANTITY: String(d.PENDINGQTY > 0 ? d.PENDINGQTY : d.QUANTITY),
+        UNIT: d.UNIT || '',
+        RATE: d.RATE ? String(d.RATE) : '',
+        DISCOUNT: '',
+        AMOUNT: '',
+        PODETAILID: d.ID || null
+      };
+      row.AMOUNT = calculateRowAmount(row);
+      return row;
+    });
+    setGridRows(imported);
   };
 
   const addGridRow = () => {
@@ -543,8 +651,11 @@ const OutwardEntry = () => {
     const dateVal = outward.OUTWARDDATE || new Date();
     const formattedDate = new Date(dateVal).toLocaleDateString('en-GB'); // DD/MM/YYYY
     doc.text(`Date: ${formattedDate}`, 196, 29, { align: 'right' });
+    if (outward.PONO) {
+      doc.text(`PO Ref: ${outward.PONO}`, 196, 33, { align: 'right' });
+    }
 
-    const dividerY = Math.max(currentHeaderY + 2, 33);
+    const dividerY = Math.max(currentHeaderY + 2, outward.PONO ? 37 : 33);
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
     doc.line(14, dividerY, 196, dividerY);
@@ -778,6 +889,8 @@ const OutwardEntry = () => {
       REMARK: remark,
       CREATEDBY: username,
       UPDATEDBY: username,
+      POID: selectedPoId || null,
+      PONO: selectedPo ? selectedPo.PONO : null,
       Details: validRows.map(r => ({
         ...r,
         SUBCODE: r.SUBCODE || '',
@@ -787,7 +900,8 @@ const OutwardEntry = () => {
         QUANTITY: parseFloat(r.QUANTITY) || 0,
         RATE: parseFloat(r.RATE) || 0,
         DISCOUNT: parseFloat(r.DISCOUNT) || 0,
-        AMOUNT: parseFloat(r.AMOUNT) || 0
+        AMOUNT: parseFloat(r.AMOUNT) || 0,
+        PODETAILID: r.PODETAILID || null
       }))
     };
 
@@ -941,6 +1055,7 @@ const OutwardEntry = () => {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>PO No</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Total Amount</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -964,6 +1079,19 @@ const OutwardEntry = () => {
                     />
                   </TableCell>
                   <TableCell>{row.OUTWARDDATE ? row.OUTWARDDATE.split('T')[0] : ''}</TableCell>
+                  <TableCell>
+                    {row.PONO ? (
+                      <Chip 
+                        size="small" 
+                        label={row.PONO}
+                        color="info"
+                        variant="outlined"
+                        sx={{ fontSize: '0.75rem', height: 22, fontWeight: 600 }}
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">—</Typography>
+                    )}
+                  </TableCell>
                   <TableCell>{row.LedgerName}</TableCell>
                   <TableCell>{row.TOTALAMOUNT}</TableCell>
                   <TableCell align="center">
@@ -982,7 +1110,7 @@ const OutwardEntry = () => {
               ))}
               {sortedOutwards.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1011,30 +1139,81 @@ const OutwardEntry = () => {
           {/* Header Section */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={3} md={1.5}>
+              <Grid item xs={12} sm={2.5} md={1.2}>
                 <FormControlLabel
                   control={<Checkbox checked={bill} onChange={handleBillChange} />}
                   label="Bill"
                 />
               </Grid>
-              <Grid item xs={12} sm={4.5} md={2.5}>
+              <Grid item xs={12} sm={4.5} md={2}>
                 <TextField fullWidth label="Outward No" size="small" value={outwardNo} onChange={(e) => setOutwardNo(e.target.value)} required />
               </Grid>
-              <Grid item xs={12} sm={4.5} md={2.5}>
+              <Grid item xs={12} sm={5} md={2}>
                 <TextField fullWidth label="Date" type="date" size="small" value={outwardDate} onChange={(e) => setOutwardDate(e.target.value)} InputLabelProps={{ shrink: true }} required />
               </Grid>
-              <Grid item xs={12} sm={12} md={5.5}>
+              <Grid item xs={12} sm={6} md={3.8}>
                 <Autocomplete
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
                   value={ledgers.find(l => l.Id === ledgerId) || null}
                   onChange={handleLedgerChange}
-                  renderInput={(params) => <TextField {...params} label="Ledger" size="small" required fullWidth />}
+                  renderInput={(params) => <TextField {...params} label="Account Ledger (Customer)" size="small" required fullWidth />}
                   fullWidth
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
                 />
               </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Autocomplete
+                  disabled={!ledgerId}
+                  loading={loadingPOs}
+                  options={ledgerPOs}
+                  getOptionLabel={(option) => {
+                    if (!option) return '';
+                    const pendingInfo = option.PendingQtySum !== undefined ? ` (Pending: ${option.PendingQtySum})` : '';
+                    return `${option.PONO}${pendingInfo}`;
+                  }}
+                  value={selectedPo || (selectedPoId && ledgerPOs.find(p => p.ID === selectedPoId)) || null}
+                  onChange={handlePoChange}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Purchase Order (PO - Optional)" 
+                      size="small" 
+                      placeholder={ledgerId ? (ledgerPOs.length > 0 ? "Select PO to fulfill" : "No active POs") : "Select customer first"} 
+                      fullWidth 
+                    />
+                  )}
+                  fullWidth
+                />
+              </Grid>
             </Grid>
+
+            {selectedPo && (
+              <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip 
+                    label={`Linked PO: ${selectedPo.PONO}`} 
+                    color="primary" 
+                    size="small" 
+                    sx={{ fontWeight: 600 }}
+                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                    Order Date: <strong>{selectedPo.PODATE ? selectedPo.PODATE.split('T')[0] : 'N/A'}</strong> | 
+                    Pending Qty: <strong style={{ color: '#d97706' }}>{selectedPo.PendingQtySum ?? selectedPo.TOTALQTY}</strong> | 
+                    Status: <strong style={{ color: selectedPo.STATUS === 'Completed' ? '#16a34a' : '#2563eb' }}>{selectedPo.STATUS}</strong>
+                  </Typography>
+                </Box>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  color="primary" 
+                  onClick={handleImportPoItems}
+                  sx={{ textTransform: 'none', fontWeight: 600, py: 0.3, px: 1.5 }}
+                >
+                  📥 Load Items from PO
+                </Button>
+              </Box>
+            )}
           </Paper>
 
           {/* Grid Section */}

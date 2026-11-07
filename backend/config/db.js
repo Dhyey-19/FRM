@@ -231,7 +231,14 @@ class Request {
   }
 
   input(name, typeOrVal, val) {
-    const value = val !== undefined ? val : typeOrVal;
+    let value;
+    if (val !== undefined) {
+      value = val;
+    } else if (typeof typeOrVal !== 'function') {
+      value = typeOrVal;
+    } else {
+      value = null;
+    }
     this.parameters[name] = value;
     return this;
   }

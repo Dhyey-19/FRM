@@ -208,7 +208,12 @@ exports.addInward = async (req, res) => {
       let purchaseLedgerId = purchaseLedgerRes.recordset.length > 0 ? purchaseLedgerRes.recordset[0].Id : null;
 
       if (!purchaseLedgerId) {
-        throw new Error('Purchase ledger not found. Please create a ledger named Purchase.');
+        await new sql.Request(transaction).query(`
+          INSERT INTO LedgerMaster (LedgerName, AccountGroupID, OpeningBalance, ClosingBalance)
+          VALUES ('Purchase', 9, 0, 0)
+        `);
+        const fetchPurchase = await new sql.Request(transaction).query("SELECT Id FROM LedgerMaster WHERE UPPER(LTRIM(RTRIM(LedgerName))) = 'PURCHASE'");
+        purchaseLedgerId = fetchPurchase.recordset[0]?.Id;
       }
 
       const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
@@ -307,11 +312,15 @@ exports.updateInward = async (req, res) => {
           .input('Through', sql.VarChar(30), 'Inward')
           .input('Remark', sql.VarChar(255), oldHeader.INWARDNO)
           .query(`
-            UPDATE l
-            SET l.ClosingBalance = ISNULL(l.ClosingBalance, 0) - CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END
-            FROM LedgerMaster l
-            INNER JOIN VoucherEntry v ON l.Id = v.LedgerId
-            WHERE v.Through = @Through AND v.Remark = @Remark;
+            UPDATE LedgerMaster
+            SET ClosingBalance = ISNULL(ClosingBalance, 0) - (
+              SELECT ISNULL(SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END), 0)
+              FROM VoucherEntry
+              WHERE LedgerId = LedgerMaster.Id AND Through = @Through AND Remark = @Remark
+            )
+            WHERE Id IN (
+              SELECT LedgerId FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark
+            );
 
             DELETE FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark;
           `);
@@ -406,7 +415,12 @@ exports.updateInward = async (req, res) => {
       let purchaseLedgerId = purchaseLedgerRes.recordset.length > 0 ? purchaseLedgerRes.recordset[0].Id : null;
 
       if (!purchaseLedgerId) {
-        throw new Error('Purchase ledger not found. Please create a ledger named Purchase.');
+        await new sql.Request(transaction).query(`
+          INSERT INTO LedgerMaster (LedgerName, AccountGroupID, OpeningBalance, ClosingBalance)
+          VALUES ('Purchase', 9, 0, 0)
+        `);
+        const fetchPurchase = await new sql.Request(transaction).query("SELECT Id FROM LedgerMaster WHERE UPPER(LTRIM(RTRIM(LedgerName))) = 'PURCHASE'");
+        purchaseLedgerId = fetchPurchase.recordset[0]?.Id;
       }
 
       const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
@@ -489,11 +503,15 @@ exports.deleteInward = async (req, res) => {
           .input('Through', sql.VarChar(30), 'Inward')
           .input('Remark', sql.VarChar(255), oldHeader.INWARDNO)
           .query(`
-            UPDATE l
-            SET l.ClosingBalance = ISNULL(l.ClosingBalance, 0) - CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END
-            FROM LedgerMaster l
-            INNER JOIN VoucherEntry v ON l.Id = v.LedgerId
-            WHERE v.Through = @Through AND v.Remark = @Remark;
+            UPDATE LedgerMaster
+            SET ClosingBalance = ISNULL(ClosingBalance, 0) - (
+              SELECT ISNULL(SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END), 0)
+              FROM VoucherEntry
+              WHERE LedgerId = LedgerMaster.Id AND Through = @Through AND Remark = @Remark
+            )
+            WHERE Id IN (
+              SELECT LedgerId FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark
+            );
 
             DELETE FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark;
           `);

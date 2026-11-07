@@ -58,7 +58,7 @@ exports.getOutwards = async (req, res) => {
     
     // Fetch OutwardDetails
     const detailResult = await pool.request().query(`
-      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, i.ItemName
+      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, d.PODETAILID, i.ItemName
       FROM OutwardDetail d
       LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
     `);
@@ -93,9 +93,12 @@ exports.getOutwardReport = async (req, res) => {
         d.ID as RowId,
         h.OUTWARDNO, 
         h.OUTWARDDATE, 
+        h.POID,
+        h.PONO,
         l.LedgerName, 
         d.ITEMCODE, 
         ISNULL(d.SUBCODE, '') AS SUBCODE,
+        d.PODETAILID,
         i.ItemName, 
         d.UNIT, 
         d.QUANTITY, 
@@ -123,7 +126,7 @@ exports.getOutwardReport = async (req, res) => {
 };
 
 exports.addOutward = async (req, res) => {
-  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, Details } = req.body;
+  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, POID, PONO, Details } = req.body;
 
   if (!OUTWARDNO || !OUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'OutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -136,6 +139,18 @@ exports.addOutward = async (req, res) => {
     await transaction.begin();
 
     try {
+      // Resolve PONO if POID is provided but PONO is missing
+      let resolvedPoId = POID ? parseInt(POID, 10) : null;
+      let resolvedPoNo = PONO || null;
+      if (resolvedPoId && !resolvedPoNo) {
+        const poRes = await new sql.Request(transaction)
+          .input('PoId', sql.Numeric(8, 0), resolvedPoId)
+          .query('SELECT PONO FROM PurchaseOrderHeader WHERE ID = @PoId');
+        if (poRes.recordset.length > 0) {
+          resolvedPoNo = poRes.recordset[0].PONO;
+        }
+      }
+
       // Insert Header
       const headerReq = new sql.Request(transaction);
       const headerRes = await headerReq
@@ -155,22 +170,43 @@ exports.addOutward = async (req, res) => {
         .input('REMARK', sql.VarChar(100), REMARK || null)
         .input('CREATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .input('UPDATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
+        .input('POID', sql.Numeric(8, 0), resolvedPoId)
+        .input('PONO', sql.VarChar(50), resolvedPoNo)
         .query(`
-          INSERT INTO OutwardHeader (Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY)
+          INSERT INTO OutwardHeader (Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY, POID, PONO)
           OUTPUT INSERTED.ID
-          VALUES (@Bill, @OUTWARDNO, @OUTWARDDATE, @LEDGERID, @EXPENSE, @CDPER, @CDAMOUNT, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY)
+          VALUES (@Bill, @OUTWARDNO, @OUTWARDDATE, @LEDGERID, @EXPENSE, @CDPER, @CDAMOUNT, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY, @POID, @PONO)
         `);
 
       const newOutwardId = headerRes.recordset[0].ID;
 
-      // Insert Details and Update Item Stock
+      // Insert Details and Update Item Stock & Purchase Order
       for (const d of Details) {
         if (!d.ITEMCODE) {
           throw new Error('Item Code is required for all detail rows');
         }
         
-        const detailReq = new sql.Request(transaction);
         const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
+        const qtyVal = parseFloat(d.QUANTITY) || 0;
+
+        // Determine if linked to PO Detail
+        let poDetailId = d.PODETAILID ? parseInt(d.PODETAILID, 10) : null;
+        if (!poDetailId && resolvedPoId) {
+          const matchPoDetail = await new sql.Request(transaction)
+            .input('POID', sql.Numeric(8, 0), resolvedPoId)
+            .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE.trim())
+            .input('SUBCODE', sql.VarChar(50), subCodeVal)
+            .query(`
+              SELECT TOP 1 ID FROM PurchaseOrderDetail 
+              WHERE POID = @POID AND UPPER(LTRIM(RTRIM(ITEMCODE))) = UPPER(LTRIM(RTRIM(@ITEMCODE))) 
+                AND ISNULL(SUBCODE, '') = @SUBCODE AND PENDINGQTY > 0
+            `);
+          if (matchPoDetail.recordset.length > 0) {
+            poDetailId = matchPoDetail.recordset[0].ID;
+          }
+        }
+
+        const detailReq = new sql.Request(transaction);
         await detailReq
           .input('OUTWARDID', sql.Numeric(8,0), newOutwardId)
           .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
@@ -178,14 +214,15 @@ exports.addOutward = async (req, res) => {
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
-          .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
+          .input('QUANTITY', sql.Numeric(10,2), qtyVal)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('DISCOUNT', sql.Numeric(5,2), d.DISCOUNT || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
+          .input('PODETAILID', sql.Numeric(8, 0), poDetailId)
           .query(`
-            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
-            VALUES (@OUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
+            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT, PODETAILID)
+            VALUES (@OUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT, @PODETAILID);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
@@ -195,6 +232,34 @@ exports.addOutward = async (req, res) => {
               END
             WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
           `);
+
+        // If linked to PO detail, reduce PO pending quantity and increase delivered quantity
+        if (poDetailId) {
+          await new sql.Request(transaction)
+            .input('PODETAILID', sql.Numeric(8, 0), poDetailId)
+            .input('DELIVER_QTY', sql.Numeric(10, 2), qtyVal)
+            .query(`
+              UPDATE PurchaseOrderDetail
+              SET DELIVEREDQTY = DELIVEREDQTY + @DELIVER_QTY,
+                  PENDINGQTY = CASE WHEN (PENDINGQTY - @DELIVER_QTY) < 0 THEN 0 ELSE (PENDINGQTY - @DELIVER_QTY) END
+              WHERE ID = @PODETAILID;
+            `);
+        }
+      }
+
+      // If linked to PO, recalculate PO status
+      if (resolvedPoId) {
+        await new sql.Request(transaction)
+          .input('POID', sql.Numeric(8, 0), resolvedPoId)
+          .query(`
+            UPDATE PurchaseOrderHeader
+            SET STATUS = CASE 
+              WHEN (SELECT ISNULL(SUM(PENDINGQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) <= 0 THEN 'Completed'
+              WHEN (SELECT ISNULL(SUM(DELIVEREDQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) > 0 THEN 'Partially Fulfilled'
+              ELSE 'Pending'
+            END
+            WHERE ID = @POID;
+          `);
       }
 
       // 5. Generate Voucher and Update Ledgers
@@ -202,7 +267,12 @@ exports.addOutward = async (req, res) => {
       let salesLedgerId = salesLedgerRes.recordset.length > 0 ? salesLedgerRes.recordset[0].Id : null;
 
       if (!salesLedgerId) {
-        throw new Error('Sales ledger not found. Please create a ledger named Sales.');
+        await new sql.Request(transaction).query(`
+          INSERT INTO LedgerMaster (LedgerName, AccountGroupID, OpeningBalance, ClosingBalance)
+          VALUES ('Sales', 8, 0, 0)
+        `);
+        const fetchSales = await new sql.Request(transaction).query("SELECT Id FROM LedgerMaster WHERE UPPER(LTRIM(RTRIM(LedgerName))) = 'SALES'");
+        salesLedgerId = fetchSales.recordset[0]?.Id;
       }
 
       const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
@@ -265,7 +335,7 @@ exports.addOutward = async (req, res) => {
 
 exports.updateOutward = async (req, res) => {
   const { id } = req.params;
-  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, Details } = req.body;
+  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, POID, PONO, Details } = req.body;
 
   if (!OUTWARDNO || !OUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'OutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -278,29 +348,35 @@ exports.updateOutward = async (req, res) => {
     await transaction.begin();
 
     try {
-      // 1. Reverse previous ledger and item stock updates
+      // 1. Reverse previous ledger, item stock, and PO updates
       const oldDataReq = new sql.Request(transaction);
-      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, OUTWARDNO FROM OutwardHeader WHERE ID = @ID');
+      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, OUTWARDNO, POID FROM OutwardHeader WHERE ID = @ID');
       
+      let oldPoId = null;
       if (oldHeaderRes.recordset.length > 0) {
         const oldHeader = oldHeaderRes.recordset[0];
+        oldPoId = oldHeader.POID ? parseInt(oldHeader.POID, 10) : null;
         
         const revertVoucherReq = new sql.Request(transaction);
         await revertVoucherReq
           .input('Through', sql.VarChar(30), 'Outward')
           .input('Remark', sql.VarChar(255), oldHeader.OUTWARDNO)
           .query(`
-            UPDATE l
-            SET l.ClosingBalance = ISNULL(l.ClosingBalance, 0) - CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END
-            FROM LedgerMaster l
-            INNER JOIN VoucherEntry v ON l.Id = v.LedgerId
-            WHERE v.Through = @Through AND v.Remark = @Remark;
+            UPDATE LedgerMaster
+            SET ClosingBalance = ISNULL(ClosingBalance, 0) - (
+              SELECT ISNULL(SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END), 0)
+              FROM VoucherEntry
+              WHERE LedgerId = LedgerMaster.Id AND Through = @Through AND Remark = @Remark
+            )
+            WHERE Id IN (
+              SELECT LedgerId FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark
+            );
 
             DELETE FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark;
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT, PODETAILID FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
@@ -319,12 +395,52 @@ exports.updateOutward = async (req, res) => {
                 END
               WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
             `);
+
+          // Reverse previous PO detail fulfillment
+          if (oldD.PODETAILID) {
+            await new sql.Request(transaction)
+              .input('PODETAILID', sql.Numeric(8, 0), oldD.PODETAILID)
+              .input('OLD_QUANTITY', sql.Numeric(10, 2), oldD.QUANTITY)
+              .query(`
+                UPDATE PurchaseOrderDetail
+                SET DELIVEREDQTY = CASE WHEN (DELIVEREDQTY - @OLD_QUANTITY) < 0 THEN 0 ELSE (DELIVEREDQTY - @OLD_QUANTITY) END,
+                    PENDINGQTY = CASE WHEN (PENDINGQTY + @OLD_QUANTITY) > QUANTITY THEN QUANTITY ELSE (PENDINGQTY + @OLD_QUANTITY) END
+                WHERE ID = @PODETAILID;
+              `);
+          }
+        }
+
+        // Recompute old PO status if linked
+        if (oldPoId) {
+          await new sql.Request(transaction)
+            .input('POID', sql.Numeric(8, 0), oldPoId)
+            .query(`
+              UPDATE PurchaseOrderHeader
+              SET STATUS = CASE 
+                WHEN (SELECT ISNULL(SUM(PENDINGQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) <= 0 THEN 'Completed'
+                WHEN (SELECT ISNULL(SUM(DELIVEREDQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) > 0 THEN 'Partially Fulfilled'
+                ELSE 'Pending'
+              END
+              WHERE ID = @POID;
+            `);
         }
       }
 
       // 2. Delete old details
       const deleteDetailsReq = new sql.Request(transaction);
       await deleteDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('DELETE FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
+
+      // Resolve new PO No if POID is provided
+      let resolvedPoId = POID ? parseInt(POID, 10) : null;
+      let resolvedPoNo = PONO || null;
+      if (resolvedPoId && !resolvedPoNo) {
+        const poRes = await new sql.Request(transaction)
+          .input('PoId', sql.Numeric(8, 0), resolvedPoId)
+          .query('SELECT PONO FROM PurchaseOrderHeader WHERE ID = @PoId');
+        if (poRes.recordset.length > 0) {
+          resolvedPoNo = poRes.recordset[0].PONO;
+        }
+      }
 
       // 3. Update Header
       const headerReq = new sql.Request(transaction);
@@ -345,22 +461,44 @@ exports.updateOutward = async (req, res) => {
         .input('TOTALAMOUNT', sql.Numeric(12,2), TOTALAMOUNT || 0)
         .input('REMARK', sql.VarChar(100), REMARK || null)
         .input('UPDATEDBY', sql.VarChar(40), getSignature(UPDATEDBY))
+        .input('POID', sql.Numeric(8, 0), resolvedPoId)
+        .input('PONO', sql.VarChar(50), resolvedPoNo)
         .query(`
           UPDATE OutwardHeader 
           SET Bill = @Bill, OUTWARDNO = @OUTWARDNO, OUTWARDDATE = @OUTWARDDATE, LEDGERID = @LEDGERID, 
               EXPENSE = @EXPENSE, CDPER = @CDPER, CDAMOUNT = @CDAMOUNT, SGST = @SGST, CGST = @CGST, IGST = @IGST, 
-              GSTPER = @GSTPER, ROUNDOFF = @ROUNDOFF, TOTALAMOUNT = @TOTALAMOUNT, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY
+              GSTPER = @GSTPER, ROUNDOFF = @ROUNDOFF, TOTALAMOUNT = @TOTALAMOUNT, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY,
+              POID = @POID, PONO = @PONO
           WHERE ID = @ID
         `);
 
-      // 4. Insert New Details and Update Item Stock
+      // 4. Insert New Details and Update Item Stock & PO
       for (const d of Details) {
         if (!d.ITEMCODE) {
           throw new Error('Item Code is required for all detail rows');
         }
         
-        const detailReq = new sql.Request(transaction);
         const subCodeVal = (d.SUBCODE || d.SubCode || '').trim();
+        const qtyVal = parseFloat(d.QUANTITY) || 0;
+
+        // Determine if linked to PO Detail
+        let poDetailId = d.PODETAILID ? parseInt(d.PODETAILID, 10) : null;
+        if (!poDetailId && resolvedPoId) {
+          const matchPoDetail = await new sql.Request(transaction)
+            .input('POID', sql.Numeric(8, 0), resolvedPoId)
+            .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE.trim())
+            .input('SUBCODE', sql.VarChar(50), subCodeVal)
+            .query(`
+              SELECT TOP 1 ID FROM PurchaseOrderDetail 
+              WHERE POID = @POID AND UPPER(LTRIM(RTRIM(ITEMCODE))) = UPPER(LTRIM(RTRIM(@ITEMCODE))) 
+                AND ISNULL(SUBCODE, '') = @SUBCODE AND PENDINGQTY > 0
+            `);
+          if (matchPoDetail.recordset.length > 0) {
+            poDetailId = matchPoDetail.recordset[0].ID;
+          }
+        }
+
+        const detailReq = new sql.Request(transaction);
         await detailReq
           .input('OUTWARDID', sql.Numeric(8,0), id)
           .input('ITEMCODE', sql.VarChar(50), d.ITEMCODE)
@@ -368,14 +506,15 @@ exports.updateOutward = async (req, res) => {
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
-          .input('QUANTITY', sql.Numeric(10,2), d.QUANTITY || 0)
+          .input('QUANTITY', sql.Numeric(10,2), qtyVal)
           .input('UNIT', sql.VarChar(10), d.UNIT || null)
           .input('RATE', sql.Numeric(10,2), d.RATE || 0)
           .input('DISCOUNT', sql.Numeric(5,2), d.DISCOUNT || 0)
           .input('AMOUNT', sql.Numeric(12,2), d.AMOUNT || 0)
+          .input('PODETAILID', sql.Numeric(8, 0), poDetailId)
           .query(`
-            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT)
-            VALUES (@OUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT);
+            INSERT INTO OutwardDetail (OUTWARDID, ITEMCODE, SUBCODE, GROSSWT, NETWT, TENPCSWT, QUANTITY, UNIT, RATE, DISCOUNT, AMOUNT, PODETAILID)
+            VALUES (@OUTWARDID, @ITEMCODE, @SUBCODE, @GROSSWT, @NETWT, @TENPCSWT, @QUANTITY, @UNIT, @RATE, @DISCOUNT, @AMOUNT, @PODETAILID);
 
             UPDATE ItemMaster
             SET ClosingStock = ISNULL(ClosingStock, 0) - 
@@ -385,6 +524,33 @@ exports.updateOutward = async (req, res) => {
               END
             WHERE ItemCode = @ITEMCODE AND ISNULL(SubCode, '') = @SUBCODE;
           `);
+
+        if (poDetailId) {
+          await new sql.Request(transaction)
+            .input('PODETAILID', sql.Numeric(8, 0), poDetailId)
+            .input('DELIVER_QTY', sql.Numeric(10, 2), qtyVal)
+            .query(`
+              UPDATE PurchaseOrderDetail
+              SET DELIVEREDQTY = DELIVEREDQTY + @DELIVER_QTY,
+                  PENDINGQTY = CASE WHEN (PENDINGQTY - @DELIVER_QTY) < 0 THEN 0 ELSE (PENDINGQTY - @DELIVER_QTY) END
+              WHERE ID = @PODETAILID;
+            `);
+        }
+      }
+
+      // Recompute new PO status if linked
+      if (resolvedPoId) {
+        await new sql.Request(transaction)
+          .input('POID', sql.Numeric(8, 0), resolvedPoId)
+          .query(`
+            UPDATE PurchaseOrderHeader
+            SET STATUS = CASE 
+              WHEN (SELECT ISNULL(SUM(PENDINGQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) <= 0 THEN 'Completed'
+              WHEN (SELECT ISNULL(SUM(DELIVEREDQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) > 0 THEN 'Partially Fulfilled'
+              ELSE 'Pending'
+            END
+            WHERE ID = @POID;
+          `);
       }
 
       // 5. Generate Voucher and Update Ledgers
@@ -392,7 +558,12 @@ exports.updateOutward = async (req, res) => {
       let salesLedgerId = salesLedgerRes.recordset.length > 0 ? salesLedgerRes.recordset[0].Id : null;
 
       if (!salesLedgerId) {
-        throw new Error('Sales ledger not found. Please create a ledger named Sales.');
+        await new sql.Request(transaction).query(`
+          INSERT INTO LedgerMaster (LedgerName, AccountGroupID, OpeningBalance, ClosingBalance)
+          VALUES ('Sales', 8, 0, 0)
+        `);
+        const fetchSales = await new sql.Request(transaction).query("SELECT Id FROM LedgerMaster WHERE UPPER(LTRIM(RTRIM(LedgerName))) = 'SALES'");
+        salesLedgerId = fetchSales.recordset[0]?.Id;
       }
 
       const nextNoRes = await new sql.Request(transaction).query('SELECT ISNULL(MAX(VoucherNo), 0) + 1 AS NextVoucherNo FROM VoucherEntry');
@@ -463,29 +634,34 @@ exports.deleteOutward = async (req, res) => {
     await transaction.begin();
 
     try {
-      // 1. Reverse previous ledger and item stock updates
+      // 1. Reverse previous ledger, item stock, and PO updates
       const oldDataReq = new sql.Request(transaction);
-      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, OUTWARDNO FROM OutwardHeader WHERE ID = @ID');
+      const oldHeaderRes = await oldDataReq.input('ID', sql.Numeric(8,0), id).query('SELECT LEDGERID, TOTALAMOUNT, OUTWARDNO, POID FROM OutwardHeader WHERE ID = @ID');
       
       if (oldHeaderRes.recordset.length > 0) {
         const oldHeader = oldHeaderRes.recordset[0];
+        const oldPoId = oldHeader.POID ? parseInt(oldHeader.POID, 10) : null;
         
         const revertVoucherReq = new sql.Request(transaction);
         await revertVoucherReq
           .input('Through', sql.VarChar(30), 'Outward')
           .input('Remark', sql.VarChar(255), oldHeader.OUTWARDNO)
           .query(`
-            UPDATE l
-            SET l.ClosingBalance = ISNULL(l.ClosingBalance, 0) - CASE WHEN v.Mode = 'Debit' THEN v.Amount ELSE -v.Amount END
-            FROM LedgerMaster l
-            INNER JOIN VoucherEntry v ON l.Id = v.LedgerId
-            WHERE v.Through = @Through AND v.Remark = @Remark;
+            UPDATE LedgerMaster
+            SET ClosingBalance = ISNULL(ClosingBalance, 0) - (
+              SELECT ISNULL(SUM(CASE WHEN Mode = 'Debit' THEN Amount ELSE -Amount END), 0)
+              FROM VoucherEntry
+              WHERE LedgerId = LedgerMaster.Id AND Through = @Through AND Remark = @Remark
+            )
+            WHERE Id IN (
+              SELECT LedgerId FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark
+            );
 
             DELETE FROM VoucherEntry WHERE Through = @Through AND Remark = @Remark;
           `);
 
         const oldDetailsReq = new sql.Request(transaction);
-        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
+        const oldDetailsRes = await oldDetailsReq.input('OUTWARDID', sql.Numeric(8,0), id).query('SELECT ITEMCODE, ISNULL(SUBCODE, \'\') AS SUBCODE, QUANTITY, NETWT, UNIT, PODETAILID FROM OutwardDetail WHERE OUTWARDID = @OUTWARDID');
         
         for (const oldD of oldDetailsRes.recordset) {
           const revertItemReq = new sql.Request(transaction);
@@ -503,6 +679,32 @@ exports.deleteOutward = async (req, res) => {
                   ELSE @OLD_QUANTITY
                 END
               WHERE ItemCode = @OLD_ITEMCODE AND ISNULL(SubCode, '') = @OLD_SUBCODE;
+            `);
+
+          if (oldD.PODETAILID) {
+            await new sql.Request(transaction)
+              .input('PODETAILID', sql.Numeric(8, 0), oldD.PODETAILID)
+              .input('OLD_QUANTITY', sql.Numeric(10, 2), oldD.QUANTITY)
+              .query(`
+                UPDATE PurchaseOrderDetail
+                SET DELIVEREDQTY = CASE WHEN (DELIVEREDQTY - @OLD_QUANTITY) < 0 THEN 0 ELSE (DELIVEREDQTY - @OLD_QUANTITY) END,
+                    PENDINGQTY = CASE WHEN (PENDINGQTY + @OLD_QUANTITY) > QUANTITY THEN QUANTITY ELSE (PENDINGQTY + @OLD_QUANTITY) END
+                WHERE ID = @PODETAILID;
+              `);
+          }
+        }
+
+        if (oldPoId) {
+          await new sql.Request(transaction)
+            .input('POID', sql.Numeric(8, 0), oldPoId)
+            .query(`
+              UPDATE PurchaseOrderHeader
+              SET STATUS = CASE 
+                WHEN (SELECT ISNULL(SUM(PENDINGQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) <= 0 THEN 'Completed'
+                WHEN (SELECT ISNULL(SUM(DELIVEREDQTY), 0) FROM PurchaseOrderDetail WHERE POID = @POID) > 0 THEN 'Partially Fulfilled'
+                ELSE 'Pending'
+              END
+              WHERE ID = @POID;
             `);
         }
       }

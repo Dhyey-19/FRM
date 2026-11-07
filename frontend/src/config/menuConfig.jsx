@@ -18,7 +18,8 @@ import {
   AccountBalance as AccountBalanceIcon,
   QrCode2 as QrCodeIcon,
   ManageAccounts as UserAccessIcon,
-  NotificationsActive as NotificationsActiveIcon
+  NotificationsActive as NotificationsActiveIcon,
+  Assignment as POIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -59,6 +60,7 @@ export const MENU_STRUCTURE = [
     id: 'transactions',
     icon: <TransactionIcon />,
     children: [
+      { title: 'Purchase Order', path: '/dashboard/purchase-orders', icon: <POIcon /> },
       { title: 'Purchase', path: '/dashboard/inwards', icon: <ListIcon /> },
       { title: 'Sales', path: '/dashboard/outwards', icon: <ListIcon /> },
       { title: 'Sub-Contract', path: '/dashboard/subcontract', icon: <ListIcon /> },
@@ -112,6 +114,7 @@ export const MENU_STRUCTURE = [
       {
         groupTitle: 'Purchase & Sales Log',
         children: [
+          { title: 'Pending PO Report', path: '/dashboard/reports/pending-po', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Inward Log', path: '/dashboard/reports/inward', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Outward Log', path: '/dashboard/reports/outward', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Item-wise Sales', path: '/dashboard/reports/itemwise-outward', icon: <ReportsIcon fontSize="small" /> },
