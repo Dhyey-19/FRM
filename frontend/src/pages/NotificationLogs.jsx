@@ -75,6 +75,8 @@ const NotificationLogs = () => {
   const filteredNotifications = notifications.filter(item => {
     // Tab filter
     if (currentTab === 'reorder' && item.type !== 'reorder') return false;
+    if (currentTab === 'shortfall' && item.type !== 'shortfall') return false;
+    if (currentTab === 'dispatch_ready' && item.type !== 'dispatch_ready') return false;
     if (currentTab === 'receivables' && item.type !== 'receivable_overdue') return false;
     if (currentTab === 'payables' && item.type !== 'payable_overdue') return false;
 
@@ -246,9 +248,11 @@ const NotificationLogs = () => {
             }}
           >
             <Tab label={`All (${summary.total})`} value="all" />
-            <Tab label={`Low Stock (${summary.reorder})`} value="reorder" />
-            <Tab label={`Overdue Receivables (${summary.receivables})`} value="receivables" />
-            <Tab label={`Overdue Payables (${summary.payables})`} value="payables" />
+            <Tab label={`Low Stock (${summary.reorder || 0})`} value="reorder" />
+            <Tab label={`PO Shortfall (${summary.shortfall || 0})`} value="shortfall" />
+            <Tab label={`Ready to Dispatch (${summary.dispatchReady || 0})`} value="dispatch_ready" />
+            <Tab label={`Overdue Receivables (${summary.receivables || 0})`} value="receivables" />
+            <Tab label={`Overdue Payables (${summary.payables || 0})`} value="payables" />
           </Tabs>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: { xs: '100%', sm: 'auto' } }}>

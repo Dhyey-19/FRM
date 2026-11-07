@@ -449,6 +449,168 @@ exports.getDashboardKPIs = async (req, res) => {
     `);
     const cashBankBalance = bankBalanceResult.recordset[0].cashBankBalance || 0;
 
+    // 12. Purchase Authority & Sales Authority Metrics (PO Fulfillment, Ready to Dispatch & Shortfall)
+    const authorityOrdersResult = await pool.request().query(`
+      SELECT 
+        i.ItemCode,
+        ISNULL(i.SubCode, '') AS SubCode,
+        i.ItemName,
+        ISNULL(i.Category, 'Inhouse') AS Category,
+        i.Unit,
+        ISNULL(i.Costing, 0) AS Costing,
+        ISNULL(i.ClosingStock, 0) AS StockInHand,
+        ISNULL(po.TotalPOPendingQty, 0) AS TotalPOPendingQty,
+        ISNULL(po.TotalPOOrderedQty, 0) AS TotalPOOrderedQty,
+        ISNULL(po.POCount, 0) AS POCount,
+        ISNULL(po.PODetailsList, '') AS AssociatedPOs,
+        ISNULL(pi.TotalPIPendingQty, 0) AS PendingPIQty,
+        ISNULL(pi.PIDetailsList, '') AS AssociatedPIs
+      FROM (
+        SELECT 
+          d.ITEMCODE,
+          ISNULL(d.SUBCODE, '') AS SUBCODE,
+          SUM(d.PENDINGQTY) AS TotalPOPendingQty,
+          SUM(d.QUANTITY) AS TotalPOOrderedQty,
+          COUNT(DISTINCT h.ID) AS POCount,
+          GROUP_CONCAT(h.PONO || ' (' || CAST(d.PENDINGQTY AS INT) || ' ' || ISNULL(d.UNIT, 'PCS') || ')', ', ') AS PODetailsList
+        FROM PurchaseOrderDetail d
+        INNER JOIN PurchaseOrderHeader h ON d.POID = h.ID
+        WHERE UPPER(h.STATUS) IN ('PENDING', 'PARTIALLY FULFILLED') AND d.PENDINGQTY > 0
+        GROUP BY d.ITEMCODE, ISNULL(d.SUBCODE, '')
+      ) po
+      JOIN ItemMaster i ON po.ITEMCODE = i.ItemCode AND po.SUBCODE = ISNULL(i.SubCode, '')
+      LEFT JOIN (
+        SELECT 
+          pid.ITEMCODE,
+          ISNULL(pid.SUBCODE, '') AS SUBCODE,
+          SUM(pid.PENDINGQTY) AS TotalPIPendingQty,
+          GROUP_CONCAT(pih.PINO || ' (' || CAST(pid.PENDINGQTY AS INT) || ' ' || ISNULL(pid.UNIT, 'PCS') || ')', ', ') AS PIDetailsList
+        FROM PerformaInvoiceDetail pid
+        INNER JOIN PerformaInvoiceHeader pih ON pid.PIID = pih.ID
+        WHERE UPPER(pih.STATUS) IN ('ORDERED', 'PARTIALLY RECEIVED', 'DRAFT') AND pid.PENDINGQTY > 0
+        GROUP BY pid.ITEMCODE, ISNULL(pid.SUBCODE, '')
+      ) pi ON i.ItemCode = pi.ITEMCODE AND ISNULL(i.SubCode, '') = pi.SUBCODE
+      ORDER BY (po.TotalPOPendingQty - ISNULL(i.ClosingStock, 0) - ISNULL(pi.TotalPIPendingQty, 0)) DESC, i.ItemCode ASC
+    `);
+
+    const authorityRows = authorityOrdersResult.recordset || [];
+
+    const distinctPOCountResult = await pool.request().query(`
+      SELECT COUNT(DISTINCT ID) AS totalPendingPOs
+      FROM PurchaseOrderHeader
+      WHERE UPPER(STATUS) IN ('PENDING', 'PARTIALLY FULFILLED')
+    `);
+    const totalPendingPOsCount = distinctPOCountResult.recordset[0]?.totalPendingPOs || 0;
+
+    // Process Purchase Authority Metrics
+    const purchaseShortfallItems = [];
+    let purchaseTotalPOQty = 0;
+    let purchaseTotalShortfallQty = 0;
+    let purchaseTotalMissingValue = 0;
+    let purchasePipelinePIQty = 0;
+    let allPendingPOQty = 0;
+
+    // Process Sales Authority Metrics
+    const salesPendingOrderItems = [];
+    let salesTotalOrderQty = 0;
+    let salesReadyToDispatchQty = 0;
+    let salesTotalShortfallQty = 0;
+    let salesFullyReadyCount = 0;
+    let salesPartialOrShortfallCount = 0;
+
+    authorityRows.forEach(row => {
+      const poDemand = parseFloat(row.TotalPOPendingQty) || 0;
+      const stock = parseFloat(row.StockInHand) || 0;
+      const piPending = parseFloat(row.PendingPIQty) || 0;
+      const costing = parseFloat(row.Costing) || 0;
+
+      allPendingPOQty += poDemand;
+      purchasePipelinePIQty += piPending;
+
+      // Purchase Authority Shortfall formula: Math.max(0, poDemand - stock - piPending)
+      const purchaseShortfall = Math.max(0, poDemand - stock - piPending);
+      const purchaseMissingVal = Math.round(purchaseShortfall * costing * 100) / 100;
+
+      if (purchaseShortfall > 0) {
+        purchaseTotalPOQty += poDemand;
+        purchaseTotalShortfallQty += purchaseShortfall;
+        purchaseTotalMissingValue += purchaseMissingVal;
+
+        purchaseShortfallItems.push({
+          itemCode: row.ItemCode,
+          subCode: row.SubCode || '',
+          itemName: row.ItemName,
+          category: row.Category || 'Inhouse',
+          unit: row.Unit || 'PCS',
+          costing: costing,
+          poPendingQty: poDemand,
+          stockInHand: stock,
+          piPendingQty: piPending,
+          shortfallQty: purchaseShortfall,
+          missingValue: purchaseMissingVal,
+          associatedPOs: row.AssociatedPOs || '',
+          associatedPIs: row.AssociatedPIs || '',
+          status: piPending > 0 ? 'Partial Shortfall' : 'Critical Shortfall'
+        });
+      }
+
+      // Sales Authority Dispatch formula:
+      // Ready to dispatch = Math.min(poDemand, Math.max(0, stock))
+      // Sales shortfall = Math.max(0, poDemand - Math.max(0, stock))
+      const readyQty = Math.min(poDemand, Math.max(0, stock));
+      const salesShortfall = Math.max(0, poDemand - Math.max(0, stock));
+
+      salesTotalOrderQty += poDemand;
+      salesReadyToDispatchQty += readyQty;
+      salesTotalShortfallQty += salesShortfall;
+
+      if (salesShortfall === 0) {
+        salesFullyReadyCount++;
+      } else {
+        salesPartialOrShortfallCount++;
+      }
+
+      salesPendingOrderItems.push({
+        itemCode: row.ItemCode,
+        subCode: row.SubCode || '',
+        itemName: row.ItemName,
+        category: row.Category || 'Inhouse',
+        unit: row.Unit || 'PCS',
+        poPendingQty: poDemand,
+        stockInHand: stock,
+        readyToDispatchQty: readyQty,
+        shortfallQty: salesShortfall,
+        associatedPOs: row.AssociatedPOs || '',
+        status: salesShortfall === 0 ? 'Ready to Dispatch' : (readyQty > 0 ? 'Partial Dispatch Ready' : 'Awaiting Stock')
+      });
+    });
+
+    const salesReadinessPercentage = salesTotalOrderQty > 0 
+      ? Math.round((salesReadyToDispatchQty / salesTotalOrderQty) * 100) 
+      : 100;
+
+    const purchaseAuthority = {
+      shortfallItemsCount: purchaseShortfallItems.length,
+      totalShortfallQty: Math.round(purchaseTotalShortfallQty * 1000) / 1000,
+      totalPOQty: Math.round(purchaseTotalPOQty * 1000) / 1000,
+      allPendingPOQty: Math.round(allPendingPOQty * 1000) / 1000,
+      pipelinePIQty: Math.round(purchasePipelinePIQty * 1000) / 1000,
+      totalMissingValue: Math.round(purchaseTotalMissingValue * 100) / 100,
+      items: purchaseShortfallItems
+    };
+
+    const salesAuthority = {
+      pendingOrderItemsCount: salesPendingOrderItems.length,
+      totalPendingOrdersCount: totalPendingPOsCount,
+      totalOrderQty: Math.round(salesTotalOrderQty * 1000) / 1000,
+      readyToDispatchQty: Math.round(salesReadyToDispatchQty * 1000) / 1000,
+      shortfallQty: Math.round(salesTotalShortfallQty * 1000) / 1000,
+      readinessPercentage: salesReadinessPercentage,
+      fullyReadyItemsCount: salesFullyReadyCount,
+      partialOrShortfallCount: salesPartialOrShortfallCount,
+      items: salesPendingOrderItems
+    };
+
     res.status(200).json({
       totalItems,
       totalValue,
@@ -474,7 +636,9 @@ exports.getDashboardKPIs = async (req, res) => {
       monthlyOutward,
       topParties,
       cashBankBalance,
-      departmentStocks
+      departmentStocks,
+      purchaseAuthority,
+      salesAuthority
     });
 
   } catch (error) {
@@ -523,6 +687,91 @@ exports.getDashboardNotifications = async (req, res) => {
         timestamp: new Date().toISOString(),
         actionLink: `/dashboard/items?itemCode=${encodeURIComponent(itemCodeStr)}${subCodeStr ? `&subCode=${encodeURIComponent(subCodeStr)}` : ''}`
       });
+    });
+
+    // 1b. Purchase Shortfall & Sales Ready Notifications (Authority Alerts)
+    const authorityNotifResult = await pool.request().query(`
+      SELECT 
+        i.ItemCode,
+        ISNULL(i.SubCode, '') AS SubCode,
+        i.ItemName,
+        i.Unit,
+        ISNULL(i.ClosingStock, 0) AS StockInHand,
+        ISNULL(po.TotalPOPendingQty, 0) AS TotalPOPendingQty,
+        ISNULL(pi.TotalPIPendingQty, 0) AS PendingPIQty,
+        ISNULL(po.PODetailsList, '') AS AssociatedPOs
+      FROM (
+        SELECT 
+          d.ITEMCODE,
+          ISNULL(d.SUBCODE, '') AS SUBCODE,
+          SUM(d.PENDINGQTY) AS TotalPOPendingQty,
+          GROUP_CONCAT(h.PONO, ', ') AS PODetailsList
+        FROM PurchaseOrderDetail d
+        INNER JOIN PurchaseOrderHeader h ON d.POID = h.ID
+        WHERE UPPER(h.STATUS) IN ('PENDING', 'PARTIALLY FULFILLED') AND d.PENDINGQTY > 0
+        GROUP BY d.ITEMCODE, ISNULL(d.SUBCODE, '')
+      ) po
+      JOIN ItemMaster i ON po.ITEMCODE = i.ItemCode AND po.SUBCODE = ISNULL(i.SubCode, '')
+      LEFT JOIN (
+        SELECT 
+          pid.ITEMCODE,
+          ISNULL(pid.SUBCODE, '') AS SUBCODE,
+          SUM(pid.PENDINGQTY) AS TotalPIPendingQty
+        FROM PerformaInvoiceDetail pid
+        INNER JOIN PerformaInvoiceHeader pih ON pid.PIID = pih.ID
+        WHERE UPPER(pih.STATUS) IN ('ORDERED', 'PARTIALLY RECEIVED', 'DRAFT') AND pid.PENDINGQTY > 0
+        GROUP BY pid.ITEMCODE, ISNULL(pid.SUBCODE, '')
+      ) pi ON i.ItemCode = pi.ITEMCODE AND ISNULL(i.SubCode, '') = pi.SUBCODE
+    `);
+
+    (authorityNotifResult.recordset || []).forEach(item => {
+      const itemCodeStr = (item.ItemCode || '').trim();
+      const subCodeStr = (item.SubCode || '').trim();
+      const displayCode = subCodeStr ? `${itemCodeStr} / ${subCodeStr}` : itemCodeStr;
+      const poDemand = parseFloat(item.TotalPOPendingQty) || 0;
+      const stock = parseFloat(item.StockInHand) || 0;
+      const piPending = parseFloat(item.PendingPIQty) || 0;
+
+      const shortfallQty = Math.max(0, poDemand - stock - piPending);
+      if (shortfallQty > 0) {
+        notifications.push({
+          id: `shortfall_${itemCodeStr}_${subCodeStr}`,
+          type: 'shortfall',
+          category: 'Purchase Shortfall Alert',
+          severity: 'critical',
+          title: `Procurement Shortfall: ${item.ItemName} (${displayCode})`,
+          message: `Pending POs (${item.AssociatedPOs}) need ${poDemand} ${item.Unit}. Stock in hand: ${stock} ${item.Unit}. Shortfall to purchase: ${shortfallQty} ${item.Unit}.`,
+          itemCode: itemCodeStr,
+          subCode: subCodeStr,
+          itemName: item.ItemName,
+          poDemand,
+          stockInHand: stock,
+          shortfallQty,
+          unit: item.Unit,
+          timestamp: new Date().toISOString(),
+          actionLink: `/dashboard/reports/pending-po?tab=2&search=${encodeURIComponent(itemCodeStr)}`
+        });
+      }
+
+      // If fully ready to dispatch for sales
+      if (stock >= poDemand && poDemand > 0) {
+        notifications.push({
+          id: `dispatch_ready_${itemCodeStr}_${subCodeStr}`,
+          type: 'dispatch_ready',
+          category: 'Sales Ready to Dispatch',
+          severity: 'success',
+          title: `Ready for Dispatch: ${item.ItemName} (${displayCode})`,
+          message: `Full order quantity (${poDemand} ${item.Unit}) is ready in stock (${stock} available). You can generate Sales Outward.`,
+          itemCode: itemCodeStr,
+          subCode: subCodeStr,
+          itemName: item.ItemName,
+          poDemand,
+          stockInHand: stock,
+          unit: item.Unit,
+          timestamp: new Date().toISOString(),
+          actionLink: `/dashboard/outward?itemCode=${encodeURIComponent(itemCodeStr)}`
+        });
+      }
     });
 
     // 2. Overdue Receivables
@@ -702,10 +951,13 @@ exports.getDashboardNotifications = async (req, res) => {
     const summary = {
       total: notifications.length,
       reorder: notifications.filter(n => n.type === 'reorder').length,
+      shortfall: notifications.filter(n => n.type === 'shortfall').length,
+      dispatchReady: notifications.filter(n => n.type === 'dispatch_ready').length,
       receivables: notifications.filter(n => n.type === 'receivable_overdue').length,
       payables: notifications.filter(n => n.type === 'payable_overdue').length,
       critical: notifications.filter(n => n.severity === 'critical').length,
-      warning: notifications.filter(n => n.severity === 'warning').length
+      warning: notifications.filter(n => n.severity === 'warning').length,
+      success: notifications.filter(n => n.severity === 'success').length
     };
 
     res.status(200).json({

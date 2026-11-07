@@ -25,7 +25,8 @@ import {
   Tooltip,
   IconButton,
   Badge,
-  Alert
+  Alert,
+  LinearProgress
 } from '@mui/material';
 import {
   AccountBalanceWallet as ValueIcon,
@@ -39,7 +40,11 @@ import {
   WarningAmber as WarningIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  ArrowForward as ArrowForwardIcon
+  ArrowForward as ArrowForwardIcon,
+  ShoppingCart,
+  LocalShipping,
+  CheckCircle,
+  Launch as LaunchIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -51,6 +56,9 @@ const DashboardHome = () => {
   const [cashBankDialogOpen, setCashBankDialogOpen] = useState(false);
   const [cashBankLedgers, setCashBankLedgers] = useState([]);
   const [cashBankLoading, setCashBankLoading] = useState(false);
+
+  const [purchaseShortfallModalOpen, setPurchaseShortfallModalOpen] = useState(false);
+  const [salesOrdersModalOpen, setSalesOrdersModalOpen] = useState(false);
 
   const fetchCashBankLedgers = async () => {
     setCashBankDialogOpen(true);
@@ -498,7 +506,346 @@ const DashboardHome = () => {
         ))}
       </Grid>
 
-      {/* Row 2: Financial Analysis - Receivables & Payables with Bill / Without Bill & Overdue */}
+      {/* Row 2: Authority Operations Center - Purchase Authority (Shortfall) & Sales Authority (Pending Orders & Dispatch) */}
+      <Box sx={{ mb: 3.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.3 }}>
+              Order Fulfillment & Authority Center
+            </Typography>
+            <Chip 
+              label="Live Demand & Fulfillment Tracking" 
+              size="small" 
+              sx={{ bgcolor: '#eff6ff', color: '#1e40af', fontWeight: 700, fontSize: '0.68rem', height: 20 }} 
+            />
+          </Box>
+          <Typography variant="caption" sx={{ color: '#64748b' }}>
+            Real-time synchronization between Customer POs, Store Stock & Procurement Pipeline
+          </Typography>
+        </Box>
+
+        <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
+          {/* Card 1: Purchase Authority - Shortfall Items */}
+          <Grid item xs={12} lg={6}>
+            <Card sx={{ 
+              borderRadius: 3, 
+              boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+              border: '1px solid #fed7aa',
+              borderTop: '4px solid #ea580c',
+              bgcolor: '#ffffff',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': { 
+                transform: 'translateY(-3px)',
+                boxShadow: '0 8px 24px rgba(234, 88, 12, 0.12)' 
+              }
+            }}>
+              <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                {/* Header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                      <Chip 
+                        icon={<ShoppingCart sx={{ fontSize: '15px !important', color: '#c2410c !important' }} />}
+                        label="Purchase Authority" 
+                        size="small" 
+                        sx={{ bgcolor: '#fff7ed', color: '#c2410c', fontWeight: 800, fontSize: '0.74rem', height: 24, border: '1px solid #ffedd5' }} 
+                      />
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                        Procurement & PO Fulfillment
+                      </Typography>
+                    </Box>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: (kpis?.purchaseAuthority?.shortfallItemsCount || 0) > 0 ? '#c2410c' : '#0F3B66', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+                      {loading ? <Skeleton width={140} /> : (
+                        <>
+                          {kpis?.purchaseAuthority?.shortfallItemsCount || 0}{' '}
+                          <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#64748b' }}>
+                            {kpis?.purchaseAuthority?.shortfallItemsCount === 1 ? 'Shortfall Item' : 'Shortfall Items'}
+                          </span>
+                        </>
+                      )}
+                    </Typography>
+                  </Box>
+                  <Avatar sx={{ bgcolor: '#fff7ed', color: '#ea580c', width: 46, height: 46, borderRadius: 2 }}>
+                    <ShoppingCart sx={{ fontSize: 24 }} />
+                  </Avatar>
+                </Box>
+
+                {/* 2x2 Metrics Box */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, my: 1, flexGrow: 1 }}>
+                  {/* Metric 1: PO Qty */}
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                      Total PO Qty (Demand)
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                      {loading ? <Skeleton width={70} /> : `${(kpis?.purchaseAuthority?.totalPOQty || 0).toLocaleString()} PCS`}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                      Required for active customer POs
+                    </Typography>
+                  </Box>
+
+                  {/* Metric 2: Shortfall Qty */}
+                  <Box sx={{ 
+                    p: 1.5, 
+                    borderRadius: 2, 
+                    bgcolor: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#fff1f2' : '#f0fdf4', 
+                    border: '1px solid',
+                    borderColor: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#fecaca' : '#bbf7d0'
+                  }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.3 }}>
+                      <Typography variant="caption" sx={{ 
+                        fontWeight: 700, 
+                        color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#991b1b' : '#166534', 
+                        textTransform: 'uppercase', 
+                        letterSpacing: 0.4 
+                      }}>
+                        Shortfall Qty
+                      </Typography>
+                      {(kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? (
+                        <Chip label="Procure Needed" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#fee2e2', color: '#dc2626' }} />
+                      ) : (
+                        <Chip label="Healthy" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#dcfce7', color: '#15803d' }} />
+                      )}
+                    </Box>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 900, 
+                      color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#dc2626' : '#16a34a' 
+                    }}>
+                      {loading ? <Skeleton width={70} /> : `${(kpis?.purchaseAuthority?.totalShortfallQty || 0).toLocaleString()} PCS`}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#ef4444' : '#15803d', fontSize: '0.7rem' }}>
+                      {(kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? 'Missing qty after stock & pipeline' : 'All order demand fully covered'}
+                    </Typography>
+                  </Box>
+
+                  {/* Metric 3: Pipeline Proforma Invoice Qty */}
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                      In Procurement (PI)
+                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0284c7' }}>
+                      {loading ? <Skeleton width={60} /> : `${(kpis?.purchaseAuthority?.pipelinePIQty || 0).toLocaleString()} PCS`}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                      Ordered on Proforma Invoices
+                    </Typography>
+                  </Box>
+
+                  {/* Metric 4: Est. Shortfall Capital */}
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                      Est. Shortfall Valuation
+                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#b45309' }}>
+                      {loading ? <Skeleton width={70} /> : formatCurrency(kpis?.purchaseAuthority?.totalMissingValue || 0)}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                      Purchase capital needed @ Costing
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Footer Actions */}
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setPurchaseShortfallModalOpen(true)}
+                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', color: '#c2410c', borderColor: '#fed7aa', '&:hover': { bgcolor: '#fff7ed', borderColor: '#ea580c' } }}
+                  >
+                    Inspect Shortfall Items ({kpis?.purchaseAuthority?.shortfallItemsCount || 0})
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => navigate('/dashboard/reports/pending-po?tab=2')}
+                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', bgcolor: '#ea580c', '&:hover': { bgcolor: '#c2410c' } }}
+                  >
+                    Fulfillment Report & Order PI
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Card 2: Sales Authority - Pending Orders & Ready to Dispatch */}
+          <Grid item xs={12} lg={6}>
+            <Card sx={{ 
+              borderRadius: 3, 
+              boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+              border: '1px solid #bfdbfe',
+              borderTop: '4px solid #0F3B66',
+              bgcolor: '#ffffff',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': { 
+                transform: 'translateY(-3px)',
+                boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
+              }
+            }}>
+              <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                {/* Header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                      <Chip 
+                        icon={<LocalShipping sx={{ fontSize: '15px !important', color: '#0F3B66 !important' }} />}
+                        label="Sales Authority" 
+                        size="small" 
+                        sx={{ bgcolor: '#eff6ff', color: '#0F3B66', fontWeight: 800, fontSize: '0.74rem', height: 24, border: '1px solid #dbeafe' }} 
+                      />
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                        Order Dispatch & Stock Fulfillment
+                      </Typography>
+                    </Box>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+                      {loading ? <Skeleton width={140} /> : (
+                        <>
+                          {kpis?.salesAuthority?.pendingOrderItemsCount || 0}{' '}
+                          <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#64748b' }}>
+                            Pending Order Items
+                          </span>
+                        </>
+                      )}
+                    </Typography>
+                  </Box>
+                  <Avatar sx={{ bgcolor: '#eff6ff', color: '#0F3B66', width: 46, height: 46, borderRadius: 2 }}>
+                    <LocalShipping sx={{ fontSize: 24 }} />
+                  </Avatar>
+                </Box>
+
+                {/* Readiness Progress Bar */}
+                <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155' }}>
+                      Dispatch Readiness Rate
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: (kpis?.salesAuthority?.readinessPercentage || 0) === 100 ? '#15803d' : '#0F3B66' }}>
+                      {kpis?.salesAuthority?.readinessPercentage || 0}% Ready to Ship
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={kpis?.salesAuthority?.readinessPercentage || 0} 
+                    sx={{ 
+                      height: 8, 
+                      borderRadius: 4, 
+                      bgcolor: '#e2e8f0',
+                      '& .MuiLinearProgress-bar': {
+                        bgcolor: (kpis?.salesAuthority?.readinessPercentage || 0) >= 80 ? '#10b981' : (kpis?.salesAuthority?.readinessPercentage || 0) >= 40 ? '#f59e0b' : '#ef4444'
+                      }
+                    }} 
+                  />
+                </Box>
+
+                {/* 2x2 Metrics Box */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, my: 1, flexGrow: 1 }}>
+                  {/* Metric 1: Ready to Dispatch Qty */}
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.3 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                        Ready to Dispatch
+                      </Typography>
+                      <CheckCircle sx={{ fontSize: 16, color: '#16a34a' }} />
+                    </Box>
+                    <Typography variant="h6" sx={{ fontWeight: 900, color: '#15803d' }}>
+                      {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.readyToDispatchQty || 0).toLocaleString()} PCS`}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#166534', fontSize: '0.7rem' }}>
+                      In-hand stock ready for immediate delivery
+                    </Typography>
+                  </Box>
+
+                  {/* Metric 2: Sales Shortfall Qty */}
+                  <Box sx={{ 
+                    p: 1.5, 
+                    borderRadius: 2, 
+                    bgcolor: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#fff7ed' : '#f8fafc', 
+                    border: '1px solid',
+                    borderColor: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#fed7aa' : '#e2e8f0'
+                  }}>
+                    <Typography variant="caption" sx={{ 
+                      fontWeight: 700, 
+                      color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#c2410c' : '#475569', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: 0.4, 
+                      display: 'block', 
+                      mb: 0.3 
+                    }}>
+                      Shortfall Qty
+                    </Typography>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 900, 
+                      color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#ea580c' : '#64748b' 
+                    }}>
+                      {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.shortfallQty || 0).toLocaleString()} PCS`}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#c2410c' : '#64748b', fontSize: '0.7rem' }}>
+                      {(kpis?.salesAuthority?.shortfallQty || 0) > 0 ? 'Awaiting stock replenishment' : 'Zero order backlog'}
+                    </Typography>
+                  </Box>
+
+                  {/* Metric 3: Total Pending Order Qty */}
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                      Total Order Demand
+                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                      {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.totalOrderQty || 0).toLocaleString()} PCS`}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                      Across {kpis?.salesAuthority?.totalPendingOrdersCount || 0} active Customer POs
+                    </Typography>
+                  </Box>
+
+                  {/* Metric 4: Item Coverage State */}
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                      Item Fulfillment Status
+                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
+                      {loading ? <Skeleton width={70} /> : `${kpis?.salesAuthority?.fullyReadyItemsCount || 0} Ready / ${kpis?.salesAuthority?.partialOrShortfallCount || 0} Partial`}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                      Line-item dispatch readiness
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Footer Actions */}
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setSalesOrdersModalOpen(true)}
+                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', color: '#0F3B66', borderColor: '#bfdbfe', '&:hover': { bgcolor: '#eff6ff', borderColor: '#0F3B66' } }}
+                  >
+                    Inspect Pending Orders ({kpis?.salesAuthority?.pendingOrderItemsCount || 0})
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => navigate('/dashboard/outward')}
+                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' } }}
+                  >
+                    Sales Outward Dispatch
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* Row 3: Financial Analysis - Receivables & Payables with Bill / Without Bill & Overdue */}
       <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
         {/* Receivables Card */}
         <Grid item xs={12} lg={6}>
@@ -927,6 +1274,200 @@ const DashboardHome = () => {
         <DialogActions sx={{ p: 2, borderTop: '1px solid #e2e8f0' }}>
           <Button onClick={() => setCashBankDialogOpen(false)} variant="contained" color="primary">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Purchase Authority: Shortfall Items Drill-Down Dialog */}
+      <Dialog 
+        open={purchaseShortfallModalOpen} 
+        onClose={() => setPurchaseShortfallModalOpen(false)} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ShoppingCart sx={{ color: '#ea580c' }} />
+            <span>Purchase Authority: Shortfall Items ({kpis?.purchaseAuthority?.shortfallItemsCount || 0})</span>
+          </Box>
+          <Chip 
+            label={`Total Shortfall: ${(kpis?.purchaseAuthority?.totalShortfallQty || 0).toLocaleString()} PCS`} 
+            size="small" 
+            sx={{ bgcolor: '#fee2e2', color: '#dc2626', fontWeight: 800 }} 
+          />
+        </DialogTitle>
+        <DialogContent sx={{ mt: 1.5, p: { xs: 1.5, sm: 2.5 } }}>
+          {(!kpis?.purchaseAuthority?.items || kpis.purchaseAuthority.items.length === 0) ? (
+            <Alert severity="success" sx={{ my: 2 }}>
+              Great news! Zero shortfall items detected. All customer purchase orders are fully covered by stock in hand or active pipeline.
+            </Alert>
+          ) : (
+            <TableContainer component={Paper} sx={{ border: '1px solid #e2e8f0', borderRadius: 2, maxHeight: '60vh' }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Item Code</TableCell>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Item Name</TableCell>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Category</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>PO Qty</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>In Hand</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>PI Pipeline</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Shortfall Qty</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Est. Value</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {kpis.purchaseAuthority.items.map((row, idx) => (
+                    <TableRow key={idx} hover>
+                      <TableCell sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                        {row.itemCode}{row.subCode ? ` / ${row.subCode}` : ''}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{row.itemName}</TableCell>
+                      <TableCell>
+                        <Chip label={row.category} size="small" sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }} />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>{row.poPendingQty.toLocaleString()} {row.unit}</TableCell>
+                      <TableCell align="right" sx={{ color: '#16a34a', fontWeight: 600 }}>{row.stockInHand.toLocaleString()} {row.unit}</TableCell>
+                      <TableCell align="right" sx={{ color: '#0284c7', fontWeight: 600 }}>{row.piPendingQty.toLocaleString()} {row.unit}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 900, color: '#dc2626', bgcolor: '#fee2e2' }}>
+                        {row.shortfallQty.toLocaleString()} {row.unit}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c' }}>
+                        ₹{row.missingValue.toLocaleString('en-IN')}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow sx={{ bgcolor: '#f8fafc', borderTop: '2px solid #0F3B66' }}>
+                    <TableCell colSpan={3} sx={{ fontWeight: 800, textAlign: 'right', color: '#0F3B66' }}>Totals:</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: '#0F3B66' }}>{(kpis?.purchaseAuthority?.totalPOQty || 0).toLocaleString()}</TableCell>
+                    <TableCell align="right">-</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: '#0284c7' }}>{(kpis?.purchaseAuthority?.pipelinePIQty || 0).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 900, color: '#dc2626' }}>{(kpis?.purchaseAuthority?.totalShortfallQty || 0).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 900, color: '#c2410c' }}>₹{Math.round(kpis?.purchaseAuthority?.totalMissingValue || 0).toLocaleString('en-IN')}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #e2e8f0', justifyContent: 'space-between' }}>
+          <Button onClick={() => setPurchaseShortfallModalOpen(false)} color="inherit" sx={{ textTransform: 'none' }}>
+            Close
+          </Button>
+          <Button 
+            variant="contained" 
+            endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
+            onClick={() => {
+              setPurchaseShortfallModalOpen(false);
+              navigate('/dashboard/reports/pending-po?tab=2');
+            }}
+            sx={{ bgcolor: '#ea580c', '&:hover': { bgcolor: '#c2410c' }, textTransform: 'none', fontWeight: 700 }}
+          >
+            Open Shortfall & Create Proforma Invoice
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Sales Authority: Pending Orders & Dispatch Status Drill-Down Dialog */}
+      <Dialog 
+        open={salesOrdersModalOpen} 
+        onClose={() => setSalesOrdersModalOpen(false)} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <LocalShipping sx={{ color: '#0F3B66' }} />
+            <span>Sales Authority: Pending Orders & Dispatch Readiness ({kpis?.salesAuthority?.pendingOrderItemsCount || 0})</span>
+          </Box>
+          <Chip 
+            label={`${kpis?.salesAuthority?.readinessPercentage || 0}% Ready to Ship`} 
+            size="small" 
+            sx={{ bgcolor: '#eff6ff', color: '#1e40af', fontWeight: 800 }} 
+          />
+        </DialogTitle>
+        <DialogContent sx={{ mt: 1.5, p: { xs: 1.5, sm: 2.5 } }}>
+          {(!kpis?.salesAuthority?.items || kpis.salesAuthority.items.length === 0) ? (
+            <Alert severity="info" sx={{ my: 2 }}>
+              No pending customer purchase orders. All orders have been completed and dispatched.
+            </Alert>
+          ) : (
+            <TableContainer component={Paper} sx={{ border: '1px solid #e2e8f0', borderRadius: 2, maxHeight: '60vh' }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Item Code</TableCell>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Item Name</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Total Order Qty</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Stock in Hand</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Ready to Dispatch</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Shortfall Qty</TableCell>
+                    <TableCell align="center" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {kpis.salesAuthority.items.map((row, idx) => (
+                    <TableRow key={idx} hover>
+                      <TableCell sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                        {row.itemCode}{row.subCode ? ` / ${row.subCode}` : ''}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{row.itemName}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                        {row.poPendingQty.toLocaleString()} {row.unit}
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: '#475569' }}>
+                        {row.stockInHand.toLocaleString()} {row.unit}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 900, color: '#16a34a', bgcolor: '#f0fdf4' }}>
+                        {row.readyToDispatchQty.toLocaleString()} {row.unit}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 900, color: row.shortfallQty > 0 ? '#ea580c' : '#94a3b8' }}>
+                        {row.shortfallQty > 0 ? `${row.shortfallQty.toLocaleString()} ${row.unit}` : '-'}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip 
+                          label={row.status} 
+                          size="small" 
+                          sx={{ 
+                            height: 22, 
+                            fontSize: '0.68rem', 
+                            fontWeight: 700,
+                            bgcolor: row.shortfallQty === 0 ? '#dcfce7' : row.readyToDispatchQty > 0 ? '#fff7ed' : '#fee2e2',
+                            color: row.shortfallQty === 0 ? '#15803d' : row.readyToDispatchQty > 0 ? '#c2410c' : '#dc2626'
+                          }} 
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow sx={{ bgcolor: '#f8fafc', borderTop: '2px solid #0F3B66' }}>
+                    <TableCell colSpan={2} sx={{ fontWeight: 800, textAlign: 'right', color: '#0F3B66' }}>Totals:</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: '#0F3B66' }}>{(kpis?.salesAuthority?.totalOrderQty || 0).toLocaleString()}</TableCell>
+                    <TableCell align="right">-</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 900, color: '#15803d' }}>{(kpis?.salesAuthority?.readyToDispatchQty || 0).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 900, color: '#ea580c' }}>{(kpis?.salesAuthority?.shortfallQty || 0).toLocaleString()}</TableCell>
+                    <TableCell align="center">
+                      <Chip label={`${kpis?.salesAuthority?.readinessPercentage || 0}% Ready`} size="small" color="primary" sx={{ fontWeight: 700 }} />
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #e2e8f0', justifyContent: 'space-between' }}>
+          <Button onClick={() => setSalesOrdersModalOpen(false)} color="inherit" sx={{ textTransform: 'none' }}>
+            Close
+          </Button>
+          <Button 
+            variant="contained" 
+            endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
+            onClick={() => {
+              setSalesOrdersModalOpen(false);
+              navigate('/dashboard/outward');
+            }}
+            sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' }, textTransform: 'none', fontWeight: 700 }}
+          >
+            Proceed to Sales Outward
           </Button>
         </DialogActions>
       </Dialog>
