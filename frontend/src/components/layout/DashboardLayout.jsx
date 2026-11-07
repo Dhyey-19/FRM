@@ -264,7 +264,7 @@ const DashboardLayout = () => {
 
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex', minHeight: '100vh', width: '100vw', overflowX: 'hidden' }}>
+      <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
         <CssBaseline />
         
         {/* Side Navigation Drawer */}
@@ -285,7 +285,8 @@ const DashboardLayout = () => {
             flexGrow: 1, 
             p: { xs: 1.5, sm: 2, md: 3 }, 
             width: { xs: '100%', md: isCollapsed ? 'calc(100% - 68px)' : `calc(100% - ${drawerWidth}px)` }, 
-            maxWidth: '100vw',
+            maxWidth: '100%',
+            minWidth: 0,
             overflowX: 'hidden',
             transition: 'width 0.3s ease, margin 0.3s ease' 
           }}

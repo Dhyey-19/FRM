@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Typography, 
   Paper, 
@@ -26,7 +26,13 @@ import {
   IconButton,
   Badge,
   Alert,
-  LinearProgress
+  LinearProgress,
+  TextField,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   AccountBalanceWallet as ValueIcon,
@@ -45,7 +51,10 @@ import {
   LocalShipping,
   CheckCircle,
   Launch as LaunchIcon,
-  AccountTree as BOMIcon
+  AccountTree as BOMIcon,
+  Search as SearchIcon,
+  Close as CloseIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import BOMShortfallModal from '../components/common/BOMShortfallModal';
@@ -59,12 +68,36 @@ const DashboardHome = () => {
   const [cashBankLedgers, setCashBankLedgers] = useState([]);
   const [cashBankLoading, setCashBankLoading] = useState(false);
 
+  // Stock Valuation Records Modal states
+  const [stockValuationModalOpen, setStockValuationModalOpen] = useState(false);
+  const [stockItems, setStockItems] = useState([]);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockSearchTerm, setStockSearchTerm] = useState('');
+  const [stockCategoryFilter, setStockCategoryFilter] = useState('All');
+  const [stockStockFilter, setStockStockFilter] = useState('All');
+
   const [purchaseShortfallModalOpen, setPurchaseShortfallModalOpen] = useState(false);
   const [salesOrdersModalOpen, setSalesOrdersModalOpen] = useState(false);
 
   // BOM Shortfall Breakup Drill-down states
   const [selectedBOMItem, setSelectedBOMItem] = useState(null);
   const [bomBreakupModalOpen, setBomBreakupModalOpen] = useState(false);
+
+  const fetchStockValuationItems = async () => {
+    setStockValuationModalOpen(true);
+    setStockLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items`);
+      if (response.ok) {
+        const data = await response.json();
+        setStockItems(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching stock items for valuation:', error);
+    } finally {
+      setStockLoading(false);
+    }
+  };
 
   const fetchCashBankLedgers = async () => {
     setCashBankDialogOpen(true);
@@ -124,12 +157,18 @@ const DashboardHome = () => {
       icon: <StockIcon sx={{ fontSize: 26 }} />,
       color: '#10b981', // Emerald
       bgColor: '#d1fae5',
-      link: '/dashboard/reports/stock',
+      onClick: fetchStockValuationItems,
       customFooter: (
         <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Total Items:</Typography>
             <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>{kpis?.totalItems || 0} SKUs</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Inspect Stock:</Typography>
+            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, cursor: 'pointer' }}>
+              View Records ↗
+            </Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Reorder Alerts:</Typography>
@@ -144,10 +183,6 @@ const DashboardHome = () => {
                 color: (kpis?.lowStockCount || 0) > 0 ? '#ef4444' : '#15803d'
               }}
             />
-          </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Valuation Mode:</Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, fontSize: '0.72rem' }}>Closing * Costing</Typography>
           </Box>
         </Box>
       )
@@ -280,10 +315,69 @@ const DashboardHome = () => {
   const maxMonthlyAmount = monthlyData.length > 0 ? Math.max(...monthlyData.map(d => d.totalAmount)) : 1;
   const topParties = kpis?.topParties || [];
 
+  const filteredStockItems = useMemo(() => {
+    return stockItems.filter(item => {
+      // Search
+      if (stockSearchTerm) {
+        const q = stockSearchTerm.toLowerCase();
+        const matchesSearch = 
+          (item.ItemCode || '').toLowerCase().includes(q) ||
+          (item.SubCode || '').toLowerCase().includes(q) ||
+          (item.ItemName || '').toLowerCase().includes(q) ||
+          (item.Category || '').toLowerCase().includes(q) ||
+          (item.ItemType || '').toLowerCase().includes(q) ||
+          (item.WarehouseNo || '').toLowerCase().includes(q) ||
+          (item.Location || '').toLowerCase().includes(q);
+        if (!matchesSearch) return false;
+      }
+      // Category filter
+      if (stockCategoryFilter !== 'All') {
+        if (item.Category !== stockCategoryFilter && item.ItemType !== stockCategoryFilter) {
+          return false;
+        }
+      }
+      // Stock quantity filter
+      if (stockStockFilter === 'InStock') {
+        if ((item.ClosingStock || 0) <= 0) return false;
+      } else if (stockStockFilter === 'LowStock') {
+        if ((item.ClosingStock || 0) >= (item.ReorderLevel || 0) || (item.ReorderLevel || 0) <= 0) return false;
+      } else if (stockStockFilter === 'ZeroStock') {
+        if ((item.ClosingStock || 0) > 0) return false;
+      }
+      return true;
+    });
+  }, [stockItems, stockSearchTerm, stockCategoryFilter, stockStockFilter]);
+
+  const totalFilteredValuation = useMemo(() => {
+    return filteredStockItems.reduce((acc, it) => acc + ((it.ClosingStock || 0) * (it.Costing || 0)), 0);
+  }, [filteredStockItems]);
+
+  const totalFilteredPcs = useMemo(() => {
+    return filteredStockItems
+      .filter(it => !['KG', 'KGS'].includes((it.Unit || '').toUpperCase()))
+      .reduce((acc, it) => acc + (it.ClosingStock || 0), 0);
+  }, [filteredStockItems]);
+
+  const totalFilteredKgs = useMemo(() => {
+    return filteredStockItems
+      .filter(it => ['KG', 'KGS'].includes((it.Unit || '').toUpperCase()))
+      .reduce((acc, it) => acc + (it.ClosingStock || 0), 0);
+  }, [filteredStockItems]);
+
+  const stockCategories = useMemo(() => {
+    const set = new Set();
+    stockItems.forEach(i => {
+      if (i.Category) set.add(i.Category);
+      if (i.ItemType) set.add(i.ItemType);
+    });
+    return Array.from(set).sort();
+  }, [stockItems]);
+
   return (
-    <Box>
+    <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* Operations Header Bar */}
       <Box sx={{ 
+        width: '100%',
         mb: 3.5, 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -450,10 +544,11 @@ const DashboardHome = () => {
       )}
 
       {/* Row 1: Core KPI Metrics (4 Cards) */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 3 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ width: '100%', mb: 3 }}>
         {topKpis.map((card, index) => (
-          <Grid item xs={12} sm={6} md={6} lg={3} key={index}>
+          <Grid item xs={12} sm={6} md={6} lg={3} xl={3} key={index} sx={{ display: 'flex' }}>
             <Card sx={{ 
+              width: '100%',
               borderRadius: 3, 
               boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
               border: '1px solid #e2e8f0',
@@ -469,7 +564,7 @@ const DashboardHome = () => {
             }}>
               <CardActionArea 
                 onClick={() => card.onClick ? card.onClick() : navigate(card.link)} 
-                sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: 0 }}
+                sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: 0 }}
               >
                 <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 }, display: 'flex', flexDirection: 'column', height: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
@@ -513,8 +608,8 @@ const DashboardHome = () => {
       </Grid>
 
       {/* Row 2: Authority Operations Center - Purchase Authority (Shortfall) & Sales Authority (Pending Orders & Dispatch) */}
-      <Box sx={{ mb: 3.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+      <Box sx={{ width: '100%', mb: 3.5 }}>
+        <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.3 }}>
               Order Fulfillment & Authority Center
@@ -530,10 +625,11 @@ const DashboardHome = () => {
           </Typography>
         </Box>
 
-        <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
+        <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ width: '100%' }}>
           {/* Card 1: Purchase Authority - Shortfall Items */}
-          <Grid item xs={12} lg={6}>
+          <Grid item xs={12} md={12} lg={6} xl={6} sx={{ display: 'flex' }}>
             <Card sx={{ 
+              width: '100%',
               borderRadius: 3, 
               boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
               border: '1px solid #fed7aa',
@@ -680,8 +776,9 @@ const DashboardHome = () => {
           </Grid>
 
           {/* Card 2: Sales Authority - Pending Orders & Ready to Dispatch */}
-          <Grid item xs={12} lg={6}>
+          <Grid item xs={12} md={12} lg={6} xl={6} sx={{ display: 'flex' }}>
             <Card sx={{ 
+              width: '100%',
               borderRadius: 3, 
               boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
               border: '1px solid #bfdbfe',
@@ -852,22 +949,25 @@ const DashboardHome = () => {
       </Box>
 
       {/* Row 3: Financial Analysis - Receivables & Payables with Bill / Without Bill & Overdue */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ width: '100%', mb: 4 }}>
         {/* Receivables Card */}
-        <Grid item xs={12} lg={6}>
+        <Grid item xs={12} md={12} lg={6} xl={6} sx={{ display: 'flex' }}>
           <Card sx={{ 
+            width: '100%',
             borderRadius: 3, 
             boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
             border: '1px solid #e2e8f0',
             borderTop: '4px solid #3b82f6',
             height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
             transition: 'transform 0.2s, box-shadow 0.2s',
             '&:hover': { 
               transform: 'translateY(-3px)',
               boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
             }
           }}>
-            <CardActionArea onClick={() => navigate('/dashboard/reports/receivable')} sx={{ height: '100%', p: 0 }}>
+            <CardActionArea onClick={() => navigate('/dashboard/reports/receivable')} sx={{ width: '100%', height: '100%', p: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
               <CardContent sx={{ p: { xs: 2, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Box>
@@ -964,20 +1064,23 @@ const DashboardHome = () => {
         </Grid>
 
         {/* Payables Card */}
-        <Grid item xs={12} lg={6}>
+        <Grid item xs={12} md={12} lg={6} xl={6} sx={{ display: 'flex' }}>
           <Card sx={{ 
+            width: '100%',
             borderRadius: 3, 
             boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
             border: '1px solid #e2e8f0',
             borderTop: '4px solid #ef4444',
             height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
             transition: 'transform 0.2s, box-shadow 0.2s',
             '&:hover': { 
               transform: 'translateY(-3px)',
               boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
             }
           }}>
-            <CardActionArea onClick={() => navigate('/dashboard/reports/payable')} sx={{ height: '100%', p: 0 }}>
+            <CardActionArea onClick={() => navigate('/dashboard/reports/payable')} sx={{ width: '100%', height: '100%', p: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
               <CardContent sx={{ p: { xs: 2, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Box>
@@ -1074,11 +1177,11 @@ const DashboardHome = () => {
         </Grid>
       </Grid>
 
-      {/* Row 3: Analytics Section - Trends & Top Parties */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
+      {/* Row 4: Analytics Section - Trends & Top Parties */}
+      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ width: '100%', mb: 4 }}>
         {/* Monthly Sales Chart Area */}
-        <Grid item xs={12} lg={8}>
-          <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
+        <Grid item xs={12} lg={8} xl={8} sx={{ display: 'flex' }}>
+          <Paper sx={{ width: '100%', p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
               Monthly Sales Trends (Last 6 Months)
             </Typography>
@@ -1123,8 +1226,8 @@ const DashboardHome = () => {
         </Grid>
 
         {/* Top 5 Party Area - Sales Authority */}
-        <Grid item xs={12} lg={4}>
-          <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
+        <Grid item xs={12} lg={4} xl={4} sx={{ display: 'flex' }}>
+          <Paper sx={{ width: '100%', p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
                 Top 5 Parties by Sales
@@ -1225,6 +1328,295 @@ const DashboardHome = () => {
         <DialogActions sx={{ p: 2, borderTop: '1px solid #e2e8f0' }}>
           <Button onClick={() => setCashBankDialogOpen(false)} variant="contained" color="primary">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Total Stock Valuation Records Modal Dialog */}
+      <Dialog 
+        open={stockValuationModalOpen} 
+        onClose={() => setStockValuationModalOpen(false)} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, maxHeight: '90vh' }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#0F3B66', 
+          color: '#ffffff', 
+          py: 2, 
+          px: 3, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 1.5
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar sx={{ bgcolor: 'rgba(16, 185, 129, 0.2)', color: '#34d399', width: 40, height: 40 }}>
+              <StockIcon />
+            </Avatar>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
+                Stock Valuation Records
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#93c5fd' }}>
+                Item Master Closing Stock * Costing Rate Breakdown
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Chip 
+              label={`Total Valuation: ${formatCurrency(totalFilteredValuation)}`}
+              sx={{ 
+                bgcolor: '#10b981', 
+                color: '#ffffff', 
+                fontWeight: 800, 
+                fontSize: '0.82rem',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }} 
+            />
+            <IconButton 
+              onClick={() => setStockValuationModalOpen(false)}
+              sx={{ color: '#ffffff', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' } }}
+              size="small"
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3, bgcolor: '#f8fafc' }}>
+          {/* Controls: Search & Filters */}
+          <Paper sx={{ p: 2, mb: 2.5, borderRadius: 2, border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={5}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Search item code, sub code, name, category, location..."
+                  value={stockSearchTerm}
+                  onChange={(e) => setStockSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: '#64748b', fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: stockSearchTerm ? (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setStockSearchTerm('')}>
+                          <CloseIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null
+                  }}
+                  sx={{ bgcolor: '#ffffff' }}
+                />
+              </Grid>
+
+              <Grid item xs={6} md={3.5}>
+                <FormControl fullWidth size="small" sx={{ bgcolor: '#ffffff' }}>
+                  <InputLabel>Category / Type</InputLabel>
+                  <Select
+                    value={stockCategoryFilter}
+                    label="Category / Type"
+                    onChange={(e) => setStockCategoryFilter(e.target.value)}
+                  >
+                    <MenuItem value="All">All Categories & Types</MenuItem>
+                    {stockCategories.map(cat => (
+                      <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={6} md={3.5}>
+                <FormControl fullWidth size="small" sx={{ bgcolor: '#ffffff' }}>
+                  <InputLabel>Stock Status</InputLabel>
+                  <Select
+                    value={stockStockFilter}
+                    label="Stock Status"
+                    onChange={(e) => setStockStockFilter(e.target.value)}
+                  >
+                    <MenuItem value="All">All Items ({stockItems.length})</MenuItem>
+                    <MenuItem value="InStock">In Stock (&gt; 0)</MenuItem>
+                    <MenuItem value="LowStock">Low Stock (Below Reorder)</MenuItem>
+                    <MenuItem value="ZeroStock">Zero / Out of Stock</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+
+            {/* Quick Summary Pill Bar */}
+            <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                Showing <b>{filteredStockItems.length}</b> of <b>{stockItems.length}</b> items
+              </Typography>
+              {totalFilteredPcs > 0 && (
+                <Chip 
+                  label={`Total Qty: ${totalFilteredPcs.toLocaleString()} PCS`} 
+                  size="small" 
+                  sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700, bgcolor: '#eff6ff', color: '#1e40af' }} 
+                />
+              )}
+              {totalFilteredKgs > 0 && (
+                <Chip 
+                  label={`Total Weight: ${totalFilteredKgs.toLocaleString()} KG`} 
+                  size="small" 
+                  sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700, bgcolor: '#f0fdf4', color: '#166534' }} 
+                />
+              )}
+              <Chip 
+                label={`Valuation: ${formatCurrency(totalFilteredValuation)}`} 
+                size="small" 
+                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 800, bgcolor: '#d1fae5', color: '#065f46' }} 
+              />
+            </Box>
+          </Paper>
+
+          {/* Table Container */}
+          {stockLoading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+              <CircularProgress size={44} sx={{ color: '#10b981', mb: 2 }} />
+              <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 600 }}>
+                Loading stock valuation records...
+              </Typography>
+            </Box>
+          ) : filteredStockItems.length === 0 ? (
+            <Alert severity="info" sx={{ my: 3 }}>
+              No stock items match your search or filter criteria. Try resetting filters.
+            </Alert>
+          ) : (
+            <TableContainer component={Paper} sx={{ border: '1px solid #e2e8f0', borderRadius: 2, maxHeight: '52vh' }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Item Code</TableCell>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Item Name</TableCell>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Category / Type</TableCell>
+                    <TableCell sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Location</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Reorder Level</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Closing Stock</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Costing Rate (₹)</TableCell>
+                    <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700 }}>Stock Valuation (₹)</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredStockItems.map((item, idx) => {
+                    const isLowStock = (item.ReorderLevel || 0) > 0 && (item.ClosingStock || 0) < item.ReorderLevel;
+                    const valuation = (item.ClosingStock || 0) * (item.Costing || 0);
+
+                    return (
+                      <TableRow key={idx} hover sx={{ bgcolor: idx % 2 === 0 ? '#ffffff' : '#fcfcfd' }}>
+                        <TableCell sx={{ fontWeight: 800, color: '#0F3B66', whiteSpace: 'nowrap' }}>
+                          {item.ItemCode}
+                          {item.SubCode ? <Typography component="span" sx={{ color: '#64748b', fontWeight: 500, fontSize: '0.8rem', ml: 0.5 }}>({item.SubCode})</Typography> : ''}
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>
+                          {item.ItemName}
+                          {item.IsDeadStock === 1 && (
+                            <Chip label="Dead Stock" size="small" sx={{ ml: 1, height: 18, fontSize: '0.62rem', fontWeight: 700, bgcolor: '#fee2e2', color: '#dc2626' }} />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {item.Category && (
+                              <Chip 
+                                label={item.Category} 
+                                size="small" 
+                                sx={{ 
+                                  height: 20, 
+                                  fontSize: '0.68rem', 
+                                  fontWeight: 700,
+                                  bgcolor: item.Category === 'BOP' ? '#eff6ff' : item.Category === 'Inhouse' ? '#f0fdf4' : '#fff7ed',
+                                  color: item.Category === 'BOP' ? '#1e40af' : item.Category === 'Inhouse' ? '#166534' : '#c2410c'
+                                }} 
+                              />
+                            )}
+                            {item.ItemType && (
+                              <Chip 
+                                label={item.ItemType} 
+                                size="small" 
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600 }} 
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ color: '#475569', fontSize: '0.8rem' }}>
+                          {item.WarehouseNo || item.Location ? `${item.WarehouseNo || ''} ${item.Location ? `(${item.Location})` : ''}` : '-'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: '#64748b', fontWeight: 500 }}>
+                          {(item.ReorderLevel || 0).toLocaleString()} {item.Unit || 'PCS'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ 
+                          fontWeight: 800, 
+                          color: isLowStock ? '#dc2626' : (item.ClosingStock || 0) > 0 ? '#15803d' : '#64748b',
+                          bgcolor: isLowStock ? '#fef2f2' : 'transparent'
+                        }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+                            {isLowStock && <WarningIcon sx={{ fontSize: 15, color: '#ef4444' }} />}
+                            <span>{(item.ClosingStock || 0).toLocaleString()} {item.Unit || 'PCS'}</span>
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, color: '#334155' }}>
+                          ₹{(item.Costing || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 900, color: '#10b981', fontSize: '0.9rem' }}>
+                          ₹{Math.round(valuation).toLocaleString('en-IN')}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+
+                  {/* Summary Totals Row */}
+                  <TableRow sx={{ bgcolor: '#f1f5f9', borderTop: '2px solid #0F3B66' }}>
+                    <TableCell colSpan={4} sx={{ fontWeight: 800, color: '#0F3B66', textAlign: 'right' }}>
+                      Totals ({filteredStockItems.length} Items):
+                    </TableCell>
+                    <TableCell align="right">-</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                      {totalFilteredPcs > 0 ? `${totalFilteredPcs.toLocaleString()} PCS` : ''}
+                      {totalFilteredKgs > 0 ? ` ${totalFilteredKgs.toLocaleString()} KG` : ''}
+                    </TableCell>
+                    <TableCell align="right">-</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 900, color: '#10b981', fontSize: '0.98rem' }}>
+                      {formatCurrency(totalFilteredValuation)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2.5, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+          <Button 
+            onClick={() => setStockValuationModalOpen(false)} 
+            variant="outlined"
+            color="inherit" 
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Close
+          </Button>
+
+          <Button 
+            variant="contained" 
+            endIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
+            onClick={() => {
+              setStockValuationModalOpen(false);
+              navigate('/dashboard/reports/stock');
+            }}
+            sx={{ 
+              bgcolor: '#10b981', 
+              '&:hover': { bgcolor: '#059669' }, 
+              textTransform: 'none', 
+              fontWeight: 700 
+            }}
+          >
+            Open Full Stock Register & Report
           </Button>
         </DialogActions>
       </Dialog>
