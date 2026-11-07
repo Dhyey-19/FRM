@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import { 
   Box, Typography, Paper, Toolbar, Button, TextField, 
@@ -17,6 +17,7 @@ const BOMMaster = () => {
   const [rawMaterials, setRawMaterials] = useState([]);
   
   const location = useLocation();
+  const navigate = useNavigate();
   const [selectedParent, setSelectedParent] = useState(null);
   const [bomItems, setBomItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -38,18 +39,29 @@ const BOMMaster = () => {
         const data = await response.json();
         if (response.ok && Array.isArray(data)) {
           setItems(data);
-          // Finished goods are items where ItemType is Finished
-          const finished = data.filter(item => item.ItemType && item.ItemType.toLowerCase() === 'finished');
-          setFinishedGoods(finished);
-          // Raw materials are items where ItemType is not Finished
-          setRawMaterials(data.filter(item => !item.ItemType || item.ItemType.toLowerCase() !== 'finished'));
 
-          if (location.state?.editParentCode) {
-            const parentToEdit = finished.find(fg => fg.ItemCode === location.state.editParentCode);
-            if (parentToEdit) {
-              setSelectedParent(parentToEdit);
-            }
-          }
+          // Finished goods / assemblies are items where ItemType contains FINISH or ASSEMBLY, or Category is Inhouse/SubContract
+          const finished = data.filter(item => {
+            if (!item) return false;
+            const type = (item.ItemType || '').trim().toUpperCase();
+            const cat = (item.Category || '').trim().toUpperCase();
+            return (
+              type.includes('FINISH') ||
+              type.includes('ASSEMBLY') ||
+              type === 'FINISHED GOOD' ||
+              type === 'SEMI-FINISHED' ||
+              type === 'FINISHED' ||
+              cat === 'INHOUSE' ||
+              cat === 'SUBCONTRACT'
+            );
+          });
+
+          // Always ensure finishedGoods has options (fallback to all items if none matched filter)
+          const validFinished = finished.length > 0 ? finished : data;
+          setFinishedGoods(validFinished);
+
+          // Child parts / raw materials can be any item in the inventory (RM, Semi-Finished, BOP, Consumables, etc.)
+          setRawMaterials(data);
         }
       } catch (error) {
         console.error('Error fetching items:', error);
@@ -57,8 +69,32 @@ const BOMMaster = () => {
       }
     };
     fetchItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When navigated from BOM Report with edit state, auto-select the parent item
+  useEffect(() => {
+    if (location.state?.editParentCode && items.length > 0) {
+      const targetCode = String(location.state.editParentCode).trim().toLowerCase();
+      const targetSubCode = String(location.state.editParentSubCode || '').trim().toLowerCase();
+
+      // 1. Try to find exact composite match (ItemCode and SubCode)
+      let parentToEdit = items.find(it => 
+        String(it.ItemCode || '').trim().toLowerCase() === targetCode &&
+        String(it.SubCode || '').trim().toLowerCase() === targetSubCode
+      );
+
+      // 2. If not found with subcode, try match by ItemCode alone
+      if (!parentToEdit) {
+        parentToEdit = items.find(it => 
+          String(it.ItemCode || '').trim().toLowerCase() === targetCode
+        );
+      }
+
+      if (parentToEdit) {
+        setSelectedParent(parentToEdit);
+      }
+    }
+  }, [location.state, items]);
 
   // Fetch BOM when parent is selected
   useEffect(() => {
@@ -154,6 +190,9 @@ const BOMMaster = () => {
         setSuccessMessage('Bill of Materials saved successfully!');
         setSelectedParent(null);
         setBomItems([]);
+        if (location.state?.editParentCode) {
+          navigate(location.pathname, { replace: true, state: {} });
+        }
         setTimeout(() => setSuccessMessage(''), 3000);
       } else {
         const data = await response.json();
@@ -309,10 +348,19 @@ const BOMMaster = () => {
         </Typography>
         <Autocomplete
           options={finishedGoods}
-          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+          getOptionLabel={(option) => {
+            if (!option) return '';
+            const sub = option.SubCode ? ` / ${option.SubCode}` : '';
+            const type = option.ItemType ? ` [${option.ItemType}]` : '';
+            return `${option.ItemCode}${sub} - ${option.ItemName}${type}`;
+          }}
+          isOptionEqualToValue={(option, value) => 
+            option?.ItemCode === value?.ItemCode && 
+            String(option?.SubCode || '').trim() === String(value?.SubCode || '').trim()
+          }
           value={selectedParent}
           onChange={(event, newValue) => setSelectedParent(newValue)}
-          renderInput={(params) => <TextField {...params} label="Finished Good (Items with Series)" size="small" />}
+          renderInput={(params) => <TextField {...params} label="Select Finished Good / Manufactured Item" size="small" />}
           sx={{ maxWidth: '100%', width: { xs: '100%', sm: 500 } }}
           autoHighlight
         />
@@ -374,18 +422,30 @@ const BOMMaster = () => {
                 </TableRow>
               ) : (
                 bomItems.map((row, index) => {
-                  const selectedChild = rawMaterials.find(rm => rm.ItemCode === row.ChildItemCode && (rm.SubCode || '') === (row.ChildSubCode || '')) || null;
+                  const selectedChild = rawMaterials.find(rm => 
+                    rm.ItemCode === row.ChildItemCode && 
+                    String(rm.SubCode || '').trim() === String(row.ChildSubCode || '').trim()
+                  ) || rawMaterials.find(rm => rm.ItemCode === row.ChildItemCode) || null;
+
                   return (
                     <TableRow hover key={index}>
                       <TableCell>
                         <Autocomplete
-                          options={rawMaterials}
-                          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                          options={rawMaterials.filter(rm => !(selectedParent && rm.ItemCode === selectedParent.ItemCode && String(rm.SubCode || '').trim() === String(selectedParent.SubCode || '').trim()))}
+                          getOptionLabel={(option) => {
+                            if (!option) return '';
+                            const sub = option.SubCode ? ` / ${option.SubCode}` : '';
+                            const cat = option.Category ? ` (${option.Category})` : '';
+                            return `${option.ItemCode}${sub} - ${option.ItemName}${cat}`;
+                          }}
+                          isOptionEqualToValue={(option, value) => 
+                            option?.ItemCode === value?.ItemCode && 
+                            String(option?.SubCode || '').trim() === String(value?.SubCode || '').trim()
+                          }
                           value={selectedChild}
                           onChange={(e, val) => handleItemChange(index, val)}
-                          renderInput={(params) => <TextField {...params} placeholder="Select Material" size="small" />}
+                          renderInput={(params) => <TextField {...params} placeholder="Select Material / Child Part" size="small" />}
                           autoHighlight
-                          disableClearable
                         />
                       </TableCell>
                       <TableCell>

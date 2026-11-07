@@ -1162,68 +1162,6 @@ const DashboardHome = () => {
         </Grid>
       </Grid>
 
-      {/* Row 4: Department-wise Stock */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
-        <Grid item xs={12}>
-          <Paper sx={{ p: { xs: 2.5, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
-              Department-wise Stock
-            </Typography>
-            {loading ? (
-              <Grid container spacing={3}>
-                {[1, 2, 3].map((n) => (
-                  <Grid item xs={12} sm={6} md={4} key={n}>
-                    <Skeleton variant="rectangular" height={90} sx={{ borderRadius: 2 }} />
-                  </Grid>
-                ))}
-              </Grid>
-            ) : (
-              <Grid container spacing={3}>
-                {kpis?.departmentStocks?.map((dept, idx) => (
-                  <Grid item xs={12} sm={6} md={4} key={idx}>
-                    <Box 
-                      sx={{ 
-                        p: 2.5, 
-                        borderRadius: 2, 
-                        border: '1px solid #e2e8f0', 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        transition: 'all 0.2s',
-                        '&:hover': { 
-                          borderColor: '#3b82f6', 
-                          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.08)',
-                          transform: 'translateY(-2px)'
-                        }
-                      }}
-                    >
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                          {dept.deptName}
-                        </Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b', mt: 0.5 }}>
-                          {dept.totalPcs || 0} Pcs | {Math.round(Number(dept.totalWeight || 0))} KG
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 700, mt: 0.5 }}>
-                          Value: {formatCurrency(dept.totalValue || 0)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Grid>
-                ))}
-                {(!kpis?.departmentStocks || kpis.departmentStocks.length === 0) && (
-                  <Grid item xs={12}>
-                    <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 3 }}>
-                      No department stock data available.
-                    </Typography>
-                  </Grid>
-                )}
-              </Grid>
-            )}
-          </Paper>
-        </Grid>
-      </Grid>
-
       {/* Cash & Bank Balances Modal Dialog */}
       <Dialog open={cashBankDialogOpen} onClose={() => setCashBankDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 2 }}>

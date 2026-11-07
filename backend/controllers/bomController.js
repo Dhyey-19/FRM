@@ -344,7 +344,19 @@ exports.getBOMByParent = async (req, res) => {
     `;
 
     if (parentSubCode) {
-      query += ` AND ISNULL(b.ParentSubCode, '') = @ParentSubCode`;
+      // Check if subcode-specific BOM exists, otherwise fallback to generic (empty subcode)
+      const checkSub = await pool.request()
+        .input('CheckParent', sql.VarChar(50), parentCode)
+        .input('CheckSub', sql.VarChar(50), parentSubCode)
+        .query("SELECT 1 FROM BOM_Master WHERE ParentItemCode = @CheckParent AND ISNULL(ParentSubCode, '') = @CheckSub LIMIT 1");
+
+      if (checkSub.recordset.length > 0) {
+        query += ` AND ISNULL(b.ParentSubCode, '') = @ParentSubCode`;
+      } else {
+        query += ` AND ISNULL(b.ParentSubCode, '') = ''`;
+      }
+    } else {
+      query += ` AND ISNULL(b.ParentSubCode, '') = ''`;
     }
 
     query += ` ORDER BY b.ChildItemCode ASC`;
