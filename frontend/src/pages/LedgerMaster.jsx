@@ -4,7 +4,7 @@ import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert,
-  MenuItem, Select, FormControl, InputLabel, Autocomplete
+  MenuItem, Select, FormControl, InputLabel, Autocomplete, Chip
 } from '@mui/material';
 import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, ContactPage as ContactIcon } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';

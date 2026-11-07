@@ -51,6 +51,7 @@ import JobworkInReport from './pages/reports/JobworkInReport';
 import JobworkMovementReport from './pages/reports/JobworkMovementReport';
 import ItemStockLedgerReport from './pages/reports/ItemStockLedgerReport';
 import NotificationLogs from './pages/NotificationLogs';
+import ErrorBoundary from './components/common/ErrorBoundary';
 function AuthApp() {
   const [currentPage, setCurrentPage] = useState('login');
   const navigate = useNavigate();
@@ -125,66 +126,68 @@ function App() {
 
   return (
     <Router>
-      <Routes>
-        {/* Auth Route */}
-        <Route path="/" element={<AuthApp />} />
-        
-        {/* Dashboard Routes wrapped in the new Layout */}
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardHome />} />
-          <Route path="logs" element={<NotificationLogs />} />
-          <Route path="notifications" element={<NotificationLogs />} />
-          <Route path="company-profile" element={<CompanyProfile />} />
-          <Route path="payment-qr" element={<PaymentQR />} />
-          <Route path="users" element={<UserMaster />} />
-          <Route path="user-access" element={<UserAccess />} />
-          <Route path="assets" element={<AssetMaster />} />
-          <Route path="brands" element={<BrandMaster />} />
-          <Route path="units" element={<UnitMaster />} />
-          <Route path="departments" element={<DepartmentMaster />} />
-          <Route path="item-types" element={<ItemTypeMaster />} />
-          <Route path="items" element={<ItemMaster />} />
-          <Route path="bom" element={<BOMMaster />} />
-          <Route path="account-groups" element={<AccountGroupMaster />} />
-          <Route path="ledgers" element={<LedgerMaster />} />
-          <Route path="vouchers" element={<VoucherEntry />} />
-          <Route path="bank-reconciliation" element={<BankReconciliation />} />
-          <Route path="inwards" element={<InwardEntry />} />
-          <Route path="purchase" element={<Navigate to="/dashboard/inwards" replace />} />
-          <Route path="outwards" element={<OutwardEntry />} />
-          <Route path="sales" element={<Navigate to="/dashboard/outwards" replace />} />
-          <Route path="subcontract" element={<Subcontract />} />
-          <Route path="sub-contract" element={<Navigate to="/dashboard/subcontract" replace />} />
-          <Route path="jobwork-outs" element={<Subcontract initialTab={1} />} />
-          <Route path="jobwork-ins" element={<Subcontract initialTab={0} />} />
-          <Route path="stock-transfer" element={<StockTransfer />} />
-          <Route path="assembly" element={<Assembly />} />
-          <Route path="stock-journal" element={<StockJournal />} />
-          <Route path="reports/brands" element={<BrandReport />} />
-          <Route path="reports/items" element={<ItemReport />} />
-          <Route path="reports/prices" element={<PriceReport />} />
-          <Route path="reports/bom" element={<BOMReport />} />
-          <Route path="reports/stock" element={<StockReport />} />
-          <Route path="reports/item-ledger" element={<ItemStockLedgerReport />} />
-          <Route path="reports/account-ledger" element={<AccountLedgerReport />} />
-          <Route path="reports/assembly" element={<AssemblyReport />} />
-          <Route path="reports/stock-journal" element={<StockJournalReport />} />
-          <Route path="reports/inward" element={<InwardReport />} />
-          <Route path="reports/outward" element={<OutwardReport />} />
-          <Route path="reports/itemwise-outward" element={<ItemwiseOutwardReport />} />
-          <Route path="reports/payable" element={<PayableReport />} />
-          <Route path="reports/receivable" element={<ReceivableReport />} />
-          <Route path="reports/profit-loss" element={<ProfitLossReport />} />
-          <Route path="reports/balance-sheet" element={<BalanceSheetReport />} />
-          <Route path="reports/trial-balance" element={<TrialBalanceReport />} />
-          <Route path="reports/invoice-payable" element={<InvoiceWisePayableReport />} />
-          <Route path="reports/invoice-receivable" element={<InvoiceWiseReceivableReport />} />
-          <Route path="reports/jobwork-out" element={<JobworkOutReport />} />
-          <Route path="reports/jobwork-in" element={<JobworkInReport />} />
-          <Route path="reports/jobwork-movement" element={<JobworkMovementReport />} />
-          <Route path="reports/jobwork-stock" element={<Navigate to="/dashboard/reports/jobwork-movement" replace />} />
-        </Route>
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          {/* Auth Route */}
+          <Route path="/" element={<AuthApp />} />
+          
+          {/* Dashboard Routes wrapped in the new Layout */}
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="logs" element={<NotificationLogs />} />
+            <Route path="notifications" element={<NotificationLogs />} />
+            <Route path="company-profile" element={<CompanyProfile />} />
+            <Route path="payment-qr" element={<PaymentQR />} />
+            <Route path="users" element={<UserMaster />} />
+            <Route path="user-access" element={<UserAccess />} />
+            <Route path="assets" element={<AssetMaster />} />
+            <Route path="brands" element={<BrandMaster />} />
+            <Route path="units" element={<UnitMaster />} />
+            <Route path="departments" element={<DepartmentMaster />} />
+            <Route path="item-types" element={<ItemTypeMaster />} />
+            <Route path="items" element={<ItemMaster />} />
+            <Route path="bom" element={<BOMMaster />} />
+            <Route path="account-groups" element={<AccountGroupMaster />} />
+            <Route path="ledgers" element={<LedgerMaster />} />
+            <Route path="vouchers" element={<VoucherEntry />} />
+            <Route path="bank-reconciliation" element={<BankReconciliation />} />
+            <Route path="inwards" element={<InwardEntry />} />
+            <Route path="purchase" element={<Navigate to="/dashboard/inwards" replace />} />
+            <Route path="outwards" element={<OutwardEntry />} />
+            <Route path="sales" element={<Navigate to="/dashboard/outwards" replace />} />
+            <Route path="subcontract" element={<Subcontract />} />
+            <Route path="sub-contract" element={<Navigate to="/dashboard/subcontract" replace />} />
+            <Route path="jobwork-outs" element={<Subcontract initialTab={1} />} />
+            <Route path="jobwork-ins" element={<Subcontract initialTab={0} />} />
+            <Route path="stock-transfer" element={<StockTransfer />} />
+            <Route path="assembly" element={<Assembly />} />
+            <Route path="stock-journal" element={<StockJournal />} />
+            <Route path="reports/brands" element={<BrandReport />} />
+            <Route path="reports/items" element={<ItemReport />} />
+            <Route path="reports/prices" element={<PriceReport />} />
+            <Route path="reports/bom" element={<BOMReport />} />
+            <Route path="reports/stock" element={<StockReport />} />
+            <Route path="reports/item-ledger" element={<ItemStockLedgerReport />} />
+            <Route path="reports/account-ledger" element={<AccountLedgerReport />} />
+            <Route path="reports/assembly" element={<AssemblyReport />} />
+            <Route path="reports/stock-journal" element={<StockJournalReport />} />
+            <Route path="reports/inward" element={<InwardReport />} />
+            <Route path="reports/outward" element={<OutwardReport />} />
+            <Route path="reports/itemwise-outward" element={<ItemwiseOutwardReport />} />
+            <Route path="reports/payable" element={<PayableReport />} />
+            <Route path="reports/receivable" element={<ReceivableReport />} />
+            <Route path="reports/profit-loss" element={<ProfitLossReport />} />
+            <Route path="reports/balance-sheet" element={<BalanceSheetReport />} />
+            <Route path="reports/trial-balance" element={<TrialBalanceReport />} />
+            <Route path="reports/invoice-payable" element={<InvoiceWisePayableReport />} />
+            <Route path="reports/invoice-receivable" element={<InvoiceWiseReceivableReport />} />
+            <Route path="reports/jobwork-out" element={<JobworkOutReport />} />
+            <Route path="reports/jobwork-in" element={<JobworkInReport />} />
+            <Route path="reports/jobwork-movement" element={<JobworkMovementReport />} />
+            <Route path="reports/jobwork-stock" element={<Navigate to="/dashboard/reports/jobwork-movement" replace />} />
+          </Route>
+        </Routes>
+      </ErrorBoundary>
     </Router>
   );
 }

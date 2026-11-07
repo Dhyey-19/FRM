@@ -23,6 +23,7 @@ import {
   Notifications as NotificationsIcon
 } from '@mui/icons-material';
 import Sidebar from './Sidebar';
+import ErrorBoundary from '../common/ErrorBoundary';
 
 // Create a custom MUI theme matching the requested colors
 const theme = createTheme({
@@ -473,7 +474,9 @@ const DashboardLayout = () => {
             </Box>
           </Paper>
 
-          <Outlet />
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </Box>
       </Box>
     </ThemeProvider>
