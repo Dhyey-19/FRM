@@ -39,9 +39,14 @@ class ErrorBoundary extends React.Component {
           <Alert 
             severity="error" 
             action={
-              <Button color="inherit" size="small" onClick={() => window.location.reload()}>
-                Reload Page
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button color="inherit" size="small" onClick={() => this.setState({ hasError: false, error: null })}>
+                  Try Again
+                </Button>
+                <Button color="inherit" size="small" onClick={() => window.location.reload()}>
+                  Reload Page
+                </Button>
+              </Box>
             }
           >
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
@@ -133,8 +138,8 @@ const StockReportContent = () => {
       const res = await fetch(`${baseUrl}/items/dead-stock`);
       if (!res.ok) throw new Error('Failed to fetch dead stock report');
       const json = await res.json();
-      setDeadStockData(json.items || []);
-      setDeadStockSummary(json.summary || {
+      setDeadStockData(Array.isArray(json?.items) ? json.items : (Array.isArray(json) ? json : []));
+      setDeadStockSummary(json?.summary || {
         totalDeadStockItems: 0,
         totalDeadStockQty: 0,
         totalDeadStockValue: 0,
@@ -179,7 +184,7 @@ const StockReportContent = () => {
       const response = await fetch(endpoint);
       if (!response.ok) throw new Error('Failed to fetch stock report');
       const result = await response.json();
-      setData(result);
+      setData(Array.isArray(result) ? result : []);
     } catch (error) {
       console.error('Error fetching stock report:', error);
     } finally {
@@ -233,17 +238,18 @@ const StockReportContent = () => {
   };
 
   // Unique filter lists
-  const uniqueTypes = useMemo(() => ['All', ...new Set(data.map(d => d.ItemType).filter(Boolean))], [data]);
-  const uniqueBrands = useMemo(() => ['All', ...new Set(data.map(d => d.Series).filter(Boolean))], [data]);
+  const safeData = Array.isArray(data) ? data : [];
+  const uniqueTypes = useMemo(() => ['All', ...Array.from(new Set(safeData.map(d => d.ItemType).filter(Boolean))).sort()], [safeData]);
+  const uniqueBrands = useMemo(() => ['All', ...Array.from(new Set(safeData.map(d => d.Series).filter(Boolean))).sort()], [safeData]);
   
   // Unique Departments list
   const uniqueDepts = useMemo(() => {
     if (reportType === 'department') {
-      return ['All', ...new Set(data.map(d => d.DeptName).filter(Boolean)).sort()];
+      return ['All', ...Array.from(new Set(safeData.map(d => d.DeptName).filter(Boolean))).sort()];
     }
     if (reportType === 'combined') {
       const set = new Set();
-      data.forEach(item => {
+      safeData.forEach(item => {
         (item.Departments || []).forEach(d => {
           if (d.DeptName) set.add(d.DeptName);
         });
@@ -251,16 +257,16 @@ const StockReportContent = () => {
       return ['All', ...Array.from(set).sort()];
     }
     return ['All'];
-  }, [data, reportType]);
+  }, [safeData, reportType]);
 
   // Unique Job Workers list
   const uniqueJobworkers = useMemo(() => {
     if (reportType === 'jobwork') {
-      return ['All', ...new Set(data.map(d => d.LedgerName).filter(Boolean)).sort()];
+      return ['All', ...Array.from(new Set(safeData.map(d => d.LedgerName).filter(Boolean))).sort()];
     }
     if (reportType === 'combined') {
       const set = new Set();
-      data.forEach(item => {
+      safeData.forEach(item => {
         (item.Jobworkers || []).forEach(j => {
           if (j.LedgerName) set.add(j.LedgerName);
         });
@@ -268,12 +274,12 @@ const StockReportContent = () => {
       return ['All', ...Array.from(set).sort()];
     }
     return ['All'];
-  }, [data, reportType]);
+  }, [safeData, reportType]);
 
   // Negative Stock Count across currently loaded data
   const negativeCount = useMemo(() => {
     if (reportType === 'combined') {
-      return data.filter(r => 
+      return safeData.filter(r => 
         (r.TotalStock || 0) < 0 || 
         (r.MainStock || 0) < 0 || 
         (r.DeptStock || 0) < 0 || 
@@ -283,23 +289,23 @@ const StockReportContent = () => {
       ).length;
     }
     if (reportType === 'item') {
-      return data.filter(r => (r.ClosingStock || 0) < 0).length;
+      return safeData.filter(r => (r.ClosingStock || 0) < 0).length;
     }
     if (reportType === 'department') {
-      return data.filter(r => (r.Pcs || 0) < 0 || (r.Weight || 0) < 0).length;
+      return safeData.filter(r => (r.Pcs || 0) < 0 || (r.Weight || 0) < 0).length;
     }
     if (reportType === 'jobwork') {
-      return data.filter(r => (r.BalQty || 0) < 0 || (r.BalNetWt || 0) < 0).length;
+      return safeData.filter(r => (r.BalQty || 0) < 0 || (r.BalNetWt || 0) < 0).length;
     }
     return 0;
-  }, [data, reportType]);
+  }, [safeData, reportType]);
 
   // Combined active negative filter flag
   const isNegativeActive = negativeOnly || (reportType === 'combined' && scopeFilter === 'NegativeStock');
 
   // Filter Data
   const filteredData = useMemo(() => {
-    return data.filter(row => {
+    return safeData.filter(row => {
       // 0. Negative Stock Filter (Applies to all views when active)
       if (isNegativeActive) {
         if (reportType === 'combined') {
@@ -405,7 +411,7 @@ const StockReportContent = () => {
 
       return true;
     });
-  }, [data, reportType, typeFilter, brandFilter, scopeFilter, deptFilter, jwFilter, searchTerm, negativeOnly]);
+  }, [safeData, reportType, typeFilter, brandFilter, scopeFilter, deptFilter, jwFilter, searchTerm, negativeOnly]);
 
   // Sort Data
   const sortedData = useMemo(() => {
@@ -598,9 +604,9 @@ const StockReportContent = () => {
       if (sortedData.length > 0) {
         tableData.push([
           { content: 'Total:', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
-          { content: totals.totalPcs, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
-          { content: totals.totalWeight.toFixed(3), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
-          { content: totals.totalValuation.toFixed(2), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } }
+          { content: Number(totals.totalPcs || 0).toLocaleString(), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
+          { content: Number(totals.totalWeight || 0).toFixed(3), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
+          { content: Number(totals.totalValuation || 0).toFixed(2), styles: { fontStyle: 'bold', textColor: [211, 47, 47] } }
         ]);
       }
     } else {
@@ -811,12 +817,13 @@ const StockReportContent = () => {
     XLSX.writeFile(workbook, filename);
   };
 
+  const safeDeadStockData = Array.isArray(deadStockData) ? deadStockData : [];
   const uniqueDeadStockWarehouses = useMemo(() => {
-    return ['All', ...new Set(deadStockData.map(i => i.WarehouseNo).filter(Boolean)).sort()];
-  }, [deadStockData]);
+    return ['All', ...Array.from(new Set(safeDeadStockData.map(i => i.WarehouseNo).filter(Boolean))).sort()];
+  }, [safeDeadStockData]);
 
   const filteredDeadStock = useMemo(() => {
-    let list = deadStockData;
+    let list = Array.isArray(deadStockData) ? deadStockData : [];
 
     if (deadStockTypeFilter !== 'All') {
       list = list.filter(i => i.EffectiveDeadStockType === deadStockTypeFilter);
@@ -827,18 +834,18 @@ const StockReportContent = () => {
     }
 
     if (deadStockWarehouseFilter !== 'All') {
-      list = list.filter(i => (i.WarehouseNo || '').trim() === deadStockWarehouseFilter);
+      list = list.filter(i => String(i.WarehouseNo || '').trim() === deadStockWarehouseFilter);
     }
 
     if (deadStockSearch.trim()) {
       const s = deadStockSearch.trim().toLowerCase();
       list = list.filter(i => 
-        (i.ItemCode && i.ItemCode.toLowerCase().includes(s)) ||
-        (i.SubCode && i.SubCode.toLowerCase().includes(s)) ||
-        (i.ItemName && i.ItemName.toLowerCase().includes(s)) ||
-        (i.WarehouseNo && i.WarehouseNo.toLowerCase().includes(s)) ||
-        (i.Location && i.Location.toLowerCase().includes(s)) ||
-        (i.Series && i.Series.toLowerCase().includes(s))
+        String(i.ItemCode || '').toLowerCase().includes(s) ||
+        String(i.SubCode || '').toLowerCase().includes(s) ||
+        String(i.ItemName || '').toLowerCase().includes(s) ||
+        String(i.WarehouseNo || '').toLowerCase().includes(s) ||
+        String(i.Location || '').toLowerCase().includes(s) ||
+        String(i.Series || '').toLowerCase().includes(s)
       );
     }
 
@@ -1973,7 +1980,7 @@ const StockReportContent = () => {
                                           return (
                                             <Chip
                                               key={d.DeptID}
-                                              label={`${d.DeptName}: ${d.Pcs.toLocaleString()} ${row.Unit || 'PCS'} ${d.Weight !== 0 ? `(${d.Weight.toFixed(3)} KG)` : ''}`}
+                                              label={`${d.DeptName}: ${Number(d.Pcs || 0).toLocaleString()} ${row.Unit || 'PCS'} ${(d.Weight || 0) !== 0 ? `(${Number(d.Weight || 0).toFixed(3)} KG)` : ''}`}
                                               size="small"
                                               sx={{
                                                 bgcolor: isNeg ? '#fee2e2' : '#f0fdfa',
@@ -2002,7 +2009,7 @@ const StockReportContent = () => {
                                           return (
                                             <Chip
                                               key={j.LedgerId}
-                                              label={`${j.LedgerName}: ${j.BalQty.toLocaleString()} ${row.Unit || 'PCS'} ${j.BalNetWt !== 0 ? `(${j.BalNetWt.toFixed(3)} KG)` : ''}`}
+                                              label={`${j.LedgerName}: ${Number(j.BalQty || 0).toLocaleString()} ${row.Unit || 'PCS'} ${(j.BalNetWt || 0) !== 0 ? `(${Number(j.BalNetWt || 0).toFixed(3)} KG)` : ''}`}
                                               size="small"
                                               sx={{
                                                 bgcolor: isNeg ? '#fee2e2' : '#fff7ed',
@@ -2064,15 +2071,15 @@ const StockReportContent = () => {
                     ) : reportType === 'item' ? (
                       <>
                         <TableCell colSpan={7} sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0F3B66' }}>Total:</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{totals.totalOpening}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{totals.totalClosing}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{Number(totals.totalOpening || 0).toLocaleString()}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{Number(totals.totalClosing || 0).toLocaleString()}</TableCell>
                       </>
                     ) : reportType === 'department' ? (
                       <>
                         <TableCell colSpan={5} sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0F3B66' }}>Total:</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{totals.totalPcs}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{totals.totalWeight.toFixed(3)}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#c2410c' }}>₹{totals.totalValuation.toFixed(2)}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{Number(totals.totalPcs || 0).toLocaleString()}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{Number(totals.totalWeight || 0).toFixed(3)}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#c2410c' }}>₹{Number(totals.totalValuation || 0).toFixed(2)}</TableCell>
                       </>
                     ) : (
                       // Job Work Stock Totals
