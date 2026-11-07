@@ -24,7 +24,10 @@ exports.getItems = async (req, res) => {
         OpeningStock, 
         ClosingStock, 
         HSNCode, 
-        ISNULL(ReorderLevel, 0) AS ReorderLevel 
+        ISNULL(ReorderLevel, 0) AS ReorderLevel,
+        ISNULL(DeadStockType, 'None') AS DeadStockType,
+        ISNULL(DeadStockDays, 0) AS DeadStockDays,
+        ISNULL(IsDeadStock, 0) AS IsDeadStock 
       FROM ItemMaster
     `;
 
@@ -82,7 +85,10 @@ exports.createItem = async (req, res) => {
     OpeningStock, 
     ClosingStock, 
     HSNCode, 
-    ReorderLevel 
+    ReorderLevel,
+    DeadStockType = 'None',
+    DeadStockDays = 0,
+    IsDeadStock = 0
   } = req.body;
 
   if (!ItemCode || !ItemName || !Unit) {
@@ -94,6 +100,9 @@ exports.createItem = async (req, res) => {
   const validCategory = ['SubContract', 'Inhouse', 'BOP'].includes(Category) ? Category : 'Inhouse';
   const formattedHSN = HSNCode ? String(HSNCode).trim().slice(0, 8).toUpperCase() : null;
   const numReorderLevel = ReorderLevel !== undefined && ReorderLevel !== null && ReorderLevel !== '' ? parseFloat(ReorderLevel) : 0;
+  const validDeadStockType = ['None', 'Auto', 'Manual'].includes(DeadStockType) ? DeadStockType : 'None';
+  const numDeadStockDays = DeadStockDays !== undefined && DeadStockDays !== null && DeadStockDays !== '' ? parseInt(DeadStockDays, 10) : 0;
+  const flagIsDeadStock = (validDeadStockType === 'Manual' || IsDeadStock == 1 || IsDeadStock === true) ? 1 : 0;
 
   try {
     const pool = await connectDB();
@@ -129,14 +138,19 @@ exports.createItem = async (req, res) => {
       .input('ClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
       .input('HSNCode', sql.VarChar(8), formattedHSN)
       .input('ReorderLevel', sql.Numeric(12, 3), numReorderLevel)
+      .input('DeadStockType', sql.VarChar(20), validDeadStockType)
+      .input('DeadStockDays', sql.Int, numDeadStockDays)
+      .input('IsDeadStock', sql.Int, flagIsDeadStock)
       .query(`
         INSERT INTO ItemMaster (
           ItemCode, SubCode, ItemName, ItemType, Category, WarehouseNo, Location, 
-          Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel
+          Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel,
+          DeadStockType, DeadStockDays, IsDeadStock
         )
         VALUES (
           @ItemCode, @SubCode, @ItemName, @ItemType, @Category, @WarehouseNo, @Location,
-          @Series, @StdWeight, @Unit, @MRP, @Costing, @OpeningStock, @ClosingStock, @HSNCode, @ReorderLevel
+          @Series, @StdWeight, @Unit, @MRP, @Costing, @OpeningStock, @ClosingStock, @HSNCode, @ReorderLevel,
+          @DeadStockType, @DeadStockDays, @IsDeadStock
         )
       `);
 
@@ -168,7 +182,10 @@ exports.updateItem = async (req, res) => {
     OpeningStock, 
     ClosingStock, 
     HSNCode, 
-    ReorderLevel 
+    ReorderLevel,
+    DeadStockType,
+    DeadStockDays,
+    IsDeadStock
   } = req.body;
 
   const targetOldItemCode = (originalItemCode || id || '').trim();
@@ -184,6 +201,9 @@ exports.updateItem = async (req, res) => {
   const validCategory = ['SubContract', 'Inhouse', 'BOP'].includes(Category) ? Category : 'Inhouse';
   const formattedHSN = HSNCode ? String(HSNCode).trim().slice(0, 8).toUpperCase() : null;
   const numReorderLevel = ReorderLevel !== undefined && ReorderLevel !== null && ReorderLevel !== '' ? parseFloat(ReorderLevel) : 0;
+  const validDeadStockType = ['None', 'Auto', 'Manual'].includes(DeadStockType) ? DeadStockType : (DeadStockType === undefined ? null : 'None');
+  const numDeadStockDays = DeadStockDays !== undefined && DeadStockDays !== null && DeadStockDays !== '' ? parseInt(DeadStockDays, 10) : (DeadStockDays === undefined ? null : 0);
+  const flagIsDeadStock = (validDeadStockType === 'Manual' || IsDeadStock == 1 || IsDeadStock === true) ? 1 : (IsDeadStock === undefined ? null : 0);
 
   try {
     const pool = await connectDB();
@@ -223,6 +243,9 @@ exports.updateItem = async (req, res) => {
       .input('ClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
       .input('HSNCode', sql.VarChar(8), formattedHSN)
       .input('ReorderLevel', sql.Numeric(12, 3), numReorderLevel)
+      .input('DeadStockType', sql.VarChar(20), validDeadStockType)
+      .input('DeadStockDays', sql.Int, numDeadStockDays)
+      .input('IsDeadStock', sql.Int, flagIsDeadStock)
       .query(`
         UPDATE ItemMaster 
         SET ItemCode = @NewItemCode,
@@ -240,7 +263,10 @@ exports.updateItem = async (req, res) => {
             OpeningStock = @OpeningStock,
             ClosingStock = @ClosingStock,
             HSNCode = @HSNCode,
-            ReorderLevel = @ReorderLevel
+            ReorderLevel = @ReorderLevel,
+            DeadStockType = COALESCE(@DeadStockType, DeadStockType),
+            DeadStockDays = COALESCE(@DeadStockDays, DeadStockDays),
+            IsDeadStock = COALESCE(@IsDeadStock, IsDeadStock)
         WHERE ItemCode = @OldItemCode AND ISNULL(SubCode, '') = @OldSubCode
       `);
 
@@ -336,6 +362,9 @@ exports.bulkCreateItems = async (req, res) => {
 
         const formattedHSN = item.HSNCode ? String(item.HSNCode).trim().slice(0, 8).toUpperCase() : null;
         const numReorderLevel = item.ReorderLevel !== undefined && item.ReorderLevel !== null && item.ReorderLevel !== '' ? parseFloat(item.ReorderLevel) : 0;
+        const validDeadStockType = ['None', 'Auto', 'Manual'].includes(item.DeadStockType) ? item.DeadStockType : 'None';
+        const numDeadStockDays = item.DeadStockDays !== undefined && item.DeadStockDays !== null && item.DeadStockDays !== '' ? parseInt(item.DeadStockDays, 10) : 0;
+        const flagIsDeadStock = (validDeadStockType === 'Manual' || item.IsDeadStock == 1 || item.IsDeadStock === true) ? 1 : 0;
 
         if (checkItem.recordset.length > 0) {
           // Update existing
@@ -356,6 +385,9 @@ exports.bulkCreateItems = async (req, res) => {
             .input('UpdClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
             .input('UpdHSNCode', sql.VarChar(8), formattedHSN)
             .input('UpdReorderLevel', sql.Numeric(12, 3), numReorderLevel)
+            .input('UpdDeadStockType', sql.VarChar(20), validDeadStockType)
+            .input('UpdDeadStockDays', sql.Int, numDeadStockDays)
+            .input('UpdIsDeadStock', sql.Int, flagIsDeadStock)
             .query(`
               UPDATE ItemMaster 
               SET ItemName = @UpdItemName, 
@@ -371,7 +403,10 @@ exports.bulkCreateItems = async (req, res) => {
                   OpeningStock = @UpdOpeningStock, 
                   ClosingStock = @UpdClosingStock,
                   HSNCode = @UpdHSNCode, 
-                  ReorderLevel = @UpdReorderLevel
+                  ReorderLevel = @UpdReorderLevel,
+                  DeadStockType = @UpdDeadStockType,
+                  DeadStockDays = @UpdDeadStockDays,
+                  IsDeadStock = @UpdIsDeadStock
               WHERE ItemCode = @UpdItemCode AND ISNULL(SubCode, '') = @UpdSubCode
             `);
           request.parameters = {};
@@ -395,14 +430,19 @@ exports.bulkCreateItems = async (req, res) => {
             .input('InsClosingStock', sql.Numeric(12, 3), ClosingStock !== undefined && ClosingStock !== null && ClosingStock !== '' ? ClosingStock : (OpeningStock || 0))
             .input('InsHSNCode', sql.VarChar(8), formattedHSN)
             .input('InsReorderLevel', sql.Numeric(12, 3), numReorderLevel)
+            .input('InsDeadStockType', sql.VarChar(20), validDeadStockType)
+            .input('InsDeadStockDays', sql.Int, numDeadStockDays)
+            .input('InsIsDeadStock', sql.Int, flagIsDeadStock)
             .query(`
               INSERT INTO ItemMaster (
                 ItemCode, SubCode, ItemName, ItemType, Category, WarehouseNo, Location,
-                Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel
+                Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel,
+                DeadStockType, DeadStockDays, IsDeadStock
               )
               VALUES (
                 @InsItemCode, @InsSubCode, @InsItemName, @InsItemType, @InsCategory, @InsWarehouseNo, @InsLocation,
-                @InsSeries, @InsStdWeight, @InsUnit, @InsMRP, @InsCosting, @InsOpeningStock, @InsClosingStock, @InsHSNCode, @InsReorderLevel
+                @InsSeries, @InsStdWeight, @InsUnit, @InsMRP, @InsCosting, @InsOpeningStock, @InsClosingStock, @InsHSNCode, @InsReorderLevel,
+                @InsDeadStockType, @InsDeadStockDays, @InsIsDeadStock
               )
             `);
           request.parameters = {};
@@ -1147,6 +1187,285 @@ exports.getCombinedStockReport = async (req, res) => {
   } catch (error) {
     console.error('Error fetching combined stock report:', error);
     res.status(500).json({ message: 'Server error fetching combined stock report', error: error.message });
+  }
+};
+
+// GET /api/items/dead-stock
+exports.getDeadStockReport = async (req, res) => {
+  try {
+    const { category, type, search } = req.query; // type: 'All', 'Auto', 'Manual'
+    const pool = await connectDB();
+
+    // 1. Fetch all items with dead stock columns
+    const [itemsRes, movementRes, deptRes, jwRes] = await Promise.all([
+      pool.request().query(`
+        SELECT 
+          ItemCode, 
+          ISNULL(SubCode, '') AS SubCode, 
+          ItemName, 
+          ItemType, 
+          ISNULL(Category, 'Inhouse') AS Category, 
+          WarehouseNo, 
+          Location, 
+          Series, 
+          StdWeight, 
+          Unit, 
+          MRP, 
+          Costing, 
+          OpeningStock, 
+          ISNULL(ClosingStock, 0) AS ClosingStock, 
+          HSNCode, 
+          ISNULL(ReorderLevel, 0) AS ReorderLevel,
+          ISNULL(DeadStockType, 'None') AS DeadStockType,
+          ISNULL(DeadStockDays, 0) AS DeadStockDays,
+          ISNULL(IsDeadStock, 0) AS IsDeadStock
+        FROM ItemMaster
+        ORDER BY ItemCode ASC, SubCode ASC
+      `),
+      pool.request().query(`
+        SELECT 
+          ItemCode,
+          SubCode,
+          MAX(TxDate) AS LastMovementDate
+        FROM (
+          SELECT d.ITEMCODE AS ItemCode, ISNULL(d.SUBCODE, '') AS SubCode, h.INWARDDATE AS TxDate
+          FROM InwardDetail d JOIN InwardHeader h ON d.INWARDID = h.ID
+          UNION ALL
+          SELECT d.ITEMCODE AS ItemCode, ISNULL(d.SUBCODE, '') AS SubCode, h.OUTWARDDATE AS TxDate
+          FROM OutwardDetail d JOIN OutwardHeader h ON d.OUTWARDID = h.ID
+          UNION ALL
+          SELECT d.ITEMCODE AS ItemCode, ISNULL(d.SUBCODE, '') AS SubCode, h.JWOUTWARDDATE AS TxDate
+          FROM JobworkOutDetail d JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
+          UNION ALL
+          SELECT d.INITEMCODE AS ItemCode, ISNULL(d.INSUBCODE, '') AS SubCode, h.JWINWARDDATE AS TxDate
+          FROM JobworkInDetail d JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
+          UNION ALL
+          SELECT d.OUTITEMCODE AS ItemCode, ISNULL(d.OUTSUBCODE, '') AS SubCode, h.JWINWARDDATE AS TxDate
+          FROM JobworkInDetail d JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
+          UNION ALL
+          SELECT d.SCRAPITEMCODE AS ItemCode, ISNULL(d.SCRAPSUBCODE, '') AS SubCode, h.JWINWARDDATE AS TxDate
+          FROM JobworkInDetail d JOIN JobworkInHeader h ON d.JWINWARDID = h.ID
+          UNION ALL
+          SELECT st.OutItemCode AS ItemCode, ISNULL(st.OutSubCode, '') AS SubCode, st.MoveDate AS TxDate
+          FROM StockTransfer st
+          UNION ALL
+          SELECT st.InItemCode AS ItemCode, ISNULL(st.InSubCode, '') AS SubCode, st.MoveDate AS TxDate
+          FROM StockTransfer st
+          UNION ALL
+          SELECT st.ScrapItemCode AS ItemCode, ISNULL(st.ScrapSubCode, '') AS SubCode, st.MoveDate AS TxDate
+          FROM StockTransfer st
+          UNION ALL
+          SELECT sj.ItemCode AS ItemCode, ISNULL(sj.SubCode, '') AS SubCode, sj.SJDate AS TxDate
+          FROM StockJournal sj
+          UNION ALL
+          SELECT a.ItemCode AS ItemCode, ISNULL(a.SubCode, '') AS SubCode, a.AssemblyDate AS TxDate
+          FROM AssemblyTransactions a
+        )
+        WHERE ItemCode IS NOT NULL AND ItemCode <> ''
+        GROUP BY ItemCode, SubCode
+      `),
+      pool.request().query(`
+        SELECT ItemCode, ISNULL(SubCode, '') AS SubCode, SUM(ISNULL(Pcs, 0)) AS DeptStock
+        FROM DepartmentStock
+        GROUP BY ItemCode, ISNULL(SubCode, '')
+      `),
+      pool.request().query(`
+        SELECT 
+          d.ITEMCODE AS ItemCode,
+          ISNULL(d.SUBCODE, '') AS SubCode,
+          (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) AS JwStock
+        FROM JobworkOutDetail d
+        INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
+        LEFT JOIN (
+          SELECT 
+            jwh.LEDGERID,
+            jwd.OUTITEMCODE,
+            ISNULL(jwd.OUTSUBCODE, '') AS OUTSUBCODE,
+            SUM(jwd.QUANTITY) AS InQty
+          FROM JobworkInDetail jwd
+          INNER JOIN JobworkInHeader jwh ON jwd.JWINWARDID = jwh.ID
+          GROUP BY jwh.LEDGERID, jwd.OUTITEMCODE, ISNULL(jwd.OUTSUBCODE, '')
+        ) inwards ON h.LEDGERID = inwards.LEDGERID AND d.ITEMCODE = inwards.OUTITEMCODE AND ISNULL(d.SUBCODE, '') = inwards.OUTSUBCODE
+        GROUP BY d.ITEMCODE, ISNULL(d.SUBCODE, ''), inwards.InQty
+        HAVING (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) > 0
+      `)
+    ]);
+
+    // Movement map
+    const movementMap = {};
+    for (const row of movementRes.recordset) {
+      const key = `${row.ItemCode}__${row.SubCode || ''}`;
+      movementMap[key] = row.LastMovementDate ? String(row.LastMovementDate).slice(0, 10) : null;
+    }
+
+    // Dept stock map
+    const deptStockMap = {};
+    for (const row of deptRes.recordset) {
+      const key = `${row.ItemCode}__${row.SubCode || ''}`;
+      deptStockMap[key] = Number(row.DeptStock || 0);
+    }
+
+    // JW stock map
+    const jwStockMap = {};
+    for (const row of jwRes.recordset) {
+      const key = `${row.ItemCode}__${row.SubCode || ''}`;
+      jwStockMap[key] = Number(row.JwStock || 0);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const deadStockList = [];
+
+    for (const item of itemsRes.recordset) {
+      const itemKey = `${item.ItemCode}__${item.SubCode || ''}`;
+      const lastMovement = movementMap[itemKey] || null;
+
+      let daysInactive = null;
+      if (lastMovement) {
+        const mvDate = new Date(lastMovement);
+        if (!isNaN(mvDate.getTime())) {
+          const diffTime = today.getTime() - mvDate.getTime();
+          daysInactive = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+        }
+      }
+
+      const deadStockType = (item.DeadStockType || 'None').trim();
+      const deadStockDays = parseInt(item.DeadStockDays, 10) || 0;
+      const isManualDeclared = deadStockType === 'Manual' || item.IsDeadStock === 1;
+
+      // Auto criteria: DeadStockType is 'Auto' AND deadStockDays > 0 AND (daysInactive >= deadStockDays OR never moved)
+      const isAutoDeclared = deadStockType === 'Auto' && deadStockDays > 0 && (
+        daysInactive === null || daysInactive >= deadStockDays
+      );
+
+      if (isManualDeclared || isAutoDeclared) {
+        const declaredType = isManualDeclared ? 'Manual' : 'Auto';
+        let reason = '';
+        if (isManualDeclared) {
+          reason = 'Manually declared as Dead Stock';
+        } else if (daysInactive === null) {
+          reason = `No transaction recorded (Threshold: ${deadStockDays} days)`;
+        } else {
+          reason = `No movement in ${daysInactive} days (Threshold: ${deadStockDays} days)`;
+        }
+
+        const mainStock = Number(item.ClosingStock || 0);
+        const deptStock = deptStockMap[itemKey] || 0;
+        const jwStock = jwStockMap[itemKey] || 0;
+        const totalStock = mainStock + deptStock + jwStock;
+        const costing = Number(item.Costing || 0);
+        const valuation = Number((totalStock * costing).toFixed(2));
+
+        deadStockList.push({
+          ...item,
+          EffectiveDeadStockType: declaredType,
+          DeadStockDays: deadStockDays,
+          LastMovementDate: lastMovement,
+          DaysInactive: daysInactive,
+          DeadStockReason: reason,
+          MainStock: mainStock,
+          DeptStock: deptStock,
+          JwStock: jwStock,
+          TotalStock: totalStock,
+          DeadStockValuation: valuation
+        });
+      }
+    }
+
+    // Apply query filters
+    let filtered = deadStockList;
+
+    if (category && category !== 'All') {
+      filtered = filtered.filter(i => i.Category === category);
+    }
+
+    if (type && type !== 'All') {
+      filtered = filtered.filter(i => i.EffectiveDeadStockType === type);
+    }
+
+    if (search && search.trim()) {
+      const s = search.trim().toLowerCase();
+      filtered = filtered.filter(i => 
+        (i.ItemCode && i.ItemCode.toLowerCase().includes(s)) ||
+        (i.SubCode && i.SubCode.toLowerCase().includes(s)) ||
+        (i.ItemName && i.ItemName.toLowerCase().includes(s)) ||
+        (i.WarehouseNo && i.WarehouseNo.toLowerCase().includes(s)) ||
+        (i.Location && i.Location.toLowerCase().includes(s)) ||
+        (i.Series && i.Series.toLowerCase().includes(s))
+      );
+    }
+
+    // Calculate KPI summary
+    const totalDeadStockItems = filtered.length;
+    const totalDeadStockQty = filtered.reduce((acc, i) => acc + (Number(i.TotalStock) || 0), 0);
+    const totalDeadStockValue = filtered.reduce((acc, i) => acc + (Number(i.DeadStockValuation) || 0), 0);
+    const autoCount = filtered.filter(i => i.EffectiveDeadStockType === 'Auto').length;
+    const manualCount = filtered.filter(i => i.EffectiveDeadStockType === 'Manual').length;
+
+    res.status(200).json({
+      summary: {
+        totalDeadStockItems,
+        totalDeadStockQty: Math.round(totalDeadStockQty * 1000) / 1000,
+        totalDeadStockValue: Math.round(totalDeadStockValue * 100) / 100,
+        autoCount,
+        manualCount
+      },
+      items: filtered
+    });
+  } catch (error) {
+    console.error('Error fetching dead stock report:', error);
+    res.status(500).json({ message: 'Server error fetching dead stock report', error: error.message });
+  }
+};
+
+// PUT /api/items/:id/dead-stock
+exports.updateDeadStockStatus = async (req, res) => {
+  const { id } = req.params;
+  const { subCode = '', deadStockType = 'None', deadStockDays = 0, isDeadStock = 0 } = req.body;
+
+  const itemCode = (id || '').trim();
+  const cleanSubCode = (subCode !== undefined && subCode !== null ? String(subCode) : (req.query.subCode || '')).trim();
+
+  if (!itemCode) {
+    return res.status(400).json({ message: 'ItemCode is required' });
+  }
+
+  const validType = ['None', 'Auto', 'Manual'].includes(deadStockType) ? deadStockType : 'None';
+  const numDays = parseInt(deadStockDays, 10) || 0;
+  const flagIsDead = (validType === 'Manual' || isDeadStock === 1 || isDeadStock === true) ? 1 : 0;
+
+  try {
+    const pool = await connectDB();
+    const result = await pool.request()
+      .input('ItemCode', sql.VarChar(50), itemCode)
+      .input('SubCode', sql.VarChar(50), cleanSubCode)
+      .input('DeadStockType', sql.VarChar(20), validType)
+      .input('DeadStockDays', sql.Int, numDays)
+      .input('IsDeadStock', sql.Int, flagIsDead)
+      .query(`
+        UPDATE ItemMaster 
+        SET DeadStockType = @DeadStockType,
+            DeadStockDays = @DeadStockDays,
+            IsDeadStock = @IsDeadStock
+        WHERE ItemCode = @ItemCode AND ISNULL(SubCode, '') = @SubCode
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    res.status(200).json({ 
+      message: 'Dead stock status updated successfully',
+      itemCode,
+      subCode: cleanSubCode,
+      deadStockType: validType,
+      deadStockDays: numDays,
+      isDeadStock: flagIsDead
+    });
+  } catch (error) {
+    console.error('Error updating dead stock status:', error);
+    res.status(500).json({ message: 'Server error updating dead stock status', error: error.message });
   }
 };
 

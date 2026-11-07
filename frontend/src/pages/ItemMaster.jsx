@@ -42,7 +42,9 @@ import {
   FileDownload as ExportIcon,
   FileUpload as ImportIcon,
   FilterList as FilterListIcon,
-  RestartAlt as ResetIcon
+  RestartAlt as ResetIcon,
+  WarningAmber,
+  HourglassEmpty
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import * as XLSX from 'xlsx';
@@ -66,12 +68,20 @@ const ItemMaster = () => {
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterItemType, setFilterItemType] = useState('All');
   const [filterSeries, setFilterSeries] = useState('All');
+  const [filterDeadStock, setFilterDeadStock] = useState('All');
   
   // Dialog States
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState('add'); // 'add' or 'edit'
   const [dialogError, setDialogError] = useState('');
   
+  // Quick Dead Stock Modal States
+  const [deadStockModalOpen, setDeadStockModalOpen] = useState(false);
+  const [selectedDeadStockItem, setSelectedDeadStockItem] = useState(null);
+  const [quickDeadStockType, setQuickDeadStockType] = useState('None');
+  const [quickDeadStockDays, setQuickDeadStockDays] = useState('');
+  const [quickModalLoading, setQuickModalLoading] = useState(false);
+
   // Track original composite key for edit PUT request
   const [originalItemCode, setOriginalItemCode] = useState(null);
   const [originalSubCode, setOriginalSubCode] = useState('');
@@ -103,7 +113,10 @@ const ItemMaster = () => {
     OpeningStock: '',
     ClosingStock: '',
     HSNCode: '',
-    ReorderLevel: ''
+    ReorderLevel: '',
+    DeadStockType: 'None',
+    DeadStockDays: '',
+    IsDeadStock: false
   });
 
   const fetchItems = async (singleCode = null, singleSubCode = null) => {
@@ -207,7 +220,19 @@ const ItemMaster = () => {
     const matchesCategory = filterCategory === 'All' || item.Category === filterCategory;
     const matchesType = filterItemType === 'All' || item.ItemType === filterItemType;
     const matchesSeries = filterSeries === 'All' || item.Series === filterSeries;
-    return matchesSearch && matchesCategory && matchesType && matchesSeries;
+    
+    let matchesDeadStock = true;
+    if (filterDeadStock === 'Auto') {
+      matchesDeadStock = item.DeadStockType === 'Auto';
+    } else if (filterDeadStock === 'Manual') {
+      matchesDeadStock = item.DeadStockType === 'Manual' || item.IsDeadStock === 1;
+    } else if (filterDeadStock === 'Active') {
+      matchesDeadStock = (!item.DeadStockType || item.DeadStockType === 'None') && !item.IsDeadStock;
+    } else if (filterDeadStock === 'AllDead') {
+      matchesDeadStock = item.DeadStockType === 'Auto' || item.DeadStockType === 'Manual' || item.IsDeadStock === 1;
+    }
+
+    return matchesSearch && matchesCategory && matchesType && matchesSeries && matchesDeadStock;
   });
 
   const handleSort = (key) => {
@@ -252,7 +277,10 @@ const ItemMaster = () => {
         OpeningStock: item.OpeningStock || '',
         ClosingStock: item.ClosingStock || '',
         HSNCode: item.HSNCode || '',
-        ReorderLevel: item.ReorderLevel != null ? item.ReorderLevel : ''
+        ReorderLevel: item.ReorderLevel != null ? item.ReorderLevel : '',
+        DeadStockType: item.DeadStockType || 'None',
+        DeadStockDays: item.DeadStockDays != null && item.DeadStockDays > 0 ? item.DeadStockDays : '',
+        IsDeadStock: item.IsDeadStock === 1 || item.DeadStockType === 'Manual'
       });
     } else {
       setOriginalItemCode(null);
@@ -273,7 +301,10 @@ const ItemMaster = () => {
         OpeningStock: '',
         ClosingStock: '',
         HSNCode: '',
-        ReorderLevel: ''
+        ReorderLevel: '',
+        DeadStockType: 'None',
+        DeadStockDays: '',
+        IsDeadStock: false
       });
     }
     setOpenDialog(true);
@@ -346,7 +377,10 @@ const ItemMaster = () => {
         OpeningStock: formData.OpeningStock ? parseFloat(formData.OpeningStock) : null,
         ClosingStock: formData.ClosingStock ? parseFloat(formData.ClosingStock) : null,
         HSNCode: formData.HSNCode ? formData.HSNCode.trim().slice(0, 8).toUpperCase() : null,
-        ReorderLevel: formData.ReorderLevel !== '' && formData.ReorderLevel != null ? parseFloat(formData.ReorderLevel) : 0
+        ReorderLevel: formData.ReorderLevel !== '' && formData.ReorderLevel != null ? parseFloat(formData.ReorderLevel) : 0,
+        DeadStockType: formData.DeadStockType || 'None',
+        DeadStockDays: formData.DeadStockType === 'Auto' && formData.DeadStockDays ? parseInt(formData.DeadStockDays, 10) : 0,
+        IsDeadStock: (formData.DeadStockType === 'Manual' || formData.IsDeadStock) ? 1 : 0
       };
 
       const response = await fetch(url, {
@@ -369,6 +403,58 @@ const ItemMaster = () => {
     } catch (error) {
       console.error('Error saving item:', error);
       setDialogError('A network error occurred. Please try again.');
+    }
+  };
+
+  const handleOpenDeadStockModal = (item) => {
+    setSelectedDeadStockItem(item);
+    setQuickDeadStockType(item.DeadStockType || (item.IsDeadStock ? 'Manual' : 'None'));
+    setQuickDeadStockDays(item.DeadStockDays != null && item.DeadStockDays > 0 ? item.DeadStockDays : '');
+    setDeadStockModalOpen(true);
+  };
+
+  const handleCloseDeadStockModal = () => {
+    setDeadStockModalOpen(false);
+    setSelectedDeadStockItem(null);
+  };
+
+  const handleSaveQuickDeadStock = async () => {
+    if (!selectedDeadStockItem) return;
+    if (quickDeadStockType === 'Auto' && (!quickDeadStockDays || parseInt(quickDeadStockDays, 10) <= 0)) {
+      alert('Please specify a valid number of days for Auto Dead Stock detection.');
+      return;
+    }
+
+    setQuickModalLoading(true);
+    try {
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/items/${encodeURIComponent(selectedDeadStockItem.ItemCode)}/dead-stock?subCode=${encodeURIComponent(selectedDeadStockItem.SubCode || '')}`;
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subCode: selectedDeadStockItem.SubCode || '',
+          deadStockType: quickDeadStockType,
+          deadStockDays: quickDeadStockType === 'Auto' ? parseInt(quickDeadStockDays, 10) : 0,
+          isDeadStock: quickDeadStockType === 'Manual' ? 1 : 0
+        })
+      });
+
+      if (response.ok) {
+        handleCloseDeadStockModal();
+        if (filterParamItemCode) {
+          fetchItems(filterParamItemCode, filterParamSubCode);
+        } else {
+          fetchItems();
+        }
+      } else {
+        const err = await response.json();
+        alert(err.message || 'Failed to update dead stock status');
+      }
+    } catch (err) {
+      console.error('Error updating dead stock:', err);
+      alert('Network error while updating dead stock status');
+    } finally {
+      setQuickModalLoading(false);
     }
   };
 
@@ -422,7 +508,10 @@ const ItemMaster = () => {
       OpeningStock: item.OpeningStock || 0,
       ClosingStock: item.ClosingStock || 0,
       HSNCode: item.HSNCode || '',
-      ReorderLevel: item.ReorderLevel || 0
+      ReorderLevel: item.ReorderLevel || 0,
+      DeadStockType: item.DeadStockType || 'None',
+      DeadStockDays: item.DeadStockDays || 0,
+      IsDeadStock: item.IsDeadStock || 0
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
@@ -572,6 +661,20 @@ const ItemMaster = () => {
                 <MenuItem key={s} value={s}>{s}</MenuItem>
               ))}
             </TextField>
+            <TextField
+              select
+              size="small"
+              label="Dead Stock"
+              value={filterDeadStock}
+              onChange={(e) => setFilterDeadStock(e.target.value)}
+              sx={{ width: { xs: '100%', sm: 150 }, minWidth: { sm: 150 } }}
+            >
+              <MenuItem value="All">All Stock Status</MenuItem>
+              <MenuItem value="Active">🟢 Active Inventory</MenuItem>
+              <MenuItem value="Auto">⚡ Auto Dead Stock</MenuItem>
+              <MenuItem value="Manual">🔴 Manual Dead Stock</MenuItem>
+              <MenuItem value="AllDead">⚠️ All Dead Stock</MenuItem>
+            </TextField>
           </Box>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
             <input
@@ -709,6 +812,15 @@ const ItemMaster = () => {
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Reorder Level</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                  <TableSortLabel
+                    active={sortConfig.key === 'DeadStockType'}
+                    direction={sortConfig.key === 'DeadStockType' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('DeadStockType')}
+                  >
+                    Dead Stock
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600, color: '#0F3B66' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -773,6 +885,60 @@ const ItemMaster = () => {
                           </Typography>
                         ) : '-'}
                       </TableCell>
+                      <TableCell>
+                        {row.DeadStockType === 'Manual' || row.IsDeadStock === 1 ? (
+                          <Tooltip title="Manually declared as Dead Stock. Click to change.">
+                            <Chip 
+                              label="Manual Dead Stock" 
+                              size="small" 
+                              onClick={() => handleOpenDeadStockModal(row)}
+                              sx={{ 
+                                bgcolor: '#fee2e2', 
+                                color: '#991b1b', 
+                                fontWeight: 700, 
+                                fontSize: '0.7rem', 
+                                cursor: 'pointer',
+                                height: 22,
+                                '&:hover': { bgcolor: '#fca5a5' }
+                              }} 
+                            />
+                          </Tooltip>
+                        ) : row.DeadStockType === 'Auto' ? (
+                          <Tooltip title={`Auto Dead Stock (No movement in ${row.DeadStockDays || 0}d). Click to change.`}>
+                            <Chip 
+                              label={`Auto (${row.DeadStockDays || 0}d)`} 
+                              size="small" 
+                              onClick={() => handleOpenDeadStockModal(row)}
+                              sx={{ 
+                                bgcolor: '#fef3c7', 
+                                color: '#92400e', 
+                                fontWeight: 700, 
+                                fontSize: '0.7rem', 
+                                cursor: 'pointer',
+                                height: 22,
+                                '&:hover': { bgcolor: '#fde68a' }
+                              }} 
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="Active inventory. Click to declare as Dead Stock.">
+                            <Chip 
+                              label="Active" 
+                              size="small" 
+                              variant="outlined" 
+                              onClick={() => handleOpenDeadStockModal(row)}
+                              sx={{ 
+                                color: '#059669', 
+                                borderColor: '#a7f3d0', 
+                                fontSize: '0.7rem', 
+                                cursor: 'pointer',
+                                height: 22,
+                                '&:hover': { bgcolor: '#ecfdf5' }
+                              }} 
+                            />
+                          </Tooltip>
+                        )}
+                      </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
                           <Tooltip title="Edit Item">
@@ -792,7 +958,7 @@ const ItemMaster = () => {
                 })}
               {sortedItems.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={15} align="center" sx={{ py: 3, color: '#64748b' }}>
+                  <TableCell colSpan={16} align="center" sx={{ py: 3, color: '#64748b' }}>
                     No items found matching the selected filters.
                   </TableCell>
                 </TableRow>
@@ -996,6 +1162,74 @@ const ItemMaster = () => {
                 size="small" 
               />
             </Box>
+
+            {/* Dead Stock Declaration Section */}
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #cbd5e1' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <WarningAmber sx={{ color: '#d97706', fontSize: 20 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                  Dead Stock Declaration
+                </Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 2 }}>
+                Declare this item as dead stock either automatically (if not moved in specified days) or manually.
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: 'flex-start' }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="dead-stock-type-label">Declaration Mode</InputLabel>
+                  <Select
+                    labelId="dead-stock-type-label"
+                    label="Declaration Mode"
+                    name="DeadStockType"
+                    value={formData.DeadStockType || 'None'}
+                    onChange={handleInputChange}
+                  >
+                    <MenuItem value="None">
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>
+                        🟢 None (Active Inventory)
+                      </Typography>
+                    </MenuItem>
+                    <MenuItem value="Auto">
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706' }}>
+                        ⚡ Auto (No movement in X days)
+                      </Typography>
+                    </MenuItem>
+                    <MenuItem value="Manual">
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#dc2626' }}>
+                        🔴 Manual (Declare as Dead Stock now)
+                      </Typography>
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+
+                {formData.DeadStockType === 'Auto' && (
+                  <TextField
+                    label="Inactivity Days Threshold *"
+                    name="DeadStockDays"
+                    type="number"
+                    size="small"
+                    fullWidth
+                    placeholder="e.g. 30, 60, 90, 180, 365"
+                    value={formData.DeadStockDays}
+                    onChange={handleInputChange}
+                    helperText="Classified as dead stock if not moved for this many days"
+                    inputProps={{ min: 1 }}
+                  />
+                )}
+              </Box>
+
+              {formData.DeadStockType === 'Manual' && (
+                <Alert severity="warning" sx={{ mt: 1.5, py: 0.5, fontSize: '0.82rem' }}>
+                  This item is manually declared as Dead Stock and will appear in the Dead Stock Report.
+                </Alert>
+              )}
+              {formData.DeadStockType === 'Auto' && (
+                <Alert severity="info" sx={{ mt: 1.5, py: 0.5, fontSize: '0.82rem' }}>
+                  System will track transactions across Purchases, Sales, Job Work, and Transfers. If no transaction occurs within {formData.DeadStockDays || 'the specified'} days, it will be classified as dead stock.
+                </Alert>
+              )}
+            </Paper>
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e2e8f0' }}>
@@ -1006,6 +1240,91 @@ const ItemMaster = () => {
             sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' }, textTransform: 'none', fontWeight: 600, px: 3 }}
           >
             Save Item
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Quick Dead Stock Status Modal */}
+      <Dialog
+        open={deadStockModalOpen}
+        onClose={handleCloseDeadStockModal}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5 }}>
+          Dead Stock Declaration
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2.5 }}>
+          {selectedDeadStockItem && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <Box sx={{ p: 1.5, bgcolor: '#f1f5f9', borderRadius: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                  {selectedDeadStockItem.ItemName}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                  Code: {selectedDeadStockItem.ItemCode} {selectedDeadStockItem.SubCode ? `/ ${selectedDeadStockItem.SubCode}` : ''} | Current Stock: {selectedDeadStockItem.ClosingStock || 0} {selectedDeadStockItem.Unit || ''}
+                </Typography>
+              </Box>
+
+              <FormControl fullWidth size="small">
+                <InputLabel id="quick-dead-stock-mode-label">Declaration Mode</InputLabel>
+                <Select
+                  labelId="quick-dead-stock-mode-label"
+                  label="Declaration Mode"
+                  value={quickDeadStockType}
+                  onChange={(e) => setQuickDeadStockType(e.target.value)}
+                >
+                  <MenuItem value="None">
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>
+                      🟢 None (Active Inventory)
+                    </Typography>
+                  </MenuItem>
+                  <MenuItem value="Auto">
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706' }}>
+                      ⚡ Auto (No movement in X days)
+                    </Typography>
+                  </MenuItem>
+                  <MenuItem value="Manual">
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#dc2626' }}>
+                      🔴 Manual (Declare as Dead Stock now)
+                    </Typography>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
+              {quickDeadStockType === 'Auto' && (
+                <TextField
+                  label="Threshold Inactivity Days *"
+                  type="number"
+                  size="small"
+                  fullWidth
+                  placeholder="e.g. 30, 60, 90, 180"
+                  value={quickDeadStockDays}
+                  onChange={(e) => setQuickDeadStockDays(e.target.value)}
+                  helperText="Days of inactivity to trigger dead stock"
+                  inputProps={{ min: 1 }}
+                />
+              )}
+
+              {quickDeadStockType === 'Manual' && (
+                <Alert severity="warning" sx={{ py: 0.5, fontSize: '0.8rem' }}>
+                  Item will be marked as Dead Stock immediately.
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e2e8f0' }}>
+          <Button onClick={handleCloseDeadStockModal} color="inherit" sx={{ textTransform: 'none' }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveQuickDeadStock}
+            variant="contained"
+            disabled={quickModalLoading}
+            sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' }, textTransform: 'none', fontWeight: 600 }}
+          >
+            {quickModalLoading ? 'Saving...' : 'Update Status'}
           </Button>
         </DialogActions>
       </Dialog>

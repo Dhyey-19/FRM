@@ -17,6 +17,12 @@ router.get('/stock-ledger', itemController.getItemStockLedger);
 // GET combined stock report (main stock + department stock + jobwork stock)
 router.get('/combined-stock', itemController.getCombinedStockReport);
 
+// GET dead stock report
+router.get('/dead-stock', itemController.getDeadStockReport);
+
+// PUT quick update dead stock declaration
+router.put('/:id/dead-stock', itemController.updateDeadStockStatus);
+
 // PUT update an item (using ItemCode)
 router.put('/:id', itemController.updateItem);
 

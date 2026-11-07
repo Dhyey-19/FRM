@@ -118,6 +118,9 @@ CREATE TABLE IF NOT EXISTS "ItemMaster" (
     "ClosingStock" DECIMAL(12, 3),
     "HSNCode" VARCHAR(8),
     "ReorderLevel" DECIMAL(12, 3) DEFAULT 0,
+    "DeadStockType" VARCHAR(20) DEFAULT 'None',
+    "DeadStockDays" INTEGER DEFAULT 0,
+    "IsDeadStock" INTEGER DEFAULT 0,
     PRIMARY KEY ("ItemCode", "SubCode")
 );
 

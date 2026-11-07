@@ -7,13 +7,13 @@ import {
   ToggleButton, ToggleButtonGroup,
   FormControl, InputLabel, Select, MenuItem, Tooltip,
   IconButton, Collapse, Chip, Card, CardContent, Grid,
-  Divider, Alert
+  Divider, Alert, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, TablePagination
 } from '@mui/material';
 import { 
   PictureAsPdf, Visibility, TableView, Share, 
   Search as SearchIcon, KeyboardArrowDown, KeyboardArrowUp,
   Inventory, Business, Factory, Layers, UnfoldMore, UnfoldLess,
-  WarningAmber
+  WarningAmber, Edit as EditIcon, Refresh as RefreshIcon, EventBusy as EventBusyIcon, AccessTime
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -92,6 +92,71 @@ const StockReportContent = () => {
   // Sorting states
   const [orderBy, setOrderBy] = useState('ItemCode');
   const [order, setOrder] = useState('asc');
+
+  // Main Tab State: 0 = Current Stock Report, 1 = Dead Stock Report
+  const [mainTab, setMainTab] = useState(0);
+
+  // Dead Stock States
+  const [deadStockData, setDeadStockData] = useState([]);
+  const [deadStockSummary, setDeadStockSummary] = useState({
+    totalDeadStockItems: 0,
+    totalDeadStockQty: 0,
+    totalDeadStockValue: 0,
+    autoCount: 0,
+    manualCount: 0
+  });
+  const [deadStockLoading, setDeadStockLoading] = useState(false);
+  
+  // Dead Stock Filters & Search
+  const [deadStockSearch, setDeadStockSearch] = useState('');
+  const [deadStockTypeFilter, setDeadStockTypeFilter] = useState('All'); // 'All', 'Auto', 'Manual'
+  const [deadStockCategoryFilter, setDeadStockCategoryFilter] = useState('All'); // 'All', 'SubContract', 'Inhouse', 'BOP'
+  const [deadStockWarehouseFilter, setDeadStockWarehouseFilter] = useState('All');
+
+  // Dead Stock Sort & Pagination
+  const [deadStockOrderBy, setDeadStockOrderBy] = useState('DaysInactive');
+  const [deadStockOrder, setDeadStockOrder] = useState('desc');
+  const [dsPage, setDsPage] = useState(0);
+  const [dsRowsPerPage, setDsRowsPerPage] = useState(25);
+
+  // Quick Edit Modal in Dead Stock
+  const [dsModalOpen, setDsModalOpen] = useState(false);
+  const [selectedDsItem, setSelectedDsItem] = useState(null);
+  const [dsModalType, setDsModalType] = useState('Auto');
+  const [dsModalDays, setDsModalDays] = useState('');
+  const [dsModalLoading, setDsModalLoading] = useState(false);
+
+  const fetchDeadStock = async () => {
+    setDeadStockLoading(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${baseUrl}/items/dead-stock`);
+      if (!res.ok) throw new Error('Failed to fetch dead stock report');
+      const json = await res.json();
+      setDeadStockData(json.items || []);
+      setDeadStockSummary(json.summary || {
+        totalDeadStockItems: 0,
+        totalDeadStockQty: 0,
+        totalDeadStockValue: 0,
+        autoCount: 0,
+        manualCount: 0
+      });
+    } catch (err) {
+      console.error('Error fetching dead stock report:', err);
+    } finally {
+      setDeadStockLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeadStock();
+  }, []);
+
+  useEffect(() => {
+    if (mainTab === 1) {
+      fetchDeadStock();
+    }
+  }, [mainTab]);
 
   useEffect(() => {
     fetchData();
@@ -746,6 +811,304 @@ const StockReportContent = () => {
     XLSX.writeFile(workbook, filename);
   };
 
+  const uniqueDeadStockWarehouses = useMemo(() => {
+    return ['All', ...new Set(deadStockData.map(i => i.WarehouseNo).filter(Boolean)).sort()];
+  }, [deadStockData]);
+
+  const filteredDeadStock = useMemo(() => {
+    let list = deadStockData;
+
+    if (deadStockTypeFilter !== 'All') {
+      list = list.filter(i => i.EffectiveDeadStockType === deadStockTypeFilter);
+    }
+
+    if (deadStockCategoryFilter !== 'All') {
+      list = list.filter(i => i.Category === deadStockCategoryFilter);
+    }
+
+    if (deadStockWarehouseFilter !== 'All') {
+      list = list.filter(i => (i.WarehouseNo || '').trim() === deadStockWarehouseFilter);
+    }
+
+    if (deadStockSearch.trim()) {
+      const s = deadStockSearch.trim().toLowerCase();
+      list = list.filter(i => 
+        (i.ItemCode && i.ItemCode.toLowerCase().includes(s)) ||
+        (i.SubCode && i.SubCode.toLowerCase().includes(s)) ||
+        (i.ItemName && i.ItemName.toLowerCase().includes(s)) ||
+        (i.WarehouseNo && i.WarehouseNo.toLowerCase().includes(s)) ||
+        (i.Location && i.Location.toLowerCase().includes(s)) ||
+        (i.Series && i.Series.toLowerCase().includes(s))
+      );
+    }
+
+    return list;
+  }, [deadStockData, deadStockTypeFilter, deadStockCategoryFilter, deadStockWarehouseFilter, deadStockSearch]);
+
+  const sortedDeadStock = useMemo(() => {
+    return [...filteredDeadStock].sort((a, b) => {
+      let valA = a[deadStockOrderBy];
+      let valB = b[deadStockOrderBy];
+      
+      if (deadStockOrderBy === 'DaysInactive') {
+        valA = valA === null || valA === undefined ? 999999 : Number(valA);
+        valB = valB === null || valB === undefined ? 999999 : Number(valB);
+      } else if (typeof valA === 'number' || typeof valB === 'number') {
+        valA = Number(valA || 0);
+        valB = Number(valB || 0);
+      } else {
+        valA = String(valA || '').toLowerCase();
+        valB = String(valB || '').toLowerCase();
+      }
+
+      if (valA < valB) return deadStockOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return deadStockOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredDeadStock, deadStockOrderBy, deadStockOrder]);
+
+  const deadStockTotals = useMemo(() => {
+    return {
+      count: filteredDeadStock.length,
+      totalQty: filteredDeadStock.reduce((acc, i) => acc + Number(i.TotalStock || 0), 0),
+      totalValuation: filteredDeadStock.reduce((acc, i) => acc + Number(i.DeadStockValuation || 0), 0),
+      autoCount: filteredDeadStock.filter(i => i.EffectiveDeadStockType === 'Auto').length,
+      manualCount: filteredDeadStock.filter(i => i.EffectiveDeadStockType === 'Manual').length
+    };
+  }, [filteredDeadStock]);
+
+  const handleOpenDsModal = (item) => {
+    setSelectedDsItem(item);
+    setDsModalType(item.EffectiveDeadStockType || item.DeadStockType || 'Auto');
+    setDsModalDays(item.DeadStockDays > 0 ? item.DeadStockDays : '');
+    setDsModalOpen(true);
+  };
+
+  const handleCloseDsModal = () => {
+    setDsModalOpen(false);
+    setSelectedDsItem(null);
+  };
+
+  const handleSaveDsModal = async () => {
+    if (!selectedDsItem) return;
+    if (dsModalType === 'Auto' && (!dsModalDays || parseInt(dsModalDays, 10) <= 0)) {
+      alert('Please enter a valid threshold days greater than 0.');
+      return;
+    }
+
+    setDsModalLoading(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const url = `${baseUrl}/items/${encodeURIComponent(selectedDsItem.ItemCode)}/dead-stock?subCode=${encodeURIComponent(selectedDsItem.SubCode || '')}`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subCode: selectedDsItem.SubCode || '',
+          deadStockType: dsModalType,
+          deadStockDays: dsModalType === 'Auto' ? parseInt(dsModalDays, 10) : 0,
+          isDeadStock: dsModalType === 'Manual' ? 1 : 0
+        })
+      });
+
+      if (res.ok) {
+        handleCloseDsModal();
+        await fetchDeadStock();
+      } else {
+        const err = await res.json();
+        alert(err.message || 'Failed to update dead stock status');
+      }
+    } catch (err) {
+      console.error('Error saving dead stock modal:', err);
+      alert('Network error updating dead stock status');
+    } finally {
+      setDsModalLoading(false);
+    }
+  };
+
+  const handleExportDeadStockExcel = () => {
+    const rows = sortedDeadStock.map(row => ({
+      'Item Code': row.ItemCode,
+      'Sub Code': row.SubCode || '-',
+      'Item Name': row.ItemName,
+      'Category': row.Category || 'Inhouse',
+      'Warehouse': row.WarehouseNo || '-',
+      'Location': row.Location || '-',
+      'Unit': row.Unit || 'PCS',
+      'Main Stock': Number(row.MainStock || 0),
+      'Dept Stock': Number(row.DeptStock || 0),
+      'Jobwork Stock': Number(row.JwStock || 0),
+      'Total Stock': Number(row.TotalStock || 0),
+      'Costing (Rs.)': Number(row.Costing || 0),
+      'Dead Stock Valuation (Rs.)': Number(row.DeadStockValuation || 0),
+      'Declaration Type': row.EffectiveDeadStockType,
+      'Threshold (Days)': row.DeadStockDays || '-',
+      'Last Movement Date': row.LastMovementDate || 'Never Moved',
+      'Days Inactive': row.DaysInactive !== null ? row.DaysInactive : 'Never Moved',
+      'Reason': row.DeadStockReason
+    }));
+
+    if (rows.length > 0) {
+      rows.push({
+        'Item Code': 'Total:',
+        'Sub Code': '',
+        'Item Name': '',
+        'Category': '',
+        'Warehouse': '',
+        'Location': '',
+        'Unit': '',
+        'Main Stock': '',
+        'Dept Stock': '',
+        'Jobwork Stock': '',
+        'Total Stock': deadStockTotals.totalQty,
+        'Costing (Rs.)': '',
+        'Dead Stock Valuation (Rs.)': deadStockTotals.totalValuation,
+        'Declaration Type': '',
+        'Threshold (Days)': '',
+        'Last Movement Date': '',
+        'Days Inactive': '',
+        'Reason': ''
+      });
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Dead Stock');
+    XLSX.writeFile(workbook, 'Dead_Stock_Report.xlsx');
+  };
+
+  const handleExportDeadStockPDF = (action = 'download') => {
+    const doc = new jsPDF('landscape');
+    
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 59, 102);
+    doc.text(localUser.companyName || 'FRM Enterprise', 14, 18);
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80);
+    doc.text('Dead Stock Inactivity & Valuation Report', 14, 26);
+    
+    doc.setFontSize(8.5);
+    doc.text(`Generated on: ${new Date().toLocaleString('en-GB')}`, 14, 32);
+    
+    doc.setDrawColor(15, 59, 102);
+    doc.setLineWidth(0.5);
+    doc.line(14, 36, 280, 36);
+
+    let startY = 40;
+
+    // KPI Summary Header
+    doc.setFillColor(254, 242, 242);
+    doc.roundedRect(14, startY, 266, 10, 1.5, 1.5, 'F');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+
+    doc.setTextColor(185, 28, 28);
+    doc.text(`TOTAL DEAD STOCK ITEMS: ${deadStockTotals.count}`, 18, startY + 6.5);
+
+    doc.setTextColor(15, 59, 102);
+    doc.text(`TOTAL UNITS: ${Number(deadStockTotals.totalQty || 0).toLocaleString()} PCS`, 90, startY + 6.5);
+
+    doc.setTextColor(194, 65, 12);
+    doc.text(`VALUATION: Rs. ${Number(deadStockTotals.totalValuation || 0).toLocaleString()}`, 155, startY + 6.5);
+
+    doc.setTextColor(71, 85, 105);
+    doc.text(`AUTO: ${deadStockTotals.autoCount} | MANUAL: ${deadStockTotals.manualCount}`, 225, startY + 6.5);
+
+    startY += 14;
+
+    const head = [['Code', 'SubCode', 'Item Name', 'Category', 'Warehouse', 'Unit', 'Total Stock', 'Costing', 'Valuation (Rs.)', 'Type', 'Last Movement', 'Inactive Days']];
+    
+    const tableData = [];
+    sortedDeadStock.forEach(row => {
+      tableData.push([
+        row.ItemCode,
+        row.SubCode || '-',
+        row.ItemName || '-',
+        row.Category || '-',
+        row.WarehouseNo ? `${row.WarehouseNo} ${row.Location ? `(${row.Location})` : ''}` : '-',
+        row.Unit || 'PCS',
+        Number(row.TotalStock || 0),
+        Number(row.Costing || 0).toFixed(2),
+        Number(row.DeadStockValuation || 0).toFixed(2),
+        row.EffectiveDeadStockType,
+        row.LastMovementDate || 'Never Moved',
+        row.DaysInactive !== null ? `${row.DaysInactive} d` : 'Never'
+      ]);
+    });
+
+    if (sortedDeadStock.length > 0) {
+      tableData.push([
+        { content: 'Total:', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
+        { content: Number(deadStockTotals.totalQty || 0), styles: { fontStyle: 'bold', textColor: [185, 28, 28] } },
+        { content: '', styles: { fontStyle: 'bold' } },
+        { content: Number(deadStockTotals.totalValuation || 0).toFixed(2), styles: { fontStyle: 'bold', textColor: [194, 65, 12] } },
+        { content: '', colSpan: 3, styles: {} }
+      ]);
+    }
+
+    autoTable(doc, {
+      head: head,
+      body: tableData,
+      startY: startY,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold' },
+      margin: { top: startY }
+    });
+
+    const filename = `dead_stock_report_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    if (action === 'share') {
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const reportName = filename.replace('.pdf', '');
+      
+      fetch(`${baseUrl}/auth/share-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64, reportName })
+      })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to share PDF');
+        return res.json();
+      })
+      .then(data => {
+        alert(data.message || 'PDF saved and highlighted in explorer');
+      })
+      .catch(err => {
+        console.error('Error sharing PDF:', err);
+        alert('Error sharing PDF: ' + err.message);
+      });
+    } else if (action === 'preview') {
+      const pdfBlob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      setPreviewUrl(blobUrl);
+      setPreviewOpen(true);
+    } else {
+      doc.save(filename);
+    }
+  };
+
+  const DsSortableTableCell = ({ label, property, align = 'left', width }) => (
+    <TableCell align={align} sx={{ backgroundColor: '#0F3B66', width, py: 0.6 }}>
+      <TableSortLabel
+        active={deadStockOrderBy === property}
+        direction={deadStockOrderBy === property ? deadStockOrder : 'asc'}
+        onClick={() => {
+          const isAsc = deadStockOrderBy === property && deadStockOrder === 'asc';
+          setDeadStockOrder(isAsc ? 'desc' : 'asc');
+          setDeadStockOrderBy(property);
+        }}
+        sx={{ color: '#ffffff !important', fontWeight: 'bold', fontSize: '0.82rem', '& .MuiTableSortLabel-icon': { color: '#ffffff !important' } }}
+      >
+        {label}
+      </TableSortLabel>
+    </TableCell>
+  );
+
   const SortableTableCell = ({ label, property, align = 'left', width }) => (
     <TableCell align={align} sx={{ backgroundColor: '#0F3B66', width, py: 0.6 }}>
       <TableSortLabel
@@ -762,38 +1125,110 @@ const StockReportContent = () => {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 1. Header & Actions */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1.5 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', letterSpacing: -0.5 }}>
-            Stock Report
+            {mainTab === 0 ? 'Stock Report' : 'Dead Stock Report'}
           </Typography>
           <Typography variant="caption" sx={{ color: '#64748b' }}>
-            {reportType === 'combined' 
-              ? 'Multi-location real-time stock across Main Store, Manufacturing Departments & Job Work Vendors'
-              : reportType === 'item' 
-                ? 'Master Item stock register' 
-                : reportType === 'department'
-                  ? 'In-process stock allocated across factory departments'
-                  : 'Pending material outstanding stock at outside Job Work vendors'}
+            {mainTab === 0 
+              ? (reportType === 'combined' 
+                  ? 'Multi-location real-time stock across Main Store, Manufacturing Departments & Job Work Vendors'
+                  : reportType === 'item' 
+                    ? 'Master Item stock register' 
+                    : reportType === 'department'
+                      ? 'In-process stock allocated across factory departments'
+                      : 'Pending material outstanding stock at outside Job Work vendors')
+              : 'Audit of non-moving inventory, auto-detected inactive stock items & manually declared dead stock'}
           </Typography>
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-          <Button variant="outlined" startIcon={<TableView />} onClick={handleExportExcel} sx={{ color: '#107c41', borderColor: '#107c41', textTransform: 'none', fontWeight: 600 }}>
-            Export Excel
-          </Button>
-          <Button variant="outlined" startIcon={<Visibility />} onClick={() => handleExportPDF('preview')} sx={{ color: '#0F3B66', borderColor: '#0F3B66', textTransform: 'none', fontWeight: 600 }}>
-            Preview PDF
-          </Button>
-          <Button variant="outlined" startIcon={<PictureAsPdf />} onClick={() => handleExportPDF('download')} sx={{ color: '#d32f2f', borderColor: '#d32f2f', textTransform: 'none', fontWeight: 600 }}>
-            Export PDF
-          </Button>
-          <Button variant="contained" startIcon={<Share />} onClick={() => handleExportPDF('share')} sx={{ bgcolor: 'secondary.main', textTransform: 'none', fontWeight: 600 }}>
-            Share
-          </Button>
+          {mainTab === 0 ? (
+            <>
+              <Button variant="outlined" startIcon={<TableView />} onClick={handleExportExcel} sx={{ color: '#107c41', borderColor: '#107c41', textTransform: 'none', fontWeight: 600 }}>
+                Export Excel
+              </Button>
+              <Button variant="outlined" startIcon={<Visibility />} onClick={() => handleExportPDF('preview')} sx={{ color: '#0F3B66', borderColor: '#0F3B66', textTransform: 'none', fontWeight: 600 }}>
+                Preview PDF
+              </Button>
+              <Button variant="outlined" startIcon={<PictureAsPdf />} onClick={() => handleExportPDF('download')} sx={{ color: '#d32f2f', borderColor: '#d32f2f', textTransform: 'none', fontWeight: 600 }}>
+                Export PDF
+              </Button>
+              <Button variant="contained" startIcon={<Share />} onClick={() => handleExportPDF('share')} sx={{ bgcolor: 'secondary.main', textTransform: 'none', fontWeight: 600 }}>
+                Share
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchDeadStock} sx={{ color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600 }}>
+                Refresh
+              </Button>
+              <Button variant="outlined" startIcon={<TableView />} onClick={handleExportDeadStockExcel} sx={{ color: '#107c41', borderColor: '#107c41', textTransform: 'none', fontWeight: 600 }}>
+                Export Excel
+              </Button>
+              <Button variant="outlined" startIcon={<Visibility />} onClick={() => handleExportDeadStockPDF('preview')} sx={{ color: '#0F3B66', borderColor: '#0F3B66', textTransform: 'none', fontWeight: 600 }}>
+                Preview PDF
+              </Button>
+              <Button variant="outlined" startIcon={<PictureAsPdf />} onClick={() => handleExportDeadStockPDF('download')} sx={{ color: '#d32f2f', borderColor: '#d32f2f', textTransform: 'none', fontWeight: 600 }}>
+                Export PDF
+              </Button>
+              <Button variant="contained" startIcon={<Share />} onClick={() => handleExportDeadStockPDF('share')} sx={{ bgcolor: 'secondary.main', textTransform: 'none', fontWeight: 600 }}>
+                Share
+              </Button>
+            </>
+          )}
         </Box>
       </Box>
 
+      {/* Main Tabs Navigation: Live Stock Register vs Dead Stock Report */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs 
+          value={mainTab} 
+          onChange={(e, val) => setMainTab(val)}
+          sx={{
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              py: 1,
+              minHeight: 44
+            }
+          }}
+        >
+          <Tab 
+            icon={<Inventory sx={{ fontSize: 18 }} />} 
+            iconPosition="start" 
+            label="Live Stock Register" 
+          />
+          <Tab 
+            icon={<WarningAmber sx={{ fontSize: 18, color: '#d97706' }} />} 
+            iconPosition="start" 
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <span>Dead Stock Report</span>
+                {deadStockTotals.count > 0 && (
+                  <Chip 
+                    label={deadStockTotals.count} 
+                    size="small" 
+                    sx={{ 
+                      bgcolor: '#fee2e2', 
+                      color: '#991b1b', 
+                      fontWeight: 800, 
+                      height: 20, 
+                      fontSize: '0.7rem' 
+                    }} 
+                  />
+                )}
+              </Box>
+            } 
+          />
+        </Tabs>
+      </Box>
+
+      {/* TAB 0: LIVE STOCK REGISTER */}
+      {mainTab === 0 && (
+        <>
       {/* 2. KPI Summary Banner (Combined View) */}
       {reportType === 'combined' && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -1658,19 +2093,417 @@ const StockReportContent = () => {
           )}
         </TableContainer>
       </Box>
+      </>
+      )}
+
+      {/* TAB 1: DEAD STOCK REPORT */}
+      {mainTab === 1 && (
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* KPI Summary Banner */}
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {/* Card 1: Dead Stock Items */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderRadius: 2, border: '1px solid #fecaca', bgcolor: '#fff1f2', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 700, textTransform: 'uppercase' }}>
+                      Dead Stock Items
+                    </Typography>
+                    <WarningAmber sx={{ color: '#dc2626', fontSize: 18 }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#7f1d1d', my: 0.2 }}>
+                    {deadStockTotals.count} <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>ITEMS</span>
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 600 }}>
+                    {deadStockTotals.autoCount} Auto Detected • {deadStockTotals.manualCount} Manual
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Card 2: Dead Stock Quantity */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderRadius: 2, border: '1px solid #fed7aa', bgcolor: '#fff7ed', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" sx={{ color: '#9a3412', fontWeight: 700, textTransform: 'uppercase' }}>
+                      Dead Stock Units
+                    </Typography>
+                    <Layers sx={{ color: '#ea580c', fontSize: 18 }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#7c2d12', my: 0.2 }}>
+                    {Number(deadStockTotals.totalQty || 0).toLocaleString()} <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>UNITS</span>
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#f97316', fontWeight: 600 }}>
+                    Total Inactive Inventory
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Card 3: Dead Stock Valuation */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderRadius: 2, border: '2px solid #0F3B66', bgcolor: '#f8fafc', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" sx={{ color: '#0F3B66', fontWeight: 800, textTransform: 'uppercase' }}>
+                      Blocked Capital (Valuation)
+                    </Typography>
+                    <Business sx={{ color: '#0F3B66', fontSize: 18 }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 900, color: '#0F3B66', my: 0.2 }}>
+                    ₹{Number(deadStockTotals.totalValuation || 0).toLocaleString()}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#b45309', fontWeight: 700 }}>
+                    Based on Master Costing Rate
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Card 4: Detection Criteria */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ borderRadius: 2, border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, textTransform: 'uppercase' }}>
+                      Inactivity Thresholds
+                    </Typography>
+                    <AccessTime sx={{ color: '#64748b', fontSize: 18 }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#334155', my: 0.2 }}>
+                    {deadStockTotals.autoCount} Auto / {deadStockTotals.manualCount} Manual
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                    Configured in Item Master
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Filter Controls Toolbar */}
+          <Paper sx={{ p: 1.8, mb: 2, borderRadius: 2, border: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  placeholder="Search dead stock, subcode, warehouse..."
+                  value={deadStockSearch}
+                  onChange={(e) => setDeadStockSearch(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon color="action" />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{ width: { xs: '100%', sm: 260 } }}
+                />
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    value={deadStockTypeFilter}
+                    label="Type"
+                    onChange={(e) => setDeadStockTypeFilter(e.target.value)}
+                  >
+                    <MenuItem value="All">All Types</MenuItem>
+                    <MenuItem value="Auto">⚡ Auto Inactivity</MenuItem>
+                    <MenuItem value="Manual">🔴 Manual Declared</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel>Category</InputLabel>
+                  <Select
+                    value={deadStockCategoryFilter}
+                    label="Category"
+                    onChange={(e) => setDeadStockCategoryFilter(e.target.value)}
+                  >
+                    <MenuItem value="All">All Categories</MenuItem>
+                    <MenuItem value="SubContract">SubContract</MenuItem>
+                    <MenuItem value="Inhouse">Inhouse</MenuItem>
+                    <MenuItem value="BOP">BOP</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Warehouse</InputLabel>
+                  <Select
+                    value={deadStockWarehouseFilter}
+                    label="Warehouse"
+                    onChange={(e) => setDeadStockWarehouseFilter(e.target.value)}
+                  >
+                    {uniqueDeadStockWarehouses.map(wh => (
+                      <MenuItem key={wh} value={wh}>{wh === 'All' ? 'All Warehouses' : wh}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#475569' }}>
+                Showing <strong>{filteredDeadStock.length}</strong> items
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* Dead Stock Table */}
+          <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', flexGrow: 1 }}>
+            {deadStockLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
+                <CircularProgress size={36} />
+              </Box>
+            ) : (
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <DsSortableTableCell label="Code" property="ItemCode" width="100px" />
+                    <DsSortableTableCell label="Sub Code" property="SubCode" width="90px" />
+                    <DsSortableTableCell label="Item Name" property="ItemName" />
+                    <TableCell sx={{ backgroundColor: '#0F3B66', color: '#fff', fontWeight: 'bold', fontSize: '0.82rem', py: 0.6 }}>Category</TableCell>
+                    <DsSortableTableCell label="Warehouse" property="WarehouseNo" />
+                    <TableCell sx={{ backgroundColor: '#0F3B66', color: '#fff', fontWeight: 'bold', fontSize: '0.82rem', py: 0.6 }}>Location</TableCell>
+                    <TableCell sx={{ backgroundColor: '#0F3B66', color: '#fff', fontWeight: 'bold', fontSize: '0.82rem', py: 0.6 }} align="center">Unit</TableCell>
+                    <DsSortableTableCell label="Main Stock" property="MainStock" align="right" />
+                    <DsSortableTableCell label="Total Stock" property="TotalStock" align="right" />
+                    <DsSortableTableCell label="Costing (₹)" property="Costing" align="right" />
+                    <DsSortableTableCell label="Valuation (₹)" property="DeadStockValuation" align="right" />
+                    <TableCell sx={{ backgroundColor: '#0F3B66', color: '#fff', fontWeight: 'bold', fontSize: '0.82rem', py: 0.6 }}>Declaration</TableCell>
+                    <TableCell sx={{ backgroundColor: '#0F3B66', color: '#fff', fontWeight: 'bold', fontSize: '0.82rem', py: 0.6 }} align="center">Threshold</TableCell>
+                    <DsSortableTableCell label="Last Movement" property="LastMovementDate" />
+                    <DsSortableTableCell label="Inactive" property="DaysInactive" align="center" />
+                    <TableCell sx={{ backgroundColor: '#0F3B66', color: '#fff', fontWeight: 'bold', fontSize: '0.82rem', py: 0.6 }}>Reason / Condition</TableCell>
+                    <TableCell sx={{ backgroundColor: '#0F3B66', color: '#fff', fontWeight: 'bold', fontSize: '0.82rem', py: 0.6 }} align="center">Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedDeadStock
+                    .slice(dsPage * dsRowsPerPage, dsPage * dsRowsPerPage + dsRowsPerPage)
+                    .map((row) => {
+                      const isManual = row.EffectiveDeadStockType === 'Manual';
+                      const categoryBg = row.Category === 'SubContract' ? '#fff7ed' : (row.Category === 'BOP' ? '#ecfeff' : '#eff6ff');
+                      const categoryColor = row.Category === 'SubContract' ? '#ea580c' : (row.Category === 'BOP' ? '#0891b2' : '#0F3B66');
+
+                      return (
+                        <TableRow key={`${row.ItemCode}__${row.SubCode || ''}`} hover sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                          <TableCell sx={{ fontWeight: 700, color: '#0F3B66' }}>{row.ItemCode}</TableCell>
+                          <TableCell sx={{ color: row.SubCode ? '#334155' : '#94a3b8', fontWeight: 500 }}>
+                            {row.SubCode || '-'}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{row.ItemName}</TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={row.Category || 'Inhouse'} 
+                              size="small" 
+                              sx={{ 
+                                bgcolor: categoryBg, 
+                                color: categoryColor, 
+                                fontWeight: 700, 
+                                fontSize: '0.7rem',
+                                height: 20
+                              }} 
+                            />
+                          </TableCell>
+                          <TableCell sx={{ color: row.WarehouseNo ? '#1e293b' : '#94a3b8' }}>{row.WarehouseNo || '-'}</TableCell>
+                          <TableCell sx={{ color: row.Location ? '#1e293b' : '#94a3b8' }}>{row.Location || '-'}</TableCell>
+                          <TableCell align="center">{row.Unit || 'PCS'}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>{Number(row.MainStock || 0).toLocaleString()}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, color: '#b91c1c' }}>{Number(row.TotalStock || 0).toLocaleString()}</TableCell>
+                          <TableCell align="right">₹{Number(row.Costing || 0).toLocaleString()}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 800, color: '#c2410c' }}>
+                            ₹{Number(row.DeadStockValuation || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            {isManual ? (
+                              <Chip 
+                                label="Manual" 
+                                size="small" 
+                                sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 800, fontSize: '0.7rem', height: 22 }} 
+                              />
+                            ) : (
+                              <Chip 
+                                label={`Auto (${row.DeadStockDays || 0}d)`} 
+                                size="small" 
+                                sx={{ bgcolor: '#fef3c7', color: '#92400e', fontWeight: 800, fontSize: '0.7rem', height: 22 }} 
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell align="center">
+                            {row.DeadStockDays > 0 ? `${row.DeadStockDays} days` : '-'}
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                            {row.LastMovementDate || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Never moved</span>}
+                          </TableCell>
+                          <TableCell align="center">
+                            {row.DaysInactive !== null ? (
+                              <Chip 
+                                label={`${row.DaysInactive} days`} 
+                                size="small" 
+                                sx={{ 
+                                  bgcolor: row.DaysInactive > 90 ? '#fee2e2' : '#fef3c7', 
+                                  color: row.DaysInactive > 90 ? '#991b1b' : '#92400e', 
+                                  fontWeight: 700,
+                                  fontSize: '0.72rem',
+                                  height: 20
+                                }} 
+                              />
+                            ) : (
+                              <Chip 
+                                label="Never moved" 
+                                size="small" 
+                                sx={{ bgcolor: '#f1f5f9', color: '#64748b', fontSize: '0.7rem', height: 20 }} 
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: '0.75rem', color: '#475569' }}>
+                            {row.DeadStockReason}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Modify Dead Stock declaration">
+                              <IconButton size="small" color="primary" onClick={() => handleOpenDsModal(row)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+
+                  {sortedDeadStock.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={17} align="center" sx={{ py: 4, color: '#64748b' }}>
+                        No dead stock items found matching your filters. Configure inactivity days in Item Master to auto-flag items or declare them manually.
+                      </TableCell>
+                    </TableRow>
+                  )}
+
+                  {/* Dead Stock Summary Row */}
+                  {sortedDeadStock.length > 0 && (
+                    <TableRow sx={{ bgcolor: '#f8fafc', borderTop: '2px solid #0F3B66' }}>
+                      <TableCell colSpan={7} sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0F3B66' }}>
+                        Total Dead Stock:
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0F3B66' }}>
+                        {sortedDeadStock.reduce((acc, r) => acc + Number(r.MainStock || 0), 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#b91c1c' }}>
+                        {Number(deadStockTotals.totalQty || 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>-</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#c2410c' }}>
+                        ₹{Number(deadStockTotals.totalValuation || 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell colSpan={6}></TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </TableContainer>
+
+          <TablePagination
+            rowsPerPageOptions={[25, 50, 100]}
+            component="div"
+            count={sortedDeadStock.length}
+            rowsPerPage={dsRowsPerPage}
+            page={dsPage}
+            onPageChange={(e, newPage) => setDsPage(newPage)}
+            onRowsPerPageChange={(e) => {
+              setDsRowsPerPage(parseInt(e.target.value, 10));
+              setDsPage(0);
+            }}
+          />
+
+          {/* Quick Edit Dead Stock Modal */}
+          <Dialog open={dsModalOpen} onClose={handleCloseDsModal} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5 }}>
+              Dead Stock Settings
+            </DialogTitle>
+            <DialogContent sx={{ pt: 2.5 }}>
+              {selectedDsItem && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#f1f5f9', borderRadius: 1.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                      {selectedDsItem.ItemName}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>
+                      Code: {selectedDsItem.ItemCode} {selectedDsItem.SubCode ? `/ ${selectedDsItem.SubCode}` : ''} | Current Stock: {selectedDsItem.TotalStock || 0} {selectedDsItem.Unit || 'PCS'}
+                    </Typography>
+                  </Box>
+
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Declaration Mode</InputLabel>
+                    <Select
+                      value={dsModalType}
+                      label="Declaration Mode"
+                      onChange={(e) => setDsModalType(e.target.value)}
+                    >
+                      <MenuItem value="None">
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>
+                          🟢 None (Remove from Dead Stock)
+                        </Typography>
+                      </MenuItem>
+                      <MenuItem value="Auto">
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706' }}>
+                          ⚡ Auto (No movement in X days)
+                        </Typography>
+                      </MenuItem>
+                      <MenuItem value="Manual">
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#dc2626' }}>
+                          🔴 Manual (Declare as Dead Stock)
+                        </Typography>
+                      </MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  {dsModalType === 'Auto' && (
+                    <TextField
+                      label="Inactivity Threshold Days *"
+                      type="number"
+                      size="small"
+                      fullWidth
+                      placeholder="e.g. 30, 60, 90, 180"
+                      value={dsModalDays}
+                      onChange={(e) => setDsModalDays(e.target.value)}
+                      helperText="Classified as dead stock if not moved for this many days"
+                      inputProps={{ min: 1 }}
+                    />
+                  )}
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e2e8f0' }}>
+              <Button onClick={handleCloseDsModal} color="inherit" sx={{ textTransform: 'none' }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveDsModal}
+                variant="contained"
+                disabled={dsModalLoading}
+                sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' }, textTransform: 'none', fontWeight: 600 }}
+              >
+                {dsModalLoading ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Box>
+      )}
     
       <PdfPreviewModal 
         open={previewOpen} 
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
         title={
-          reportType === 'combined' 
-            ? 'Combined Stock Preview' 
-            : reportType === 'item' 
-              ? 'Item Stock Preview' 
-              : reportType === 'department' 
-                ? 'Department Stock Preview' 
-                : 'Job Work Stock Preview'
+          mainTab === 1
+            ? 'Dead Stock Report Preview'
+            : reportType === 'combined' 
+              ? 'Combined Stock Preview' 
+              : reportType === 'item' 
+                ? 'Item Stock Preview' 
+                : reportType === 'department' 
+                  ? 'Department Stock Preview' 
+                  : 'Job Work Stock Preview'
         } 
       />
     </Box>
