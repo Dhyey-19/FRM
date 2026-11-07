@@ -154,7 +154,7 @@ const DashboardHome = () => {
     },
     {
       title: 'Total Turnover',
-      subtitle: 'Outward Revenue',
+      subtitle: 'Sales Revenue',
       value: formatCurrency(kpis?.totalTurnover || 0),
       icon: <ValueIcon sx={{ fontSize: 26 }} />,
       color: '#f59e0b', // Amber
@@ -1076,11 +1076,11 @@ const DashboardHome = () => {
 
       {/* Row 3: Analytics Section - Trends & Top Parties */}
       <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
-        {/* Monthly Outward Chart Area */}
+        {/* Monthly Sales Chart Area */}
         <Grid item xs={12} lg={8}>
           <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
-              Monthly Outward Trends (Last 6 Months)
+              Monthly Sales Trends (Last 6 Months)
             </Typography>
             
             {loading ? (
@@ -1116,18 +1116,25 @@ const DashboardHome = () => {
               </Box>
             ) : (
               <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 8 }}>
-                No recent outward data available.
+                No recent sales data available.
               </Typography>
             )}
           </Paper>
         </Grid>
 
-        {/* Top 5 Party Area */}
+        {/* Top 5 Party Area - Sales Authority */}
         <Grid item xs={12} lg={4}>
           <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
-              Top 5 Parties by Outward
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                Top 5 Parties by Sales
+              </Typography>
+              <Chip
+                label="Sales Authority"
+                size="small"
+                sx={{ bgcolor: '#eff6ff', color: '#1e40af', fontWeight: 700, fontSize: '0.7rem', height: 22 }}
+              />
+            </Box>
             
             {loading ? (
               <Box>
