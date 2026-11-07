@@ -19,3 +19,4 @@ CREATE TABLE IF NOT EXISTS "EInvoiceSettings" (
 INSERT INTO "EInvoiceSettings" ("Id", "IsEnabled", "Environment", "Gstin", "ClientId", "ClientSecret", "Username", "Password", "BaseUrl")
 SELECT 1, 1, 'sandbox', '24AAACF1234K1Z5', '', '', '', '', 'https://einv-apisandbox.nic.in/eivital/v1.03'
 WHERE NOT EXISTS (SELECT 1 FROM "EInvoiceSettings");
+

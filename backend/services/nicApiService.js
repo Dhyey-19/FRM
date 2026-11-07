@@ -384,3 +384,4 @@ class NicApiService {
 }
 
 module.exports = new NicApiService();
+

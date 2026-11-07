@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Box, Typography, Button, Tabs, Tab, TextField, Alert,
   Chip, CircularProgress, Divider, Paper, IconButton,
-  Tooltip, Grid, FormControl, InputLabel, Select, MenuItem,
-  RadioGroup, FormControlLabel, Radio
+  Grid, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -17,39 +17,31 @@ import {
   Error as ErrorIcon,
   OpenInNew as OpenInNewIcon,
   Cancel as CancelIcon,
-  AssignmentTurnedIn as VerifiedIcon,
   ElectricBolt as BoltIcon,
-  Settings as SettingsIcon,
   CloudDone as CloudDoneIcon,
-  Send as SendIcon,
-  Key as KeyIcon,
-  Security as SecurityIcon,
-  Refresh as RefreshIcon
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import QRCode from 'qrcode';
 
 const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
-  const [activeTab, setActiveTab] = useState(0); // 0: 1-Click Auto, 1: Manual JSON Export/Import, 2: IRN Details & QR, 3: Credentials Settings
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(0); // 0: 1-Click Auto, 1: Manual JSON Export/Import, 2: IRN Details & QR
   const [loading, setLoading] = useState(false);
   const [autoGenerating, setAutoGenerating] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   
   const [exportData, setExportData] = useState(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Settings State
+  // Settings State loaded from Company Profile / backend
   const [settings, setSettings] = useState({
     Environment: 'simulation',
     Gstin: '',
     ClientId: '',
-    ClientSecret: '',
     Username: '',
-    Password: '',
-    BaseUrl: 'https://einv-apisandbox.nic.in/eivital/v1.03'
+    BaseUrl: ''
   });
-  const [settingsStatus, setSettingsStatus] = useState(null);
 
   // Manual Import Form State
   const [importIrn, setImportIrn] = useState('');
@@ -69,14 +61,13 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
   const outwardNo = invoice?.OUTWARDNO || invoice?.outwardNo || '';
   const currentStatus = invoice?.EInvoiceStatus || invoice?.einvoiceStatus || (invoice?.IRN ? 'Generated' : 'Pending');
 
-  // Load Invoice data and Settings whenever modal opens
+  // Load Invoice data and Company Profile Settings whenever modal opens
   useEffect(() => {
     if (open && invoiceId) {
       fetchEInvoiceJSON();
       fetchSettings();
       setErrorMessage('');
       setSuccessMessage('');
-      setSettingsStatus(null);
 
       // If invoice already has IRN, default to Details tab (2), otherwise 1-Click Auto tab (0)
       if (invoice?.IRN && invoice?.EInvoiceStatus !== 'Cancelled') {
@@ -145,7 +136,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
     }
   };
 
-  // 1-Click Automatic Generation via NIC API
+  // 1-Click Automatic Generation using Company Profile credentials
   const handleAutoGenerateIRN = async () => {
     if (!invoiceId) return;
     setAutoGenerating(true);
@@ -186,55 +177,6 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
       setErrorMessage(err.message || 'Network error communicating with NIC e-Invoice Gateway');
     } finally {
       setAutoGenerating(false);
-    }
-  };
-
-  // Save Settings
-  const handleSaveSettings = async () => {
-    setLoading(true);
-    setErrorMessage('');
-    setSuccessMessage('');
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to save settings');
-      setSuccessMessage('e-Invoice API configuration saved successfully!');
-      fetchSettings();
-    } catch (err) {
-      setErrorMessage(err.message || 'Failed to save settings');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Test Connection
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    setSettingsStatus(null);
-    setErrorMessage('');
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/einvoice/test-connection`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Gateway connection failed');
-      setSettingsStatus({
-        success: true,
-        message: data.message || 'Connection verified successfully!'
-      });
-    } catch (err) {
-      setSettingsStatus({
-        success: false,
-        message: err.message || 'Gateway connection error.'
-      });
-    } finally {
-      setTestingConnection(false);
     }
   };
 
@@ -419,12 +361,6 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
               sx={{ fontWeight: 600, textTransform: 'none' }} 
             />
           )}
-          <Tab 
-            icon={<SettingsIcon sx={{ fontSize: 18 }} />} 
-            iconPosition="start" 
-            label="NIC Credentials & Settings" 
-            sx={{ fontWeight: 600, textTransform: 'none', ml: 'auto' }} 
-          />
         </Tabs>
       </Box>
 
@@ -443,16 +379,16 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
         {/* TAB 0: 1-CLICK AUTOMATIC NIC IRP GENERATION */}
         {activeTab === 0 && (
           <Box>
-            {/* Status & Gateway Connection Badge */}
+            {/* Status & Gateway Connection Badge (Configured Once in Company Profile) */}
             <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: '#f0fdf4', borderColor: '#bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <CloudDoneIcon color="success" sx={{ fontSize: 28 }} />
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#166534' }}>
-                    NIC IRP Gateway Connected ({settings.Environment === 'simulation' ? 'Testing Simulation Engine' : settings.Environment === 'sandbox' ? 'NIC Sandbox Portal' : 'Live Production einvoice1.gst.gov.in'})
+                    NIC Gateway Active via Company Profile ({settings.Environment === 'simulation' ? 'Simulation Engine' : settings.Environment === 'sandbox' ? 'NIC Sandbox' : 'Live einvoice1.gst.gov.in'})
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#15803d' }}>
-                    GSTIN: <strong>{settings.Gstin || '24AAACF1234K1Z5'}</strong> {settings.Username ? `| User: ${settings.Username}` : ''}
+                    GSTIN: <strong>{settings.Gstin || '24AAACF1234K1Z5'}</strong> {settings.Username ? `| API User: ${settings.Username}` : ''}
                   </Typography>
                 </Box>
               </Box>
@@ -461,10 +397,13 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                 variant="outlined"
                 color="success"
                 startIcon={<SettingsIcon />}
-                onClick={() => setActiveTab(3)}
+                onClick={() => {
+                  onClose();
+                  navigate('/dashboard/company-profile');
+                }}
                 sx={{ textTransform: 'none', fontWeight: 600 }}
               >
-                Change Credentials
+                Configure in Company Profile
               </Button>
             </Paper>
 
@@ -500,7 +439,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                 {exportData.warnings && exportData.warnings.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="caption" sx={{ color: '#d97706', fontWeight: 600, display: 'block' }}>
-                      Auto-Applied Notice:
+                      Notice:
                     </Typography>
                     {exportData.warnings.map((w, idx) => (
                       <Typography key={idx} variant="caption" sx={{ color: '#b45309', display: 'block' }}>
@@ -555,7 +494,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                     {autoGenerating ? 'Connecting to NIC IRP & Signing IRN...' : '⚡ 1-Click Generate e-Invoice'}
                   </Button>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
-                    Connects directly to the government IRP, encrypts with RSA & AES-256, generates 64-char IRN hash, and saves scannable QR Code automatically.
+                    Uses credentials saved in Company Profile to authenticate with the government gateway and retrieve the official IRN & QR Code automatically.
                   </Typography>
                 </Box>
               )}
@@ -790,132 +729,6 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                 </Button>
               </Box>
             )}
-          </Box>
-        )}
-
-        {/* TAB 3: NIC IRP CREDENTIALS & SETTINGS */}
-        {activeTab === 3 && (
-          <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
-              Official NIC IRP Gateway Configuration
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-              Enter the credentials generated from <strong>einvoice1.gst.gov.in</strong> under API Registration.
-            </Typography>
-
-            {settingsStatus && (
-              <Alert severity={settingsStatus.success ? 'success' : 'error'} sx={{ mb: 2 }}>
-                {settingsStatus.message}
-              </Alert>
-            )}
-
-            <Paper variant="outlined" sx={{ p: 2.5, mb: 3 }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1 }}>
-                SELECT ENVIRONMENT:
-              </Typography>
-              <RadioGroup
-                row
-                value={settings.Environment}
-                onChange={(e) => {
-                  const env = e.target.value;
-                  let url = settings.BaseUrl;
-                  if (env === 'sandbox') url = 'https://einv-apisandbox.nic.in/eivital/v1.03';
-                  if (env === 'production') url = 'https://api.einvoice1.gst.gov.in/eivital/v1.03';
-                  setSettings(prev => ({ ...prev, Environment: env, BaseUrl: url }));
-                }}
-                sx={{ mb: 2.5 }}
-              >
-                <FormControlLabel value="simulation" control={<Radio size="small" />} label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Simulation Engine (Safe Demo Testing)</Typography>} />
-                <FormControlLabel value="sandbox" control={<Radio size="small" />} label={<Typography variant="body2" sx={{ fontWeight: 600 }}>NIC Sandbox (Testing Portal)</Typography>} />
-                <FormControlLabel value="production" control={<Radio size="small" />} label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Live Production (einvoice1.gst.gov.in)</Typography>} />
-              </RadioGroup>
-
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="GSTIN"
-                    value={settings.Gstin}
-                    onChange={(e) => setSettings({ ...settings, Gstin: e.target.value.toUpperCase() })}
-                    helperText="15-digit Registered Taxpayer GSTIN"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="API Username"
-                    value={settings.Username}
-                    onChange={(e) => setSettings({ ...settings, Username: e.target.value })}
-                    helperText="Username created in e-Invoice portal API Registration"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="password"
-                    label="API Password"
-                    placeholder="Enter API password"
-                    value={settings.Password}
-                    onChange={(e) => setSettings({ ...settings, Password: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Client ID"
-                    value={settings.ClientId}
-                    onChange={(e) => setSettings({ ...settings, ClientId: e.target.value })}
-                    helperText="Issued by NIC upon API integration"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="password"
-                    label="Client Secret"
-                    placeholder="Enter Client Secret"
-                    value={settings.ClientSecret}
-                    onChange={(e) => setSettings({ ...settings, ClientSecret: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Gateway Base URL"
-                    value={settings.BaseUrl}
-                    onChange={(e) => setSettings({ ...settings, BaseUrl: e.target.value })}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-              <Button
-                variant="outlined"
-                color="info"
-                disabled={testingConnection}
-                startIcon={testingConnection ? <CircularProgress size={18} /> : <SecurityIcon />}
-                onClick={handleTestConnection}
-                sx={{ fontWeight: 600 }}
-              >
-                {testingConnection ? 'Testing Gateway Handshake...' : 'Test Connection'}
-              </Button>
-
-              <Button
-                variant="contained"
-                disabled={loading}
-                onClick={handleSaveSettings}
-                sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#0a2744' }, fontWeight: 700, px: 3 }}
-              >
-                Save Credentials
-              </Button>
-            </Box>
           </Box>
         )}
       </DialogContent>
