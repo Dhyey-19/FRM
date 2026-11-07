@@ -44,9 +44,11 @@ import {
   ShoppingCart,
   LocalShipping,
   CheckCircle,
-  Launch as LaunchIcon
+  Launch as LaunchIcon,
+  AccountTree as BOMIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import BOMShortfallModal from '../components/common/BOMShortfallModal';
 
 const DashboardHome = () => {
   const navigate = useNavigate();
@@ -59,6 +61,10 @@ const DashboardHome = () => {
 
   const [purchaseShortfallModalOpen, setPurchaseShortfallModalOpen] = useState(false);
   const [salesOrdersModalOpen, setSalesOrdersModalOpen] = useState(false);
+
+  // BOM Shortfall Breakup Drill-down states
+  const [selectedBOMItem, setSelectedBOMItem] = useState(null);
+  const [bomBreakupModalOpen, setBomBreakupModalOpen] = useState(false);
 
   const fetchCashBankLedgers = async () => {
     setCashBankDialogOpen(true);
@@ -1314,6 +1320,7 @@ const DashboardHome = () => {
                     <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>PI Pipeline</TableCell>
                     <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Shortfall Qty</TableCell>
                     <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Est. Value</TableCell>
+                    <TableCell align="center" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>BOM Breakup</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1335,6 +1342,36 @@ const DashboardHome = () => {
                       <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c' }}>
                         ₹{row.missingValue.toLocaleString('en-IN')}
                       </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="View BOM child parts stock availability & shortfall">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                            startIcon={<BOMIcon sx={{ fontSize: 14 }} />}
+                            onClick={() => {
+                              setSelectedBOMItem({
+                                itemCode: row.itemCode,
+                                subCode: row.subCode || '',
+                                itemName: row.itemName,
+                                shortfallQty: row.shortfallQty
+                              });
+                              setBomBreakupModalOpen(true);
+                            }}
+                            sx={{
+                              textTransform: 'none',
+                              fontWeight: 700,
+                              fontSize: '0.68rem',
+                              py: 0.2,
+                              px: 1,
+                              height: 24,
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            BOM Breakup
+                          </Button>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                   <TableRow sx={{ bgcolor: '#f8fafc', borderTop: '2px solid #0F3B66' }}>
@@ -1344,6 +1381,7 @@ const DashboardHome = () => {
                     <TableCell align="right" sx={{ fontWeight: 800, color: '#0284c7' }}>{(kpis?.purchaseAuthority?.pipelinePIQty || 0).toLocaleString()}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 900, color: '#dc2626' }}>{(kpis?.purchaseAuthority?.totalShortfallQty || 0).toLocaleString()}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 900, color: '#c2410c' }}>₹{Math.round(kpis?.purchaseAuthority?.totalMissingValue || 0).toLocaleString('en-IN')}</TableCell>
+                    <TableCell align="right">-</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -1359,7 +1397,7 @@ const DashboardHome = () => {
             endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
             onClick={() => {
               setPurchaseShortfallModalOpen(false);
-              navigate('/dashboard/reports/pending-po?tab=2');
+              navigate('/dashboard/reports/pending-po?tab=fulfillment');
             }}
             sx={{ bgcolor: '#ea580c', '&:hover': { bgcolor: '#c2410c' }, textTransform: 'none', fontWeight: 700 }}
           >
@@ -1403,6 +1441,7 @@ const DashboardHome = () => {
                     <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Ready to Dispatch</TableCell>
                     <TableCell align="right" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Shortfall Qty</TableCell>
                     <TableCell align="center" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>Status</TableCell>
+                    <TableCell align="center" sx={{ bgcolor: '#0F3B66', color: '#fff', fontWeight: 700 }}>BOM Breakup</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1437,6 +1476,40 @@ const DashboardHome = () => {
                           }} 
                         />
                       </TableCell>
+                      <TableCell align="center">
+                        {row.shortfallQty > 0 ? (
+                          <Tooltip title="View BOM child parts shortfall to fulfill this order">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              startIcon={<BOMIcon sx={{ fontSize: 14 }} />}
+                              onClick={() => {
+                                setSelectedBOMItem({
+                                  itemCode: row.itemCode,
+                                  subCode: row.subCode || '',
+                                  itemName: row.itemName,
+                                  shortfallQty: row.shortfallQty
+                                });
+                                setBomBreakupModalOpen(true);
+                              }}
+                              sx={{
+                                textTransform: 'none',
+                                fontWeight: 700,
+                                fontSize: '0.68rem',
+                                py: 0.2,
+                                px: 0.8,
+                                height: 24,
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              BOM Breakup
+                            </Button>
+                          </Tooltip>
+                        ) : (
+                          <Typography variant="caption" sx={{ color: '#16a34a', fontWeight: 600 }}>Ready</Typography>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   <TableRow sx={{ bgcolor: '#f8fafc', borderTop: '2px solid #0F3B66' }}>
@@ -1448,6 +1521,7 @@ const DashboardHome = () => {
                     <TableCell align="center">
                       <Chip label={`${kpis?.salesAuthority?.readinessPercentage || 0}% Ready`} size="small" color="primary" sx={{ fontWeight: 700 }} />
                     </TableCell>
+                    <TableCell align="right">-</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -1471,6 +1545,28 @@ const DashboardHome = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* BOM Shortfall Breakup Detailed Dialog */}
+      <BOMShortfallModal
+        open={bomBreakupModalOpen}
+        onClose={() => setBomBreakupModalOpen(false)}
+        parentCode={selectedBOMItem?.itemCode}
+        parentSubCode={selectedBOMItem?.subCode}
+        parentName={selectedBOMItem?.itemName}
+        shortfallQty={selectedBOMItem?.shortfallQty}
+        onNavigateToPI={() => {
+          setBomBreakupModalOpen(false);
+          setPurchaseShortfallModalOpen(false);
+          setSalesOrdersModalOpen(false);
+          navigate('/dashboard/reports/pending-po?tab=fulfillment');
+        }}
+        onOpenBOMMaster={() => {
+          setBomBreakupModalOpen(false);
+          setPurchaseShortfallModalOpen(false);
+          setSalesOrdersModalOpen(false);
+          navigate('/dashboard/masters/bom');
+        }}
+      />
     </Box>
   );
 };

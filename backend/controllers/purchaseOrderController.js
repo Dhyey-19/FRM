@@ -705,7 +705,13 @@ exports.getPOFulfillmentReport = async (req, res) => {
         ISNULL(po.PODetailsList, '') AS AssociatedPOs,
         ISNULL(pi.TotalPIPendingQty, 0) AS PendingPIQty,
         ISNULL(pi.TotalPIOrderedQty, 0) AS TotalPIOrderedQty,
-        ISNULL(pi.PIDetailsList, '') AS AssociatedPIs
+        ISNULL(pi.PIDetailsList, '') AS AssociatedPIs,
+        (
+          SELECT COUNT(*) 
+          FROM BOM_Master b 
+          WHERE b.ParentItemCode = i.ItemCode 
+            AND (ISNULL(b.ParentSubCode, '') = ISNULL(i.SubCode, '') OR (ISNULL(b.ParentSubCode, '') = '' AND NOT EXISTS (SELECT 1 FROM BOM_Master b2 WHERE b2.ParentItemCode = i.ItemCode AND ISNULL(b2.ParentSubCode, '') = ISNULL(i.SubCode, ''))))
+        ) AS BOMPartsCount
       FROM ItemMaster i
       INNER JOIN (
         SELECT 
@@ -804,6 +810,8 @@ exports.getPOFulfillmentReport = async (req, res) => {
         PendingPIQty: piPending,
         MissingQty: missingQty,
         MissingValue: missingValue,
+        HasBOM: (parseInt(row.BOMPartsCount) || 0) > 0,
+        BOMPartsCount: parseInt(row.BOMPartsCount) || 0,
         Status: status
       };
 

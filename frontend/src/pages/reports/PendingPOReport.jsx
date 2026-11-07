@@ -15,9 +15,12 @@ import {
   HourglassEmpty as HourglassIcon, LocalShipping as ShippingIcon, CheckCircle as CheckCircleIcon,
   AttachMoney as MoneyIcon, OpenInNew as OpenInNewIcon, Warning as WarningIcon,
   Inventory as InventoryIcon, ReceiptLong as PIIcon, ShoppingCartCheckout as OrderIcon,
-  Delete as DeleteIcon, Close as CloseIcon, FilterList as FilterListIcon
+  Delete as DeleteIcon, Close as CloseIcon, FilterList as FilterListIcon,
+  AccountTree as BOMIcon, KeyboardArrowDown as ArrowDownIcon, KeyboardArrowUp as ArrowUpIcon
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
+import BOMShortfallView from '../../components/common/BOMShortfallView';
+import BOMShortfallModal from '../../components/common/BOMShortfallModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -94,6 +97,18 @@ const PendingPOReport = () => {
   const [piSaving, setPiSaving] = useState(false);
   const [piError, setPiError] = useState('');
   const [snackbarMsg, setSnackbarMsg] = useState('');
+
+  // BOM Shortfall Breakup states
+  const [expandedBOMKeys, setExpandedBOMKeys] = useState({});
+  const [extraPIItems, setExtraPIItems] = useState([]);
+  const [activeBOMModal, setActiveBOMModal] = useState(null);
+
+  const toggleExpandBOM = (key) => {
+    setExpandedBOMKeys(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   // Fetch Report Data for Tabs 0-2
   const fetchReport = async () => {
@@ -316,12 +331,32 @@ const PendingPOReport = () => {
 
     if (singleItem) {
       const key = `${singleItem.ItemCode}___${singleItem.SubCode || ''}`;
+      
+      // Ensure single item is stored in extraPIItems if not in fulfillmentData (e.g. child part from BOM)
+      const inFulfillment = (fulfillmentData.items || []).some(
+        it => `${it.ItemCode}___${it.SubCode || ''}` === key
+      );
+      if (!inFulfillment) {
+        setExtraPIItems(prev => {
+          if (!prev.some(it => `${it.ItemCode}___${it.SubCode || ''}` === key)) {
+            return [...prev, singleItem];
+          }
+          return prev;
+        });
+      }
+
       setSelectedFulfillmentKeys([key]);
-      // Ensure quantity is positive
-      if (!orderQuantities[key] || parseFloat(orderQuantities[key]) <= 0) {
-        setOrderQuantities(prev => ({
+      
+      const qtyVal = singleItem.MissingQty > 0 ? singleItem.MissingQty : (orderQuantities[key] || 1);
+      setOrderQuantities(prev => ({
+        ...prev,
+        [key]: qtyVal
+      }));
+
+      if (singleItem.Costing) {
+        setOrderRates(prev => ({
           ...prev,
-          [key]: singleItem.MissingQty > 0 ? singleItem.MissingQty : 1
+          [key]: singleItem.Costing
         }));
       }
     }
@@ -352,7 +387,8 @@ const PendingPOReport = () => {
       return;
     }
 
-    const selectedItems = (fulfillmentData.items || []).filter(it => {
+    const allAvailable = [...(fulfillmentData.items || []), ...extraPIItems];
+    const selectedItems = allAvailable.filter(it => {
       const key = `${it.ItemCode}___${it.SubCode || ''}`;
       return selectedFulfillmentKeys.includes(key);
     });
@@ -719,11 +755,12 @@ const PendingPOReport = () => {
 
   // Summary figures for selected items in PI modal
   const selectedItemsData = useMemo(() => {
-    return (fulfillmentData.items || []).filter(it => {
+    const combined = [...(fulfillmentData.items || []), ...extraPIItems];
+    return combined.filter(it => {
       const key = `${it.ItemCode}___${it.SubCode || ''}`;
       return selectedFulfillmentKeys.includes(key);
     });
-  }, [fulfillmentData.items, selectedFulfillmentKeys]);
+  }, [fulfillmentData.items, extraPIItems, selectedFulfillmentKeys]);
 
   const selectedTotalQty = useMemo(() => {
     return selectedItemsData.reduce((acc, it) => {
@@ -1494,6 +1531,7 @@ const PendingPOReport = () => {
                       <TableCell sx={{ fontWeight: 700 }} align="right">Stock in Hand</TableCell>
                       <TableCell sx={{ fontWeight: 700 }} align="right">Pending PI Qty</TableCell>
                       <TableCell sx={{ fontWeight: 700 }} align="right">Missing Qty</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">BOM Breakup</TableCell>
                       <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 120 }} align="right">Order Qty</TableCell>
                       <TableCell sx={{ fontWeight: 700, minWidth: 100 }} align="right">Rate (₹)</TableCell>
@@ -1512,15 +1550,15 @@ const PendingPOReport = () => {
                         const lineAmount = (parseFloat(currentOrderQty) || 0) * (parseFloat(currentRate) || 0);
 
                         return (
-                          <TableRow
-                            hover
-                            key={key}
-                            selected={isSelected}
-                            sx={{
-                              bgcolor: isSelected ? '#f0f9ff' : row.MissingQty > 0 ? '#fffbfb' : 'inherit',
-                              '&:hover': { bgcolor: isSelected ? '#e0f2fe !important' : undefined }
-                            }}
-                          >
+                          <React.Fragment key={key}>
+                            <TableRow
+                              hover
+                              selected={isSelected}
+                              sx={{
+                                bgcolor: isSelected ? '#f0f9ff' : row.MissingQty > 0 ? '#fffbfb' : 'inherit',
+                                '&:hover': { bgcolor: isSelected ? '#e0f2fe !important' : undefined }
+                              }}
+                            >
                             <TableCell padding="checkbox">
                               <Checkbox
                                 size="small"
@@ -1601,6 +1639,31 @@ const PendingPOReport = () => {
                               )}
                             </TableCell>
 
+                            {/* BOM Breakup Trigger Cell */}
+                            <TableCell align="center">
+                              <Tooltip title={row.MissingQty > 0 ? "Inspect BOM child parts available vs shortfall to fulfill this order" : "View Bill of Materials child parts"}>
+                                <Button
+                                  size="small"
+                                  variant={expandedBOMKeys[key] ? "contained" : "outlined"}
+                                  color={row.MissingQty > 0 ? "secondary" : "inherit"}
+                                  startIcon={<BOMIcon sx={{ fontSize: 15 }} />}
+                                  endIcon={expandedBOMKeys[key] ? <ArrowUpIcon sx={{ fontSize: 15 }} /> : <ArrowDownIcon sx={{ fontSize: 15 }} />}
+                                  onClick={() => toggleExpandBOM(key)}
+                                  sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                    fontSize: '0.68rem',
+                                    py: 0.3,
+                                    px: 1,
+                                    height: 24,
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  BOM Breakup
+                                </Button>
+                              </Tooltip>
+                            </TableCell>
+
                             {/* Status Chip */}
                             <TableCell align="center">
                               <Chip
@@ -1665,6 +1728,41 @@ const PendingPOReport = () => {
                               </Tooltip>
                             </TableCell>
                           </TableRow>
+
+                          {/* Expandable BOM Breakup Sub-Panel */}
+                          {expandedBOMKeys[key] && (
+                            <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                              <TableCell colSpan={14} sx={{ p: 2, borderBottom: '2px solid #0F3B66' }}>
+                                <Paper elevation={0} sx={{ p: 2, bgcolor: '#ffffff', borderRadius: 2, border: '1px solid #cbd5e1' }}>
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <BOMIcon fontSize="small" />
+                                      BOM Component Stock & Shortfall Breakup for Finished Good: {row.ItemCode}{row.SubCode ? ` (${row.SubCode})` : ''} — Shortfall: {row.MissingQty > 0 ? row.MissingQty : row.TotalPOPendingQty} {row.Unit}
+                                    </Typography>
+                                    <Button
+                                      size="small"
+                                      variant="text"
+                                      color="inherit"
+                                      onClick={() => toggleExpandBOM(key)}
+                                      sx={{ textTransform: 'none', fontSize: '0.75rem', fontWeight: 600 }}
+                                    >
+                                      Hide Breakup ▲
+                                    </Button>
+                                  </Box>
+                                  <BOMShortfallView
+                                    parentCode={row.ItemCode}
+                                    parentSubCode={row.SubCode || ''}
+                                    parentName={row.ItemName}
+                                    shortfallQty={row.MissingQty > 0 ? row.MissingQty : row.TotalPOPendingQty}
+                                    inline={true}
+                                    onOpenBOMMaster={() => navigate('/dashboard/masters/bom')}
+                                    onOrderChildPart={(childItem) => handleOpenPIModal(childItem)}
+                                  />
+                                </Paper>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
                         );
                       })}
                   </TableBody>

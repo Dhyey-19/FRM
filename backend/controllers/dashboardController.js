@@ -464,7 +464,13 @@ exports.getDashboardKPIs = async (req, res) => {
         ISNULL(po.POCount, 0) AS POCount,
         ISNULL(po.PODetailsList, '') AS AssociatedPOs,
         ISNULL(pi.TotalPIPendingQty, 0) AS PendingPIQty,
-        ISNULL(pi.PIDetailsList, '') AS AssociatedPIs
+        ISNULL(pi.PIDetailsList, '') AS AssociatedPIs,
+        (
+          SELECT COUNT(*) 
+          FROM BOM_Master b 
+          WHERE b.ParentItemCode = i.ItemCode 
+            AND (ISNULL(b.ParentSubCode, '') = ISNULL(i.SubCode, '') OR (ISNULL(b.ParentSubCode, '') = '' AND NOT EXISTS (SELECT 1 FROM BOM_Master b2 WHERE b2.ParentItemCode = i.ItemCode AND ISNULL(b2.ParentSubCode, '') = ISNULL(i.SubCode, ''))))
+        ) AS BOMCount
       FROM (
         SELECT 
           d.ITEMCODE,
@@ -550,6 +556,8 @@ exports.getDashboardKPIs = async (req, res) => {
           missingValue: purchaseMissingVal,
           associatedPOs: row.AssociatedPOs || '',
           associatedPIs: row.AssociatedPIs || '',
+          hasBOM: (parseInt(row.BOMCount) || 0) > 0,
+          bomCount: parseInt(row.BOMCount) || 0,
           status: piPending > 0 ? 'Partial Shortfall' : 'Critical Shortfall'
         });
       }
