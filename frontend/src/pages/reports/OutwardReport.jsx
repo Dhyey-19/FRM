@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Button, Paper, CircularProgress, TextField } from '@mui/material';
+import { Box, Typography, Button, Paper, CircularProgress, TextField, Chip, IconButton } from '@mui/material';
 import { DataGrid, GridToolbar, useGridApiRef, gridFilteredSortedRowEntriesSelector } from '@mui/x-data-grid';
-import { PictureAsPdf, Visibility, TableView, Share } from '@mui/icons-material';
+import { PictureAsPdf, Visibility, TableView, Share, QrCode2 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
+import EInvoiceModal from '../../components/common/EInvoiceModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -16,6 +17,22 @@ const OutwardReport = () => {
 
   const [outwards, setOutwards] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // e-Invoice Modal state
+  const [einvoiceModalOpen, setEinvoiceModalOpen] = useState(false);
+  const [selectedEinvoiceRow, setSelectedEinvoiceRow] = useState(null);
+
+  const handleOpenEinvoice = (row) => {
+    setSelectedEinvoiceRow(row);
+    setEinvoiceModalOpen(true);
+  };
+
+  const handleInvoiceUpdated = (updated) => {
+    setOutwards(prev => prev.map(o => (o.OutwardHeaderId === updated.ID || o.OUTWARDNO === updated.OUTWARDNO ? { ...o, ...updated } : o)));
+    if (selectedEinvoiceRow && (selectedEinvoiceRow.OutwardHeaderId === updated.ID || selectedEinvoiceRow.OUTWARDNO === updated.OUTWARDNO)) {
+      setSelectedEinvoiceRow(prev => ({ ...prev, ...updated }));
+    }
+  };
 
   const getFirstDayOfMonth = () => {
     const date = new Date();
@@ -89,6 +106,39 @@ const OutwardReport = () => {
       valueFormatter: (value) => (value ? `${parseFloat(value).toFixed(2)}%` : '-')
     },
     { field: 'AMOUNT', headerName: 'Amount', width: 110, type: 'number' },
+    { 
+      field: 'EInvoiceStatus', 
+      headerName: 'e-Invoice', 
+      width: 140,
+      renderCell: (params) => {
+        const row = params?.row || {};
+        const status = row.EInvoiceStatus || (row.IRN ? 'Generated' : 'Pending');
+        const isGenerated = status === 'Generated' || Boolean(row.IRN);
+        const isCancelled = status === 'Cancelled';
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, height: '100%' }}>
+            <Chip 
+              size="small" 
+              label={status}
+              color={isGenerated ? 'success' : isCancelled ? 'error' : 'default'}
+              variant={isGenerated ? 'filled' : 'outlined'}
+              onClick={() => handleOpenEinvoice(row)}
+              sx={{ fontSize: '0.72rem', height: 22, fontWeight: 600, cursor: 'pointer' }}
+              title="Click to view e-Invoice / Export JSON"
+            />
+            <IconButton 
+              size="small" 
+              color="info" 
+              onClick={() => handleOpenEinvoice(row)}
+              title="e-Invoice (NIC INV-01)"
+              sx={{ p: 0.25 }}
+            >
+              <QrCode2 fontSize="small" />
+            </IconButton>
+          </Box>
+        );
+      }
+    },
   ];
 
   const filteredOutwards = useMemo(() => {
@@ -404,6 +454,13 @@ const OutwardReport = () => {
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
         title="Outward Preview" 
+      />
+
+      <EInvoiceModal 
+        open={einvoiceModalOpen}
+        onClose={() => setEinvoiceModalOpen(false)}
+        invoice={selectedEinvoiceRow}
+        onInvoiceUpdated={handleInvoiceUpdated}
       />
     </Box>
   );

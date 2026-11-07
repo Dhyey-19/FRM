@@ -91,10 +91,15 @@ exports.getOutwardReport = async (req, res) => {
     const result = await pool.request().query(`
       SELECT 
         d.ID as RowId,
+        h.ID as OutwardHeaderId,
         h.OUTWARDNO, 
         h.OUTWARDDATE, 
         h.POID,
         h.PONO,
+        h.IRN,
+        h.AckNo,
+        h.AckDate,
+        h.EInvoiceStatus,
         l.LedgerName, 
         d.ITEMCODE, 
         ISNULL(d.SUBCODE, '') AS SUBCODE,

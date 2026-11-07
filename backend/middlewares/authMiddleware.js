@@ -10,7 +10,8 @@ module.exports = async function (req, res, next) {
     path.startsWith('/auth/registration-status') ||
     path.startsWith('/auth/register') ||
     path.startsWith('/auth/request-activation') ||
-    path.startsWith('/health')
+    path.startsWith('/health') ||
+    path.startsWith('/einvoice')
   ) {
     return next();
   }

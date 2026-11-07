@@ -11,10 +11,13 @@ import {
 import { 
   Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, 
   Input as InputIcon, Visibility as ViewIcon, Close as CloseIcon, AddCircle as AddCircleIcon,
-  Description as DescriptionIcon, Print as PrintIcon, ReceiptLong, Receipt, MoneyOff 
+  Description as DescriptionIcon, Print as PrintIcon, ReceiptLong, Receipt, MoneyOff,
+  QrCode2 as QrCodeIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import PdfPreviewModal from '../components/common/PdfPreviewModal';
+import EInvoiceModal from '../components/common/EInvoiceModal';
+import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -85,6 +88,22 @@ const OutwardEntry = () => {
   const [itemToDelete, setItemToDelete] = useState(null);
 
   const [companyProfile, setCompanyProfile] = useState(null);
+
+  // e-Invoice Modal State
+  const [einvoiceModalOpen, setEinvoiceModalOpen] = useState(false);
+  const [selectedEinvoiceRow, setSelectedEinvoiceRow] = useState(null);
+
+  const handleOpenEinvoice = (row) => {
+    setSelectedEinvoiceRow(row);
+    setEinvoiceModalOpen(true);
+  };
+
+  const handleInvoiceUpdated = (updated) => {
+    setOutwards(prev => prev.map(o => (o.ID === updated.ID ? { ...o, ...updated } : o)));
+    if (selectedEinvoiceRow && (selectedEinvoiceRow.ID === updated.ID || selectedEinvoiceRow.OUTWARDNO === updated.OUTWARDNO)) {
+      setSelectedEinvoiceRow(prev => ({ ...prev, ...updated }));
+    }
+  };
 
   const fetchOutwards = async () => {
     try {
@@ -637,11 +656,23 @@ const OutwardEntry = () => {
       currentHeaderY = 33;
     }
 
+    // e-Invoice Check & QR generation
+    const isEInvoice = Boolean(outward.IRN);
+    let gstQrBase64 = null;
+    if (isEInvoice) {
+      try {
+        const qrRaw = outward.SignedQRCode || `IRN:${outward.IRN}`;
+        gstQrBase64 = await QRCode.toDataURL(qrRaw, { margin: 1, width: 140 });
+      } catch (err) {
+        console.error('QR code generation error:', err);
+      }
+    }
+
     // Title
-    doc.setFontSize(14);
+    doc.setFontSize(isEInvoice ? 13 : 14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    doc.text('SALES INVOICE', 196, 20, { align: 'right' });
+    doc.text(isEInvoice ? 'TAX INVOICE (e-Invoice)' : 'SALES INVOICE', 196, 20, { align: 'right' });
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -655,7 +686,59 @@ const OutwardEntry = () => {
       doc.text(`PO Ref: ${outward.PONO}`, 196, 33, { align: 'right' });
     }
 
-    const dividerY = Math.max(currentHeaderY + 2, outward.PONO ? 37 : 33);
+    let dividerY = Math.max(currentHeaderY + 2, outward.PONO ? 37 : 33);
+
+    // If e-Invoice, draw e-Invoice banner & QR Code!
+    if (isEInvoice) {
+      const bannerY = dividerY + 2;
+      const bannerHeight = 22;
+
+      // Light background banner for IRN & Ack info
+      doc.setFillColor(245, 248, 252);
+      doc.setDrawColor(200, 215, 235);
+      doc.rect(14, bannerY, 150, bannerHeight, 'FD');
+
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 59, 102);
+      doc.text('IRN:', 17, bannerY + 5);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.8);
+      doc.setTextColor(40);
+      doc.text(String(outward.IRN), 26, bannerY + 5);
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 59, 102);
+      doc.text('Ack No:', 17, bannerY + 11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(40);
+      doc.text(String(outward.AckNo || '-'), 30, bannerY + 11);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 59, 102);
+      doc.text('Ack Date:', 82, bannerY + 11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(40);
+      doc.text(String(outward.AckDate || '-'), 98, bannerY + 11);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(30, 110, 40);
+      doc.text('• NIC Government GST Portal Authenticated (INV-01 Format)', 17, bannerY + 17);
+
+      // Draw QR Code on the right
+      if (gstQrBase64) {
+        doc.addImage(gstQrBase64, 'PNG', 169, bannerY, 23, 23);
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100);
+        doc.text('NIC Scannable QR', 180.5, bannerY + 25.5, { align: 'center' });
+      }
+
+      dividerY = bannerY + bannerHeight + 5;
+    }
+
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
     doc.line(14, dividerY, 196, dividerY);
@@ -695,14 +778,32 @@ const OutwardEntry = () => {
     const tableStartY = Math.max(currentY + 5, dividerY + 35);
 
     // Table Column & Rows
-    const tableColumn = ["Sr.", "Item Code & Name", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Discount", "Amount"];
+    const tableColumn = isEInvoice 
+      ? ["Sr.", "Item Code & Name", "HSN/SAC", "Qty", "Unit", "Rate", "Discount", "Amount"]
+      : ["Sr.", "Item Code & Name", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Discount", "Amount"];
+
     const detailsSource = isSaveAction ? outward.Details : (outward.Details || []);
     
     const tableRows = detailsSource.map((d, index) => {
       const matched = items.find(item => item.ItemCode === d.ITEMCODE && (item.SubCode || '') === (d.SUBCODE || ''));
       const itemName = d.ItemName || matched?.ItemName || '';
       const itemCodeDisplay = d.SUBCODE ? `${d.ITEMCODE} / ${d.SUBCODE}` : d.ITEMCODE;
+      const hsnCode = matched?.HSNCode || '84818090';
       const discVal = parseFloat(d.DISCOUNT) || 0;
+      
+      if (isEInvoice) {
+        return [
+          index + 1,
+          `${itemCodeDisplay} - ${itemName}`,
+          hsnCode,
+          (d.QUANTITY || 0).toFixed(2),
+          d.UNIT || '-',
+          (d.RATE || 0).toFixed(2),
+          discVal > 0 ? `${discVal.toFixed(2)}%` : '-',
+          (d.AMOUNT || 0).toFixed(2)
+        ];
+      }
+
       return [
         index + 1,
         `${itemCodeDisplay} - ${itemName}`,
@@ -716,6 +817,25 @@ const OutwardEntry = () => {
       ];
     });
 
+    const colStyles = isEInvoice ? {
+      0: { width: 8, halign: 'center' },
+      2: { halign: 'center' },
+      3: { halign: 'right' },
+      4: { halign: 'center' },
+      5: { halign: 'right' },
+      6: { halign: 'center' },
+      7: { halign: 'right' }
+    } : {
+      0: { width: 8, halign: 'center' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'center' },
+      6: { halign: 'right' },
+      7: { halign: 'center' },
+      8: { halign: 'right' }
+    };
+
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
@@ -723,16 +843,7 @@ const OutwardEntry = () => {
       theme: 'grid',
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
       styles: { fontSize: 8.5, cellPadding: 1.5 },
-      columnStyles: {
-        0: { width: 8, halign: 'center' },
-        2: { halign: 'right' },
-        3: { halign: 'right' },
-        4: { halign: 'right' },
-        5: { halign: 'center' },
-        6: { halign: 'right' },
-        7: { halign: 'center' },
-        8: { halign: 'right' }
-      },
+      columnStyles: colStyles,
       margin: { top: tableStartY }
     });
 
@@ -1058,6 +1169,7 @@ const OutwardEntry = () => {
                 <TableCell sx={{ fontWeight: 600 }}>PO No</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Total Amount</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>e-Invoice</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -1094,8 +1206,27 @@ const OutwardEntry = () => {
                   </TableCell>
                   <TableCell>{row.LedgerName}</TableCell>
                   <TableCell>{row.TOTALAMOUNT}</TableCell>
+                  <TableCell>
+                    {row.Bill !== false && row.Bill !== 0 ? (
+                      <Chip 
+                        size="small" 
+                        label={row.EInvoiceStatus || (row.IRN ? 'Generated' : 'Pending')}
+                        color={row.EInvoiceStatus === 'Generated' || row.IRN ? 'success' : row.EInvoiceStatus === 'Cancelled' ? 'error' : 'default'}
+                        variant={row.EInvoiceStatus === 'Generated' || row.IRN ? 'filled' : 'outlined'}
+                        onClick={() => handleOpenEinvoice(row)}
+                        sx={{ fontSize: '0.72rem', height: 22, fontWeight: 600, cursor: 'pointer' }}
+                        title="Click to view e-Invoice / Export JSON"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">N/A (No Bill)</Typography>
+                    )}
+                  </TableCell>
                   <TableCell align="center">
-
+                    {row.Bill !== false && row.Bill !== 0 && (
+                      <IconButton color="info" size="small" onClick={() => handleOpenEinvoice(row)} title="e-Invoice (NIC INV-01)">
+                        <QrCodeIcon fontSize="small" />
+                      </IconButton>
+                    )}
                     <IconButton color="secondary" size="small" onClick={() => handlePrint(row)} title="Print Invoice">
                       <PrintIcon fontSize="small" />
                     </IconButton>
@@ -1110,7 +1241,7 @@ const OutwardEntry = () => {
               ))}
               {sortedOutwards.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
+                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1394,6 +1525,13 @@ const OutwardEntry = () => {
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
         title="Document Preview" 
+      />
+
+      <EInvoiceModal 
+        open={einvoiceModalOpen}
+        onClose={() => setEinvoiceModalOpen(false)}
+        invoice={selectedEinvoiceRow}
+        onInvoiceUpdated={handleInvoiceUpdated}
       />
     </Box>
   );

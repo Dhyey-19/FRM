@@ -32,6 +32,7 @@ const jobworkInRoutes = require('./routes/jobworkInRoutes');
 const paymentQrRoutes = require('./routes/paymentQrRoutes');
 const purchaseOrderRoutes = require('./routes/purchaseOrderRoutes');
 const performaInvoiceRoutes = require('./routes/performaInvoiceRoutes');
+const einvoiceRoutes = require('./routes/einvoiceRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -70,6 +71,7 @@ app.use('/api/jobwork-ins', jobworkInRoutes);
 app.use('/api/payment-qr', paymentQrRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/performa-invoices', performaInvoiceRoutes);
+app.use('/api/einvoice', einvoiceRoutes);
 
 // Test Route
 app.get('/api/health', (req, res) => {
