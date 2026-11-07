@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
@@ -32,6 +32,7 @@ const emptyRow = {
 };
 
 const PurchaseOrder = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const filterParamPoNo = searchParams.get('poNo');
 
@@ -86,6 +87,21 @@ const PurchaseOrder = () => {
   const [shortageError, setShortageError] = useState('');
   const [savingShortagePI, setSavingShortagePI] = useState(false);
   const [shortageSuccessMsg, setShortageSuccessMsg] = useState('');
+
+  // Dedicated PO Fulfillment & Missing Stock Modal
+  const [poFulfillmentModalOpen, setPoFulfillmentModalOpen] = useState(false);
+  const [poFulfillmentLoading, setPoFulfillmentLoading] = useState(false);
+  const [poFulfillmentData, setPoFulfillmentData] = useState({ poId: null, poNo: '', items: [] });
+  const [poFulfillmentSelectedKeys, setPoFulfillmentSelectedKeys] = useState([]);
+  const [poFulfillmentOrderQtys, setPoFulfillmentOrderQtys] = useState({});
+  const [poFulfillmentRates, setPoFulfillmentRates] = useState({});
+  const [poFulfillmentVendorId, setPoFulfillmentVendorId] = useState(null);
+  const [poFulfillmentPiNo, setPoFulfillmentPiNo] = useState('');
+  const [poFulfillmentDeliveryDate, setPoFulfillmentDeliveryDate] = useState('');
+  const [poFulfillmentDirectStock, setPoFulfillmentDirectStock] = useState(false);
+  const [poFulfillmentSavingPI, setPoFulfillmentSavingPI] = useState(false);
+  const [poFulfillmentError, setPoFulfillmentError] = useState('');
+  const [poFulfillmentSuccessMsg, setPoFulfillmentSuccessMsg] = useState('');
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -181,6 +197,7 @@ const PurchaseOrder = () => {
       map[key] = {
         CurrentStock: parseFloat(s.CurrentStock) || 0,
         CommittedQty: parseFloat(s.CommittedQty) || 0,
+        PendingPIQty: parseFloat(s.PendingPIQty) || 0,
         AvailableStock: parseFloat(s.AvailableStock) || 0,
         ItemName: s.ItemName || '',
         Unit: s.Unit || ''
@@ -189,7 +206,7 @@ const PurchaseOrder = () => {
     return map;
   }, [stockAvailability]);
 
-  // Compute live missing / shortage items for current gridRows
+  // Compute live missing / shortage items for current gridRows (User Formula: Demand - CurrentStock - PendingPIQty)
   const shortageAnalysis = useMemo(() => {
     const missing = [];
     gridRows.forEach(r => {
@@ -197,9 +214,9 @@ const PurchaseOrder = () => {
       const qty = parseFloat(r.QUANTITY) || 0;
       if (qty <= 0) return;
       const key = `${r.ITEMCODE}__${(r.SUBCODE || '').trim()}`;
-      const stock = stockMap[key] || { CurrentStock: 0, CommittedQty: 0, AvailableStock: 0 };
+      const stock = stockMap[key] || { CurrentStock: 0, CommittedQty: 0, PendingPIQty: 0, AvailableStock: 0 };
       const demand = (stock.CommittedQty || 0) + qty;
-      const shortage = Math.max(0, demand - (stock.CurrentStock || 0));
+      const shortage = Math.max(0, demand - (stock.CurrentStock || 0) - (stock.PendingPIQty || 0));
 
       if (shortage > 0) {
         const it = items.find(x => x.ItemCode === r.ITEMCODE && (x.SubCode || '') === (r.SUBCODE || ''));
@@ -210,6 +227,7 @@ const PurchaseOrder = () => {
           ItemName: it?.ItemName || stock.ItemName || '',
           currentStock: stock.CurrentStock,
           committedQty: stock.CommittedQty,
+          pendingPIQty: stock.PendingPIQty,
           availableStock: stock.AvailableStock,
           orderQty: qty,
           shortageQty: shortage,
@@ -222,6 +240,162 @@ const PurchaseOrder = () => {
     });
     return missing;
   }, [gridRows, stockMap, items]);
+
+  // Open PO Fulfillment Modal for a specific PO (User Request)
+  const openPOFulfillmentModal = async (poId, poNumber) => {
+    setPoFulfillmentModalOpen(true);
+    setPoFulfillmentLoading(true);
+    setPoFulfillmentError('');
+    setPoFulfillmentSuccessMsg('');
+    setPoFulfillmentVendorId(null);
+    setPoFulfillmentDirectStock(false);
+    setPoFulfillmentDeliveryDate('');
+    setPoFulfillmentData({ poId, poNo: poNumber, items: [] });
+
+    // Fetch next PI number
+    try {
+      const piRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/performa-invoices/next-no`);
+      if (piRes.ok) {
+        const piData = await piRes.json();
+        setPoFulfillmentPiNo(piData.nextNo || 'PI-1');
+      } else {
+        setPoFulfillmentPiNo('PI-1');
+      }
+    } catch {
+      setPoFulfillmentPiNo('PI-1');
+    }
+
+    // Fetch fulfillment report for this PO
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/purchase-orders/fulfillment-report?poId=${poId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const itemsList = data.items || [];
+        setPoFulfillmentData({ poId, poNo: poNumber, items: itemsList });
+
+        const selected = [];
+        const qtys = {};
+        const rates = {};
+        itemsList.forEach(it => {
+          const key = `${it.ItemCode}___${it.SubCode || ''}`;
+          if (it.MissingQty > 0) {
+            selected.push(key);
+            qtys[key] = it.MissingQty;
+          } else {
+            qtys[key] = it.TotalPOPendingQty || 0;
+          }
+          rates[key] = parseFloat(it.Costing) || 0;
+        });
+
+        if (selected.length === 0 && itemsList.length > 0) {
+          itemsList.forEach(it => {
+            selected.push(`${it.ItemCode}___${it.SubCode || ''}`);
+          });
+        }
+
+        setPoFulfillmentSelectedKeys(selected);
+        setPoFulfillmentOrderQtys(qtys);
+        setPoFulfillmentRates(rates);
+      }
+    } catch (err) {
+      console.error('Error fetching PO fulfillment:', err);
+      setPoFulfillmentError('Could not fetch stock fulfillment for this PO');
+    } finally {
+      setPoFulfillmentLoading(false);
+    }
+  };
+
+  // Generate Proforma Invoice from PO Fulfillment Modal
+  const handleSavePOFulfillmentPI = async () => {
+    if (!poFulfillmentVendorId) {
+      setPoFulfillmentError('Please select a Supplier / Vendor for this Proforma Invoice.');
+      return;
+    }
+    if (!poFulfillmentPiNo.trim()) {
+      setPoFulfillmentError('Please enter a valid Proforma Invoice number.');
+      return;
+    }
+
+    const selectedItems = (poFulfillmentData.items || []).filter(it => {
+      const key = `${it.ItemCode}___${it.SubCode || ''}`;
+      return poFulfillmentSelectedKeys.includes(key);
+    });
+
+    if (selectedItems.length === 0) {
+      setPoFulfillmentError('Please select at least one item.');
+      return;
+    }
+
+    const validDetails = [];
+    for (const it of selectedItems) {
+      const key = `${it.ItemCode}___${it.SubCode || ''}`;
+      const qty = parseFloat(poFulfillmentOrderQtys[key]) || 0;
+      if (qty <= 0) {
+        setPoFulfillmentError(`Quantity for item ${it.ItemCode} must be greater than 0.`);
+        return;
+      }
+      const rate = parseFloat(poFulfillmentRates[key]) || 0;
+      validDetails.push({
+        ITEMCODE: it.ItemCode,
+        SUBCODE: it.SubCode || '',
+        QUANTITY: qty,
+        UNIT: it.Unit || 'PCS',
+        RATE: rate,
+        AMOUNT: qty * rate,
+        REMARK: `Shortfall fulfillment for Customer PO ${poFulfillmentData.poNo}`
+      });
+    }
+
+    setPoFulfillmentSavingPI(true);
+    setPoFulfillmentError('');
+
+    try {
+      const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+      const username = localUser.Username || localUser.username || 'System';
+
+      const payload = {
+        PINO: poFulfillmentPiNo.trim(),
+        PIDATE: todayDate,
+        LEDGERID: poFulfillmentVendorId,
+        CUSTOMERPOID: poFulfillmentData.poId || null,
+        CUSTOMERPONO: poFulfillmentData.poNo || null,
+        DELIVERYDATE: poFulfillmentDeliveryDate || null,
+        STATUS: poFulfillmentDirectStock ? 'Completed' : 'Ordered',
+        updateStockDirectly: poFulfillmentDirectStock,
+        REMARK: `Created from Customer PO ${poFulfillmentData.poNo} for shortfall fulfillment`,
+        CREATEDBY: username,
+        UPDATEDBY: username,
+        Details: validDetails
+      };
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/performa-invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setPoFulfillmentSuccessMsg(`Proforma Invoice ${poFulfillmentPiNo.trim()} created successfully! Stock & PI pipeline updated.`);
+
+        // Re-fetch this PO's fulfillment to show updated missing quantity in real-time!
+        const refetchRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/purchase-orders/fulfillment-report?poId=${poFulfillmentData.poId}`);
+        if (refetchRes.ok) {
+          const refetchData = await refetchRes.json();
+          setPoFulfillmentData(prev => ({ ...prev, items: refetchData.items || [] }));
+        }
+
+        fetchOrders();
+      } else {
+        setPoFulfillmentError(data.message || 'Failed to create Proforma Invoice');
+      }
+    } catch (err) {
+      console.error('Error creating Proforma Invoice:', err);
+      setPoFulfillmentError('Network error while creating Proforma Invoice.');
+    } finally {
+      setPoFulfillmentSavingPI(false);
+    }
+  };
 
   // Handlers for Shortage Performa Invoice Modal
   const handleOpenShortageModal = async () => {
@@ -488,8 +662,13 @@ const PurchaseOrder = () => {
           const ledgerObj = ledgers.find(l => l.Id === ledgerId) || {};
           generatePDF({ ...payload, ID: editingId || data.id }, ledgerObj);
         }
+        const savedPoId = editingId || data.id;
+        const savedPoNo = poNo.trim();
         handleCloseDialog();
         fetchOrders();
+
+        // Automatically open the Stock Fulfillment & Missing Items modal for this PO!
+        openPOFulfillmentModal(savedPoId, savedPoNo);
       } else {
         setDialogError(data.message || 'Failed to save purchase order');
       }
@@ -727,6 +906,15 @@ const PurchaseOrder = () => {
             Refresh
           </Button>
           <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<HourglassIcon />}
+            onClick={() => navigate('/dashboard/reports/pending-po?tab=fulfillment')}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Fulfillment Planning
+          </Button>
+          <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleOpenNewDialog}
@@ -891,6 +1079,15 @@ const PurchaseOrder = () => {
                           onClick={() => { setViewOrder(order); setViewDialogOpen(true); }}
                         >
                           <ViewIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Stock Shortfall & Fulfillment Analysis">
+                        <IconButton
+                          size="small"
+                          color="warning"
+                          onClick={() => openPOFulfillmentModal(order.ID, order.PONO)}
+                        >
+                          <HourglassIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Print PO">
@@ -1409,24 +1606,68 @@ const PurchaseOrder = () => {
         title="Purchase Order PDF"
       />
 
-      {/* Shortage Performa Invoice Modal */}
+      {/* PO Fulfillment & Missing Stock Analysis Modal */}
       <Dialog
-        open={shortageModalOpen}
-        onClose={() => { if (!savingShortagePI) setShortageModalOpen(false); }}
-        maxWidth="md"
+        open={poFulfillmentModalOpen}
+        onClose={() => { if (!poFulfillmentSavingPI) setPoFulfillmentModalOpen(false); }}
+        maxWidth="lg"
         fullWidth
       >
-        <DialogTitle sx={{ backgroundColor: '#d97706', color: 'white', py: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            ⚡ Create Performa Invoice for Missing Items
-          </Typography>
-          <Typography variant="caption" sx={{ color: '#fef3c7', display: 'block' }}>
-            Customer PO Reference: {poNo}
-          </Typography>
+        <DialogTitle sx={{ backgroundColor: '#0F3B66', color: 'white', py: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <HourglassIcon sx={{ color: '#f59e0b', fontSize: 28 }} />
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  Stock Fulfillment & Missing Items Analysis — PO #{poFulfillmentData.poNo}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#93c5fd' }}>
+                  Missing Qty = Total PO Demand - Stock in Hand - Pending Proforma Invoice Quantity
+                </Typography>
+              </Box>
+            </Box>
+            <IconButton onClick={() => setPoFulfillmentModalOpen(false)} sx={{ color: 'white' }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
         </DialogTitle>
-        <DialogContent sx={{ p: 2.5, backgroundColor: '#f8fafc' }}>
-          {shortageError && <Alert severity="error" sx={{ mb: 2 }}>{shortageError}</Alert>}
 
+        <DialogContent sx={{ p: 2.5, backgroundColor: '#f8fafc' }}>
+          {poFulfillmentSuccessMsg && (
+            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setPoFulfillmentSuccessMsg('')}>
+              {poFulfillmentSuccessMsg}
+            </Alert>
+          )}
+
+          {poFulfillmentError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {poFulfillmentError}
+            </Alert>
+          )}
+
+          {/* Shortfall Alert */}
+          {poFulfillmentData.items.some(i => i.MissingQty > 0) ? (
+            <Alert severity="warning" variant="outlined" sx={{ mb: 2, bgcolor: '#fffbeb', borderColor: '#fde68a' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#92400e' }}>
+                ⚠️ Missing Stock Detected for PO #{poFulfillmentData.poNo}!
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#b45309' }}>
+                {poFulfillmentData.items.filter(i => i.MissingQty > 0).length} item(s) are missing in inventory to fulfill this order.
+                Select the items below, adjust order quantities as needed, and click <strong>Generate Proforma Invoice</strong> to place a vendor order.
+              </Typography>
+            </Alert>
+          ) : (
+            <Alert severity="success" variant="outlined" sx={{ mb: 2, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#166534' }}>
+                ✅ All Items Fully Covered!
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#15803d' }}>
+                Stock in hand and existing Proforma Invoices are sufficient to fulfill this purchase order. You can still order additional stock below if desired.
+              </Typography>
+            </Alert>
+          )}
+
+          {/* Supplier & PI Details Paper */}
           <Paper sx={{ p: 2, mb: 2, border: '1px solid #e2e8f0', borderRadius: 1.5, boxShadow: 'none' }}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -1434,8 +1675,8 @@ const PurchaseOrder = () => {
                   fullWidth
                   size="small"
                   label="Performa Invoice No"
-                  value={shortagePiNo}
-                  onChange={(e) => setShortagePiNo(e.target.value)}
+                  value={poFulfillmentPiNo}
+                  onChange={(e) => setPoFulfillmentPiNo(e.target.value)}
                   required
                 />
               </Grid>
@@ -1443,8 +1684,8 @@ const PurchaseOrder = () => {
                 <Autocomplete
                   options={ledgers}
                   getOptionLabel={(option) => option.LedgerName || ''}
-                  value={ledgers.find(l => l.Id === shortageVendorId) || null}
-                  onChange={(e, val) => setShortageVendorId(val ? val.Id : null)}
+                  value={ledgers.find(l => l.Id === poFulfillmentVendorId) || null}
+                  onChange={(e, val) => setPoFulfillmentVendorId(val ? val.Id : null)}
                   renderInput={(params) => <TextField {...params} label="Select Supplier / Vendor" size="small" required fullWidth />}
                   fullWidth
                   slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
@@ -1456,8 +1697,8 @@ const PurchaseOrder = () => {
                   size="small"
                   type="date"
                   label="Expected Delivery Date"
-                  value={shortageDeliveryDate}
-                  onChange={(e) => setShortageDeliveryDate(e.target.value)}
+                  value={poFulfillmentDeliveryDate}
+                  onChange={(e) => setPoFulfillmentDeliveryDate(e.target.value)}
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1465,14 +1706,14 @@ const PurchaseOrder = () => {
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={shortageDirectStock}
-                      onChange={(e) => setShortageDirectStock(e.target.checked)}
+                      checked={poFulfillmentDirectStock}
+                      onChange={(e) => setPoFulfillmentDirectStock(e.target.checked)}
                       color="success"
                     />
                   }
                   label={
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: shortageDirectStock ? '#16a34a' : 'text.primary' }}>
-                      ⚡ Update Stock Directly (mark received immediately)
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: poFulfillmentDirectStock ? '#16a34a' : 'text.primary' }}>
+                      ⚡ Update Stock Directly (mark received immediately into inventory)
                     </Typography>
                   }
                   sx={{ mt: 0.5 }}
@@ -1481,93 +1722,236 @@ const PurchaseOrder = () => {
             </Grid>
           </Paper>
 
+          {/* Items Table */}
           <Paper sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5, overflow: 'hidden' }}>
-            <TableContainer sx={{ maxHeight: '40vh' }}>
+            <TableContainer sx={{ maxHeight: '42vh' }}>
               <Table size="small">
                 <TableHead sx={{ bgcolor: '#f8fafc' }}>
                   <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={
+                          poFulfillmentData.items.length > 0 &&
+                          poFulfillmentData.items.every(i => poFulfillmentSelectedKeys.includes(`${i.ItemCode}___${i.SubCode || ''}`))
+                        }
+                        indeterminate={
+                          poFulfillmentData.items.some(i => poFulfillmentSelectedKeys.includes(`${i.ItemCode}___${i.SubCode || ''}`)) &&
+                          !poFulfillmentData.items.every(i => poFulfillmentSelectedKeys.includes(`${i.ItemCode}___${i.SubCode || ''}`))
+                        }
+                        onChange={() => {
+                          const allKeys = poFulfillmentData.items.map(i => `${i.ItemCode}___${i.SubCode || ''}`);
+                          const isAll = allKeys.length > 0 && allKeys.every(k => poFulfillmentSelectedKeys.includes(k));
+                          if (isAll) {
+                            setPoFulfillmentSelectedKeys([]);
+                          } else {
+                            setPoFulfillmentSelectedKeys(allKeys);
+                          }
+                        }}
+                      />
+                    </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Item Description</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">In Hand</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Committed</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Shortage</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right" sx={{ width: 130 }}>Order Qty</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Unit</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Rate (₹)</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">PO Demand</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Stock in Hand</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Pending PI</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Missing Qty</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
+                    <TableCell sx={{ fontWeight: 700, minWidth: 120 }} align="right">Order Qty</TableCell>
+                    <TableCell sx={{ fontWeight: 700, minWidth: 90 }} align="right">Rate (₹)</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="right">Amount (₹)</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {shortageRows.map((row, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {row.ITEMCODE}{row.SUBCODE ? ` (${row.SUBCODE})` : ''}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {row.ItemName}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">{row.currentStock}</TableCell>
-                      <TableCell align="right">{row.committedQty}</TableCell>
-                      <TableCell align="right" sx={{ color: '#d97706', fontWeight: 700 }}>
-                        {row.shortageQty.toFixed(2)}
-                      </TableCell>
-                      <TableCell align="right">
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={row.requiredQty}
-                          onChange={(e) => handleShortageRowChange(idx, 'requiredQty', e.target.value)}
-                          inputProps={{ min: 0, step: 'any', style: { textAlign: 'right', fontWeight: 700 } }}
-                          fullWidth
-                        />
-                      </TableCell>
-                      <TableCell>{row.unit}</TableCell>
-                      <TableCell align="right">
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={row.rate}
-                          onChange={(e) => handleShortageRowChange(idx, 'rate', e.target.value)}
-                          inputProps={{ min: 0, step: 'any', style: { textAlign: 'right' } }}
-                          sx={{ width: 90 }}
-                        />
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        ₹{row.amount}
+                  {poFulfillmentLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                        <CircularProgress size={30} />
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : poFulfillmentData.items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                        No items found for this purchase order.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    poFulfillmentData.items.map((row) => {
+                      const key = `${row.ItemCode}___${row.SubCode || ''}`;
+                      const isSelected = poFulfillmentSelectedKeys.includes(key);
+                      const q = poFulfillmentOrderQtys[key] !== undefined ? poFulfillmentOrderQtys[key] : (row.MissingQty > 0 ? row.MissingQty : 0);
+                      const r = poFulfillmentRates[key] !== undefined ? poFulfillmentRates[key] : (row.Costing || 0);
+                      const lineAmt = (parseFloat(q) || 0) * (parseFloat(r) || 0);
+
+                      return (
+                        <TableRow
+                          hover
+                          key={key}
+                          selected={isSelected}
+                          sx={{
+                            bgcolor: isSelected ? '#f0f9ff' : row.MissingQty > 0 ? '#fffbfb' : 'inherit'
+                          }}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              size="small"
+                              checked={isSelected}
+                              onChange={() => {
+                                setPoFulfillmentSelectedKeys(prev => 
+                                  prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                                );
+                              }}
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {row.ItemCode}{row.SubCode ? ` (${row.SubCode})` : ''}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {row.ItemName}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell align="right">
+                            {parseFloat(row.TotalPOPendingQty || 0).toFixed(2)} {row.Unit}
+                          </TableCell>
+
+                          <TableCell align="right" sx={{ color: row.StockInHand > 0 ? '#16a34a' : 'inherit' }}>
+                            {parseFloat(row.StockInHand || 0).toFixed(2)} {row.Unit}
+                          </TableCell>
+
+                          <TableCell align="right" sx={{ color: row.PendingPIQty > 0 ? '#0284c7' : 'inherit' }}>
+                            {parseFloat(row.PendingPIQty || 0).toFixed(2)} {row.Unit}
+                          </TableCell>
+
+                          <TableCell align="right">
+                            {row.MissingQty > 0 ? (
+                              <Chip
+                                size="small"
+                                label={`${parseFloat(row.MissingQty).toFixed(2)} ${row.Unit}`}
+                                color="error"
+                                sx={{ fontWeight: 800, height: 22 }}
+                              />
+                            ) : (
+                              <Chip
+                                size="small"
+                                label="Covered (0)"
+                                color="success"
+                                variant="outlined"
+                                sx={{ fontWeight: 600, height: 20 }}
+                              />
+                            )}
+                          </TableCell>
+
+                          <TableCell align="center">
+                            <Chip
+                              size="small"
+                              label={row.Status}
+                              color={row.Status === 'Critical Shortfall' ? 'error' : row.Status === 'Partial Shortfall' ? 'warning' : 'success'}
+                              sx={{ fontSize: '0.7rem', height: 20, fontWeight: 600 }}
+                            />
+                          </TableCell>
+
+                          <TableCell align="right">
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={q}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPoFulfillmentOrderQtys(prev => ({ ...prev, [key]: val }));
+                              }}
+                              inputProps={{ min: 0, step: 'any', style: { textAlign: 'right', fontWeight: 700 } }}
+                              fullWidth
+                            />
+                          </TableCell>
+
+                          <TableCell align="right">
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={r}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPoFulfillmentRates(prev => ({ ...prev, [key]: val }));
+                              }}
+                              inputProps={{ min: 0, step: 'any', style: { textAlign: 'right' } }}
+                              fullWidth
+                            />
+                          </TableCell>
+
+                          <TableCell align="right" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                            ₹{lineAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
 
-            <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 3 }}>
+            <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 3, flexWrap: 'wrap' }}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Total Items to Order: <strong>{shortageRows.length}</strong>
+                Selected Items: <strong>{poFulfillmentSelectedKeys.length}</strong>
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Total Qty: <strong>{shortageRows.reduce((s, r) => s + (parseFloat(r.requiredQty) || 0), 0).toFixed(2)}</strong>
+                Total Order Qty: <strong>
+                  {poFulfillmentData.items
+                    .filter(i => poFulfillmentSelectedKeys.includes(`${i.ItemCode}___${i.SubCode || ''}`))
+                    .reduce((acc, i) => acc + (parseFloat(poFulfillmentOrderQtys[`${i.ItemCode}___${i.SubCode || ''}`]) || 0), 0)
+                    .toFixed(2)}
+                </strong>
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                Total Amount: <strong>₹{shortageRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                Total Amount: <strong>
+                  ₹{poFulfillmentData.items
+                    .filter(i => poFulfillmentSelectedKeys.includes(`${i.ItemCode}___${i.SubCode || ''}`))
+                    .reduce((acc, i) => {
+                      const key = `${i.ItemCode}___${i.SubCode || ''}`;
+                      const q = parseFloat(poFulfillmentOrderQtys[key]) || 0;
+                      const r = parseFloat(poFulfillmentRates[key]) || 0;
+                      return acc + (q * r);
+                    }, 0)
+                    .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </strong>
               </Typography>
             </Box>
           </Paper>
         </DialogContent>
-        <DialogActions sx={{ p: 2, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
-          <Button onClick={() => setShortageModalOpen(false)} color="inherit" disabled={savingShortagePI}>
-            Cancel
-          </Button>
+
+        <DialogActions sx={{ p: 2, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
           <Button
-            variant="contained"
-            color="warning"
-            onClick={handleSaveShortagePI}
-            disabled={savingShortagePI}
-            sx={{ fontWeight: 600, textTransform: 'none' }}
+            variant="outlined"
+            color="primary"
+            onClick={() => {
+              setPoFulfillmentModalOpen(false);
+              navigate('/dashboard/reports/pending-po?tab=fulfillment');
+            }}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            {savingShortagePI ? 'Creating Performa Invoice...' : 'Create & Place Order'}
+            Open Full Fulfillment Planning Report
           </Button>
+
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              onClick={() => setPoFulfillmentModalOpen(false)}
+              color="inherit"
+              disabled={poFulfillmentSavingPI}
+            >
+              Done / Close
+            </Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleSavePOFulfillmentPI}
+              disabled={poFulfillmentSavingPI || poFulfillmentSelectedKeys.length === 0}
+              startIcon={poFulfillmentSavingPI ? <CircularProgress size={16} /> : <PIIcon />}
+              sx={{ fontWeight: 700, textTransform: 'none', px: 2.5 }}
+            >
+              {poFulfillmentSavingPI ? 'Generating PI...' : `Generate Proforma Invoice (${poFulfillmentSelectedKeys.length})`}
+            </Button>
+          </Box>
         </DialogActions>
       </Dialog>
     </Box>

@@ -11,6 +11,9 @@ router.get('/stock-availability', purchaseOrderController.getStockAvailability);
 // Pending PO Report (Vendor-wise, Item-wise, Summary)
 router.get('/pending-report', purchaseOrderController.getPendingPOReport);
 
+// PO Fulfillment & Shortfall Report
+router.get('/fulfillment-report', purchaseOrderController.getPOFulfillmentReport);
+
 // Standard CRUD
 router.get('/', purchaseOrderController.getPurchaseOrders);
 router.post('/', purchaseOrderController.createPurchaseOrder);

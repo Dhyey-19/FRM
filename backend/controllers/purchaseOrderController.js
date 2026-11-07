@@ -53,7 +53,8 @@ exports.getStockAvailability = async (req, res) => {
         i.Unit,
         ISNULL(i.ClosingStock, 0) AS CurrentStock,
         ISNULL(po.PendingQty, 0) AS CommittedQty,
-        (ISNULL(i.ClosingStock, 0) - ISNULL(po.PendingQty, 0)) AS AvailableStock
+        ISNULL(pi.PendingPIQty, 0) AS PendingPIQty,
+        (ISNULL(i.ClosingStock, 0) + ISNULL(pi.PendingPIQty, 0) - ISNULL(po.PendingQty, 0)) AS AvailableStock
       FROM ItemMaster i
       LEFT JOIN (
         SELECT 
@@ -73,6 +74,16 @@ exports.getStockAvailability = async (req, res) => {
     query += `
         GROUP BY d.ITEMCODE, ISNULL(d.SUBCODE, '')
       ) po ON i.ItemCode = po.ITEMCODE AND ISNULL(i.SubCode, '') = po.SUBCODE
+      LEFT JOIN (
+        SELECT 
+          pid.ITEMCODE,
+          ISNULL(pid.SUBCODE, '') AS SUBCODE,
+          SUM(pid.PENDINGQTY) AS PendingPIQty
+        FROM PerformaInvoiceDetail pid
+        INNER JOIN PerformaInvoiceHeader pih ON pid.PIID = pih.ID
+        WHERE UPPER(pih.STATUS) IN ('ORDERED', 'PARTIALLY RECEIVED', 'DRAFT') AND pid.PENDINGQTY > 0
+        GROUP BY pid.ITEMCODE, ISNULL(pid.SUBCODE, '')
+      ) pi ON i.ItemCode = pi.ITEMCODE AND ISNULL(i.SubCode, '') = pi.SUBCODE
       ORDER BY i.ItemCode, ISNULL(i.SubCode, '')
     `;
 
@@ -670,6 +681,154 @@ exports.deletePurchaseOrder = async (req, res) => {
   } catch (error) {
     console.error('Error deleting purchase order:', error);
     res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+// GET /api/purchase-orders/fulfillment-report
+exports.getPOFulfillmentReport = async (req, res) => {
+  try {
+    const { poId, search, category, shortfallOnly } = req.query;
+    const pool = await connectDB();
+    const reqInstance = pool.request();
+
+    let query = `
+      SELECT 
+        i.ItemCode,
+        ISNULL(i.SubCode, '') AS SubCode,
+        i.ItemName,
+        ISNULL(i.Category, 'Inhouse') AS Category,
+        i.Unit,
+        ISNULL(i.Costing, 0) AS Costing,
+        ISNULL(i.ClosingStock, 0) AS StockInHand,
+        ISNULL(po.TotalPOPendingQty, 0) AS TotalPOPendingQty,
+        ISNULL(po.TotalPOOrderedQty, 0) AS TotalPOOrderedQty,
+        ISNULL(po.PODetailsList, '') AS AssociatedPOs,
+        ISNULL(pi.TotalPIPendingQty, 0) AS PendingPIQty,
+        ISNULL(pi.TotalPIOrderedQty, 0) AS TotalPIOrderedQty,
+        ISNULL(pi.PIDetailsList, '') AS AssociatedPIs
+      FROM ItemMaster i
+      INNER JOIN (
+        SELECT 
+          d.ITEMCODE,
+          ISNULL(d.SUBCODE, '') AS SUBCODE,
+          SUM(d.PENDINGQTY) AS TotalPOPendingQty,
+          SUM(d.QUANTITY) AS TotalPOOrderedQty,
+          GROUP_CONCAT(h.PONO || ' (' || CAST(d.PENDINGQTY AS INT) || ' ' || ISNULL(d.UNIT, 'PCS') || ')', ', ') AS PODetailsList
+        FROM PurchaseOrderDetail d
+        INNER JOIN PurchaseOrderHeader h ON d.POID = h.ID
+        WHERE UPPER(h.STATUS) IN ('PENDING', 'PARTIALLY FULFILLED') AND d.PENDINGQTY > 0
+    `;
+
+    if (poId) {
+      query += ` AND h.ID = @POID`;
+      reqInstance.input('POID', sql.Numeric(8, 0), poId);
+    }
+
+    query += `
+        GROUP BY d.ITEMCODE, ISNULL(d.SUBCODE, '')
+      ) po ON i.ItemCode = po.ITEMCODE AND ISNULL(i.SubCode, '') = po.SUBCODE
+      LEFT JOIN (
+        SELECT 
+          pid.ITEMCODE,
+          ISNULL(pid.SUBCODE, '') AS SUBCODE,
+          SUM(pid.PENDINGQTY) AS TotalPIPendingQty,
+          SUM(pid.QUANTITY) AS TotalPIOrderedQty,
+          GROUP_CONCAT(pih.PINO || ' (' || CAST(pid.PENDINGQTY AS INT) || ' ' || ISNULL(pid.UNIT, 'PCS') || ')', ', ') AS PIDetailsList
+        FROM PerformaInvoiceDetail pid
+        INNER JOIN PerformaInvoiceHeader pih ON pid.PIID = pih.ID
+        WHERE UPPER(pih.STATUS) IN ('ORDERED', 'PARTIALLY RECEIVED', 'DRAFT') AND pid.PENDINGQTY > 0
+        GROUP BY pid.ITEMCODE, ISNULL(pid.SUBCODE, '')
+      ) pi ON i.ItemCode = pi.ITEMCODE AND ISNULL(i.SubCode, '') = pi.SUBCODE
+      WHERE 1=1
+    `;
+
+    if (category && category !== 'All') {
+      query += ` AND i.Category = @Category`;
+      reqInstance.input('Category', sql.VarChar(20), category);
+    }
+
+    if (search && search.trim()) {
+      query += ` AND (i.ItemCode LIKE @Search OR i.SubCode LIKE @Search OR i.ItemName LIKE @Search OR po.PODetailsList LIKE @Search)`;
+      reqInstance.input('Search', sql.VarChar(100), `%${search.trim()}%`);
+    }
+
+    query += `
+      ORDER BY (po.TotalPOPendingQty - ISNULL(i.ClosingStock, 0) - ISNULL(pi.TotalPIPendingQty, 0)) DESC, i.ItemCode ASC
+    `;
+
+    const result = await reqInstance.query(query);
+    const rawRows = result.recordset || [];
+
+    const items = [];
+    let totalDemandItems = 0;
+    let shortfallItemsCount = 0;
+    let totalDemandQty = 0;
+    let totalStockInHand = 0;
+    let totalPipelinePIQty = 0;
+    let totalMissingQty = 0;
+    let totalMissingValue = 0;
+
+    for (const row of rawRows) {
+      const poDemand = parseFloat(row.TotalPOPendingQty) || 0;
+      const stock = parseFloat(row.StockInHand) || 0;
+      const piPending = parseFloat(row.PendingPIQty) || 0;
+      const costing = parseFloat(row.Costing) || 0;
+
+      // Exact user formula: req stock = total of item wise po quantity - stock in hand - itemwise pending performa invoice quantity (if created)
+      const missingQty = Math.max(0, poDemand - stock - piPending);
+      const missingValue = Math.round(missingQty * costing * 100) / 100;
+
+      let status = 'Fully Covered';
+      if (missingQty > 0) {
+        if (piPending > 0) {
+          status = 'Partial Shortfall';
+        } else {
+          status = 'Critical Shortfall';
+        }
+      } else if (poDemand > stock && piPending > 0) {
+        status = 'Covered via PI';
+      }
+
+      totalDemandItems++;
+      if (missingQty > 0) shortfallItemsCount++;
+      totalDemandQty += poDemand;
+      totalStockInHand += stock;
+      totalPipelinePIQty += piPending;
+      totalMissingQty += missingQty;
+      totalMissingValue += missingValue;
+
+      const itemObj = {
+        ...row,
+        TotalPOPendingQty: poDemand,
+        StockInHand: stock,
+        PendingPIQty: piPending,
+        MissingQty: missingQty,
+        MissingValue: missingValue,
+        Status: status
+      };
+
+      if (shortfallOnly === 'true' && missingQty <= 0) {
+        continue;
+      }
+
+      items.push(itemObj);
+    }
+
+    res.status(200).json({
+      summary: {
+        totalDemandItems,
+        shortfallItemsCount,
+        totalDemandQty: Math.round(totalDemandQty * 1000) / 1000,
+        totalStockInHand: Math.round(totalStockInHand * 1000) / 1000,
+        totalPipelinePIQty: Math.round(totalPipelinePIQty * 1000) / 1000,
+        totalMissingQty: Math.round(totalMissingQty * 1000) / 1000,
+        totalMissingValue: Math.round(totalMissingValue * 100) / 100
+      },
+      items
+    });
+  } catch (error) {
+    console.error('Error fetching PO fulfillment report:', error);
+    res.status(500).json({ message: 'Server error fetching fulfillment report', error: error.message });
   }
 };
 
