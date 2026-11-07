@@ -58,7 +58,7 @@ exports.getOutwards = async (req, res) => {
     
     // Fetch OutwardDetails
     const detailResult = await pool.request().query(`
-      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, d.PODETAILID, i.ItemName
+      SELECT d.*, ISNULL(d.SUBCODE, '') AS SUBCODE, d.PODETAILID, i.ItemName, i.HSNCode
       FROM OutwardDetail d
       LEFT JOIN ItemMaster i ON d.ITEMCODE = i.ItemCode AND ISNULL(d.SUBCODE, '') = ISNULL(i.SubCode, '')
     `);
@@ -105,6 +105,7 @@ exports.getOutwardReport = async (req, res) => {
         ISNULL(d.SUBCODE, '') AS SUBCODE,
         d.PODETAILID,
         i.ItemName, 
+        i.HSNCode,
         d.UNIT, 
         d.QUANTITY, 
         d.GROSSWT, 

@@ -777,21 +777,22 @@ const OutwardEntry = () => {
 
     const tableStartY = Math.max(currentY + 5, dividerY + 35);
 
-    // Table Column & Rows
-    const tableColumn = isEInvoice 
-      ? ["Sr.", "Item Code & Name", "HSN/SAC", "Qty", "Unit", "Rate", "Discount", "Amount"]
-      : ["Sr.", "Item Code & Name", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Discount", "Amount"];
-
+    // Table Column & Rows - Always include HSN/SAC code
     const detailsSource = isSaveAction ? outward.Details : (outward.Details || []);
+    const hasWeights = detailsSource.some(d => (parseFloat(d.GROSSWT) || 0) > 0 || (parseFloat(d.NETWT) || 0) > 0);
+
+    const tableColumn = hasWeights 
+      ? ["Sr.", "Item Code & Name", "HSN/SAC", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Disc %", "Amount"]
+      : ["Sr.", "Item Code & Name", "HSN/SAC", "Qty", "Unit", "Rate", "Discount", "Amount"];
     
     const tableRows = detailsSource.map((d, index) => {
       const matched = items.find(item => item.ItemCode === d.ITEMCODE && (item.SubCode || '') === (d.SUBCODE || ''));
       const itemName = d.ItemName || matched?.ItemName || '';
       const itemCodeDisplay = d.SUBCODE ? `${d.ITEMCODE} / ${d.SUBCODE}` : d.ITEMCODE;
-      const hsnCode = matched?.HSNCode || '84818090';
+      const hsnCode = d.HSNCode || matched?.HSNCode || '84818090';
       const discVal = parseFloat(d.DISCOUNT) || 0;
       
-      if (isEInvoice) {
+      if (!hasWeights) {
         return [
           index + 1,
           `${itemCodeDisplay} - ${itemName}`,
@@ -807,6 +808,7 @@ const OutwardEntry = () => {
       return [
         index + 1,
         `${itemCodeDisplay} - ${itemName}`,
+        hsnCode,
         (d.GROSSWT || 0).toFixed(3),
         (d.NETWT || 0).toFixed(3),
         (d.QUANTITY || 0).toFixed(2),
@@ -817,23 +819,24 @@ const OutwardEntry = () => {
       ];
     });
 
-    const colStyles = isEInvoice ? {
+    const colStyles = hasWeights ? {
       0: { width: 8, halign: 'center' },
-      2: { halign: 'center' },
-      3: { halign: 'right' },
-      4: { halign: 'center' },
-      5: { halign: 'right' },
-      6: { halign: 'center' },
-      7: { halign: 'right' }
+      2: { width: 18, halign: 'center' },
+      3: { width: 16, halign: 'right' },
+      4: { width: 16, halign: 'right' },
+      5: { width: 14, halign: 'right' },
+      6: { width: 12, halign: 'center' },
+      7: { width: 16, halign: 'right' },
+      8: { width: 13, halign: 'center' },
+      9: { width: 20, halign: 'right' }
     } : {
       0: { width: 8, halign: 'center' },
-      2: { halign: 'right' },
-      3: { halign: 'right' },
-      4: { halign: 'right' },
-      5: { halign: 'center' },
-      6: { halign: 'right' },
-      7: { halign: 'center' },
-      8: { halign: 'right' }
+      2: { width: 22, halign: 'center' },
+      3: { width: 18, halign: 'right' },
+      4: { width: 15, halign: 'center' },
+      5: { width: 20, halign: 'right' },
+      6: { width: 16, halign: 'center' },
+      7: { width: 24, halign: 'right' }
     };
 
     autoTable(doc, {

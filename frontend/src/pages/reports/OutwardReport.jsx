@@ -93,6 +93,7 @@ const OutwardReport = () => {
     { field: 'ITEMCODE', headerName: 'Item Code', width: 110 },
     { field: 'SUBCODE', headerName: 'Sub Code', width: 95, valueGetter: (value, row) => row?.SUBCODE || '-' },
     { field: 'ItemName', headerName: 'Item Name', flex: 1 },
+    { field: 'HSNCode', headerName: 'HSN/SAC', width: 95, valueGetter: (value, row) => row?.HSNCode || '84818090' },
     { field: 'UNIT', headerName: 'Unit', width: 80 },
     { field: 'QUANTITY', headerName: 'Qty', width: 80, type: 'number' },
     { field: 'GROSSWT', headerName: 'Gross Wt', width: 90, type: 'number' },
@@ -216,6 +217,7 @@ const OutwardReport = () => {
       row.ITEMCODE,
       row.SUBCODE || '-',
       row.ItemName,
+      row.HSNCode || '84818090',
       row.UNIT || '',
       row.QUANTITY,
       row.GROSSWT,
@@ -226,11 +228,11 @@ const OutwardReport = () => {
     ]);
     
     tableData.push([
-      '', '', '', '', '', 'GRAND TOTAL', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), '', '', displayedTotals.totalAmount.toFixed(2)
+      '', '', '', '', '', 'GRAND TOTAL', '', '', displayedTotals.totalQty.toFixed(2), displayedTotals.totalGrossWt.toFixed(3), displayedTotals.totalNetWt.toFixed(3), '', '', displayedTotals.totalAmount.toFixed(2)
     ]);
 
     autoTable(doc, {
-      head: [['Outward No', 'Date', 'Ledger', 'Item Code', 'Sub Code', 'Item Name', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Disc %', 'Amount']],
+      head: [['Outward No', 'Date', 'Ledger', 'Item Code', 'Sub Code', 'Item Name', 'HSN/SAC', 'Unit', 'Qty', 'Gross Wt', 'Net Wt', 'Rate', 'Disc %', 'Amount']],
       body: tableData,
       startY: 45,
       theme: 'grid',
