@@ -71,7 +71,17 @@ const UserMaster = () => {
     IsAdd: false,
     IsEdit: false,
     IsDelete: false,
-    AllowedMenus: []
+    AllowedMenus: [],
+    FullName: '',
+    BiometricCode: '',
+    Department: 'LABOUR',
+    Designation: 'Operator',
+    SalaryType: 'Monthly',
+    MonthlySalary: 15000,
+    DailyRate: 600,
+    HourlyRate: 75,
+    OvertimeRatePerHour: 100,
+    StandardWorkingHours: 8
   });
 
   const fetchUsers = async () => {
@@ -109,6 +119,9 @@ const UserMaster = () => {
     const searchLower = searchTerm.toLowerCase();
     return (
       (user.Username && user.Username.toLowerCase().includes(searchLower)) ||
+      (user.FullName && user.FullName.toLowerCase().includes(searchLower)) ||
+      (user.BiometricCode && String(user.BiometricCode).toLowerCase().includes(searchLower)) ||
+      (user.Department && user.Department.toLowerCase().includes(searchLower)) ||
       (user.UserRole && user.UserRole.toLowerCase().includes(searchLower)) ||
       (user.MobileNo && user.MobileNo.includes(searchTerm))
     );
@@ -148,12 +161,42 @@ const UserMaster = () => {
         IsAdd: isAdmin ? true : !!user.IsAdd,
         IsEdit: isAdmin ? true : !!user.IsEdit,
         IsDelete: isAdmin ? true : !!user.IsDelete,
+        FullName: user.FullName || '',
+        BiometricCode: user.BiometricCode || '',
+        Department: user.Department || 'LABOUR',
+        Designation: user.Designation || 'Operator',
+        SalaryType: user.SalaryType || 'Monthly',
+        MonthlySalary: user.MonthlySalary !== undefined && user.MonthlySalary !== null ? user.MonthlySalary : 15000,
+        DailyRate: user.DailyRate !== undefined && user.DailyRate !== null ? user.DailyRate : 600,
+        HourlyRate: user.HourlyRate !== undefined && user.HourlyRate !== null ? user.HourlyRate : 75,
+        OvertimeRatePerHour: user.OvertimeRatePerHour !== undefined && user.OvertimeRatePerHour !== null ? user.OvertimeRatePerHour : 100,
+        StandardWorkingHours: user.StandardWorkingHours !== undefined && user.StandardWorkingHours !== null ? user.StandardWorkingHours : 8,
         AllowedMenus: (user.AllowedMenus !== undefined && user.AllowedMenus !== null)
           ? (user.AllowedMenus ? user.AllowedMenus.split(',').map(s => s.trim()).filter(Boolean) : [])
           : getAllMenuPaths()
       });
     } else {
-      setFormData({ Username: '', Password: '', MobileNo: '', UserRole: 'OPERATOR', IsActive: false, IsAdd: false, IsEdit: false, IsDelete: false, AllowedMenus: getAllMenuPaths() });
+      setFormData({ 
+        Username: '', 
+        Password: '', 
+        MobileNo: '', 
+        UserRole: 'OPERATOR', 
+        IsActive: true, 
+        IsAdd: false, 
+        IsEdit: false, 
+        IsDelete: false, 
+        FullName: '',
+        BiometricCode: '',
+        Department: 'LABOUR',
+        Designation: 'Operator',
+        SalaryType: 'Monthly',
+        MonthlySalary: 15000,
+        DailyRate: 600,
+        HourlyRate: 75,
+        OvertimeRatePerHour: 100,
+        StandardWorkingHours: 8,
+        AllowedMenus: getAllMenuPaths() 
+      });
     }
     setOpenDialog(true);
   };
@@ -315,22 +358,32 @@ const UserMaster = () => {
                 <TableCell sx={{ fontWeight: 600 }}>Sr. No.</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel
-                    active={sortConfig.key === 'Username'}
-                    direction={sortConfig.key === 'Username' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('Username')}
+                    active={sortConfig.key === 'BiometricCode'}
+                    direction={sortConfig.key === 'BiometricCode' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('BiometricCode')}
                   >
-                    Username
+                    Biometric ID
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel
-                    active={sortConfig.key === 'MobileNo'}
-                    direction={sortConfig.key === 'MobileNo' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('MobileNo')}
+                    active={sortConfig.key === 'FullName'}
+                    direction={sortConfig.key === 'FullName' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('FullName')}
                   >
-                    Mobile Number
+                    Employee / User
                   </TableSortLabel>
                 </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <TableSortLabel
+                    active={sortConfig.key === 'Department'}
+                    direction={sortConfig.key === 'Department' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('Department')}
+                  >
+                    Department
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Salary Basis</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel
                     active={sortConfig.key === 'UserRole'}
@@ -349,9 +402,6 @@ const UserMaster = () => {
                     Status
                   </TableSortLabel>
                 </TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Add</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Edit</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Delete</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -359,23 +409,64 @@ const UserMaster = () => {
               {sortedUsers
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((row, index) => {
+                  const salaryText = row.SalaryType === 'Daily'
+                    ? `₹${row.DailyRate || 0} / Day`
+                    : row.SalaryType === 'Hourly'
+                    ? `₹${row.HourlyRate || 0} / Hr`
+                    : `₹${row.MonthlySalary || 0} / Month`;
+
                   return (
                     <TableRow hover tabIndex={-1} key={row.UserId}>
                       <TableCell>{page * rowsPerPage + index + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{row.Username}</TableCell>
-                      <TableCell>{row.MobileNo || '-'}</TableCell>
-                      <TableCell>{row.UserRole}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={row.BiometricCode ? `#${row.BiometricCode}` : 'N/A'}
+                          size="small"
+                          sx={{ fontWeight: 600, bgcolor: row.BiometricCode ? '#e0f2fe' : '#f1f5f9', color: row.BiometricCode ? '#0369a1' : '#64748b' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                          {row.FullName || row.Username}
+                        </Typography>
+                        {row.FullName && row.FullName !== row.Username && (
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                            User: {row.Username}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {row.Department || 'LABOUR'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b' }}>
+                          {row.Designation || 'Operator'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#166534' }}>
+                          {salaryText}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                          OT: ₹{row.OvertimeRatePerHour || 100}/hr • {row.StandardWorkingHours || 8}h/day
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={row.UserRole} 
+                          size="small" 
+                          color={row.UserRole === 'ADMIN' ? 'primary' : 'default'}
+                          sx={{ fontWeight: 600, height: 22 }}
+                        />
+                      </TableCell>
                       <TableCell>
                         <Chip 
                           label={row.IsActive ? 'Active' : 'Inactive'} 
                           color={row.IsActive ? 'success' : 'error'} 
                           size="small" 
-                          sx={{ fontWeight: 600, height: 24 }}
+                          sx={{ fontWeight: 600, height: 22 }}
                         />
                       </TableCell>
-                      <TableCell align="center">{row.IsAdd ? 'Yes' : 'No'}</TableCell>
-                      <TableCell align="center">{row.IsEdit ? 'Yes' : 'No'}</TableCell>
-                      <TableCell align="center">{row.IsDelete ? 'Yes' : 'No'}</TableCell>
                       <TableCell align="center">
                         <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
                           <EditIcon fontSize="small" />
@@ -389,7 +480,7 @@ const UserMaster = () => {
                 })}
               {sortedUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
                     No users found matching your search.
                   </TableCell>
                 </TableRow>
@@ -411,47 +502,203 @@ const UserMaster = () => {
       </Paper>
 
       {/* Add / Edit Dialog */}
-      <Dialog open={openDialog} onClose={(event, reason) => { if (reason !== 'backdropClick') handleCloseDialog(); }} maxWidth="sm" fullWidth>
-        <DialogTitle>{dialogMode === 'add' ? 'Add New User' : 'Edit User'}</DialogTitle>
+      <Dialog open={openDialog} onClose={(event, reason) => { if (reason !== 'backdropClick') handleCloseDialog(); }} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', pb: 1 }}>
+          {dialogMode === 'add' ? 'Add New User & Employee' : 'Edit User & Employee Settings'}
+        </DialogTitle>
         <DialogContent dividers>
           {dialogError && (
             <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>
           )}
           <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField label="Username" name="Username" value={formData.Username} onChange={handleInputChange} fullWidth size="small" />
-            <TextField 
-              label="Password" 
-              name="Password" 
-              value={formData.Password} 
-              onChange={handleInputChange} 
-              type={showPassword ? 'text' : 'password'} 
-              fullWidth 
-              size="small" 
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                      size="small"
-                      sx={{ p: 0.5 }}
-                    >
-                      {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                )
-              }}
-            />
-            <TextField label="Mobile No" name="MobileNo" value={formData.MobileNo} onChange={handleInputChange} fullWidth size="small" />
-            <TextField label="Role" name="UserRole" value={formData.UserRole} onChange={handleInputChange} select fullWidth size="small">
-              <MenuItem value="OPERATOR">OPERATOR</MenuItem>
-              <MenuItem value="ADMIN">ADMIN</MenuItem>
-              <MenuItem value="MANAGER">MANAGER</MenuItem>
-            </TextField>
-            <Box sx={{ display: 'flex', gap: 2, mt: 1, flexWrap: 'wrap' }}>
+            
+            {/* Identity & Credentials */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              1. Basic Information & Login Credentials
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField 
+                label="Username" 
+                name="Username" 
+                value={formData.Username} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                required 
+              />
+              <TextField 
+                label="Full Employee Name" 
+                name="FullName" 
+                value={formData.FullName} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                placeholder="e.g. AKSHAY LOKHIL"
+              />
+              <TextField 
+                label="Password" 
+                name="Password" 
+                value={formData.Password} 
+                onChange={handleInputChange} 
+                type={showPassword ? 'text' : 'password'} 
+                fullWidth 
+                size="small" 
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                        size="small"
+                        sx={{ p: 0.5 }}
+                      >
+                        {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
+              <TextField 
+                label="Mobile No" 
+                name="MobileNo" 
+                value={formData.MobileNo} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+              />
+              <TextField 
+                label="Biometric ID / Code" 
+                name="BiometricCode" 
+                value={formData.BiometricCode} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                helperText="Matches User ID in biometric machine (e.g. 0001, 0002)"
+              />
+              <TextField 
+                label="System Role" 
+                name="UserRole" 
+                value={formData.UserRole} 
+                onChange={handleInputChange} 
+                select 
+                fullWidth 
+                size="small"
+              >
+                <MenuItem value="OPERATOR">OPERATOR</MenuItem>
+                <MenuItem value="ADMIN">ADMIN</MenuItem>
+                <MenuItem value="MANAGER">MANAGER</MenuItem>
+              </TextField>
+            </Box>
+
+            {/* Department & Designation */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, mt: 1 }}>
+              2. Department & Designation
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField 
+                label="Department" 
+                name="Department" 
+                value={formData.Department} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                placeholder="e.g. LABOUR, OFFICE, TURNING"
+              />
+              <TextField 
+                label="Designation" 
+                name="Designation" 
+                value={formData.Designation} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                placeholder="e.g. Operator, Staff, Manager"
+              />
+            </Box>
+
+            {/* Attendance & Salary Configuration */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, mt: 1 }}>
+              3. Attendance & Salary Parameters
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+              <TextField 
+                label="Salary Calculation Type" 
+                name="SalaryType" 
+                value={formData.SalaryType} 
+                onChange={handleInputChange} 
+                select 
+                fullWidth 
+                size="small"
+              >
+                <MenuItem value="Monthly">Monthly Fixed</MenuItem>
+                <MenuItem value="Daily">Daily Wages</MenuItem>
+                <MenuItem value="Hourly">Hourly Rate</MenuItem>
+              </TextField>
+
+              {formData.SalaryType === 'Monthly' && (
+                <TextField 
+                  label="Monthly Base Salary (₹)" 
+                  name="MonthlySalary" 
+                  type="number"
+                  value={formData.MonthlySalary} 
+                  onChange={handleInputChange} 
+                  fullWidth 
+                  size="small" 
+                />
+              )}
+
+              {formData.SalaryType === 'Daily' && (
+                <TextField 
+                  label="Daily Rate (₹)" 
+                  name="DailyRate" 
+                  type="number"
+                  value={formData.DailyRate} 
+                  onChange={handleInputChange} 
+                  fullWidth 
+                  size="small" 
+                />
+              )}
+
+              {formData.SalaryType === 'Hourly' && (
+                <TextField 
+                  label="Hourly Rate (₹)" 
+                  name="HourlyRate" 
+                  type="number"
+                  value={formData.HourlyRate} 
+                  onChange={handleInputChange} 
+                  fullWidth 
+                  size="small" 
+                />
+              )}
+
+              <TextField 
+                label="Overtime Rate / Hour (₹)" 
+                name="OvertimeRatePerHour" 
+                type="number"
+                value={formData.OvertimeRatePerHour} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+              />
+              <TextField 
+                label="Standard Working Hours / Day" 
+                name="StandardWorkingHours" 
+                type="number"
+                value={formData.StandardWorkingHours} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                placeholder="8"
+              />
+            </Box>
+
+            {/* Access & Action Permissions */}
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', textTransform: 'uppercase', letterSpacing: 0.5, mt: 1 }}>
+              4. Permissions & Status
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', p: 1, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #e2e8f0' }}>
               <FormControlLabel
-                control={<Checkbox name="IsActive" checked={formData.IsActive} onChange={handleInputChange} />}
-                label="Active"
+                control={<Checkbox name="IsActive" checked={formData.IsActive} onChange={handleInputChange} color="success" />}
+                label="Active Account"
               />
               <FormControlLabel
                 control={<Checkbox name="IsAdd" checked={formData.UserRole === 'ADMIN' ? true : formData.IsAdd} onChange={handleInputChange} disabled={formData.UserRole === 'ADMIN'} />}

@@ -20,7 +20,9 @@ import {
   ManageAccounts as UserAccessIcon,
   NotificationsActive as NotificationsActiveIcon,
   Assignment as POIcon,
-  ReceiptLong as PIIcon
+  ReceiptLong as PIIcon,
+  Badge as BadgeIcon,
+  CalendarMonth as CalendarMonthIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -83,6 +85,14 @@ export const MENU_STRUCTURE = [
     ]
   },
   {
+    title: 'Attendance & Payroll',
+    id: 'attendancePayroll',
+    icon: <BadgeIcon />,
+    children: [
+      { title: 'Attendance & Salary', path: '/dashboard/attendance', icon: <CalendarMonthIcon /> },
+    ]
+  },
+  {
     title: 'Reports',
     id: 'reports',
     icon: <ReportsIcon />,
@@ -133,6 +143,12 @@ export const MENU_STRUCTURE = [
           { title: 'Payable (Due by Days)', path: '/dashboard/reports/invoice-payable', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Profit & Loss', path: '/dashboard/reports/profit-loss', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Balance Sheet', path: '/dashboard/reports/balance-sheet', icon: <ReportsIcon fontSize="small" /> },
+        ]
+      },
+      {
+        groupTitle: 'HR & Payroll',
+        children: [
+          { title: 'Monthly Attendance Report', path: '/dashboard/attendance', icon: <ReportsIcon fontSize="small" /> },
         ]
       }
     ]

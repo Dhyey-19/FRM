@@ -54,6 +54,7 @@ import JobworkMovementReport from './pages/reports/JobworkMovementReport';
 import ItemStockLedgerReport from './pages/reports/ItemStockLedgerReport';
 import PendingPOReport from './pages/reports/PendingPOReport';
 import NotificationLogs from './pages/NotificationLogs';
+import AttendanceManager from './pages/AttendanceManager';
 import ErrorBoundary from './components/common/ErrorBoundary';
 function AuthApp() {
   const [currentPage, setCurrentPage] = useState('login');
@@ -193,6 +194,8 @@ function App() {
             <Route path="reports/jobwork-in" element={<JobworkInReport />} />
             <Route path="reports/jobwork-movement" element={<JobworkMovementReport />} />
             <Route path="reports/jobwork-stock" element={<Navigate to="/dashboard/reports/jobwork-movement" replace />} />
+            <Route path="attendance" element={<AttendanceManager />} />
+            <Route path="reports/attendance" element={<Navigate to="/dashboard/attendance" replace />} />
           </Route>
         </Routes>
       </ErrorBoundary>

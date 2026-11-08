@@ -6,7 +6,9 @@ exports.getUsers = async (req, res) => {
     const pool = await connectDB();
     const result = await pool.request()
       .query(`
-        SELECT UserId, Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus 
+        SELECT UserId, Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus,
+               FullName, BiometricCode, Department, Designation, SalaryType, 
+               MonthlySalary, DailyRate, HourlyRate, OvertimeRatePerHour, StandardWorkingHours
         FROM Users 
         ORDER BY UserId DESC
       `);
@@ -25,7 +27,9 @@ exports.getUserById = async (req, res) => {
     const result = await pool.request()
       .input('UserId', sql.Int, id)
       .query(`
-        SELECT UserId, Username, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus 
+        SELECT UserId, Username, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus,
+               FullName, BiometricCode, Department, Designation, SalaryType, 
+               MonthlySalary, DailyRate, HourlyRate, OvertimeRatePerHour, StandardWorkingHours
         FROM Users 
         WHERE UserId = @UserId
       `);
@@ -41,7 +45,11 @@ exports.getUserById = async (req, res) => {
 
 // POST /api/users
 exports.createUser = async (req, res) => {
-  const { Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus } = req.body;
+  const { 
+    Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus,
+    FullName, BiometricCode, Department, Designation, SalaryType, 
+    MonthlySalary, DailyRate, HourlyRate, OvertimeRatePerHour, StandardWorkingHours
+  } = req.body;
   const isAdmin = UserRole === 'ADMIN';
 
   try {
@@ -66,9 +74,27 @@ exports.createUser = async (req, res) => {
       .input('IsEdit', sql.Bit, isAdmin ? 1 : (IsEdit ? 1 : 0))
       .input('IsDelete', sql.Bit, isAdmin ? 1 : (IsDelete ? 1 : 0))
       .input('AllowedMenus', sql.NVarChar(sql.MAX), AllowedMenus || '')
+      .input('FullName', sql.VarChar(100), FullName || null)
+      .input('BiometricCode', sql.VarChar(30), BiometricCode || null)
+      .input('Department', sql.VarChar(50), Department || 'LABOUR')
+      .input('Designation', sql.VarChar(50), Designation || 'Operator')
+      .input('SalaryType', sql.VarChar(20), SalaryType || 'Monthly')
+      .input('MonthlySalary', sql.Decimal(12, 2), MonthlySalary !== undefined && MonthlySalary !== null ? MonthlySalary : 15000.00)
+      .input('DailyRate', sql.Decimal(10, 2), DailyRate !== undefined && DailyRate !== null ? DailyRate : 600.00)
+      .input('HourlyRate', sql.Decimal(10, 2), HourlyRate !== undefined && HourlyRate !== null ? HourlyRate : 75.00)
+      .input('OvertimeRatePerHour', sql.Decimal(10, 2), OvertimeRatePerHour !== undefined && OvertimeRatePerHour !== null ? OvertimeRatePerHour : 100.00)
+      .input('StandardWorkingHours', sql.Decimal(4, 2), StandardWorkingHours !== undefined && StandardWorkingHours !== null ? StandardWorkingHours : 8.00)
       .query(`
-        INSERT INTO Users (Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus)
-        VALUES (@Username, @Password, @MobileNo, @UserRole, @IsActive, @IsAdd, @IsEdit, @IsDelete, @AllowedMenus)
+        INSERT INTO Users (
+          Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus,
+          FullName, BiometricCode, Department, Designation, SalaryType,
+          MonthlySalary, DailyRate, HourlyRate, OvertimeRatePerHour, StandardWorkingHours
+        )
+        VALUES (
+          @Username, @Password, @MobileNo, @UserRole, @IsActive, @IsAdd, @IsEdit, @IsDelete, @AllowedMenus,
+          @FullName, @BiometricCode, @Department, @Designation, @SalaryType,
+          @MonthlySalary, @DailyRate, @HourlyRate, @OvertimeRatePerHour, @StandardWorkingHours
+        )
       `);
 
     res.status(201).json({ message: 'User created successfully' });
@@ -81,7 +107,11 @@ exports.createUser = async (req, res) => {
 // PUT /api/users/:id
 exports.updateUser = async (req, res) => {
   const { id } = req.params;
-  const { Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus } = req.body;
+  const { 
+    Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus,
+    FullName, BiometricCode, Department, Designation, SalaryType, 
+    MonthlySalary, DailyRate, HourlyRate, OvertimeRatePerHour, StandardWorkingHours
+  } = req.body;
   const isAdmin = UserRole === 'ADMIN';
 
   try {
@@ -108,6 +138,16 @@ exports.updateUser = async (req, res) => {
       .input('IsEdit', sql.Bit, isAdmin ? 1 : (IsEdit ? 1 : 0))
       .input('IsDelete', sql.Bit, isAdmin ? 1 : (IsDelete ? 1 : 0))
       .input('AllowedMenus', sql.NVarChar(sql.MAX), AllowedMenus || '')
+      .input('FullName', sql.VarChar(100), FullName || null)
+      .input('BiometricCode', sql.VarChar(30), BiometricCode || null)
+      .input('Department', sql.VarChar(50), Department || 'LABOUR')
+      .input('Designation', sql.VarChar(50), Designation || 'Operator')
+      .input('SalaryType', sql.VarChar(20), SalaryType || 'Monthly')
+      .input('MonthlySalary', sql.Decimal(12, 2), MonthlySalary !== undefined && MonthlySalary !== null ? MonthlySalary : 15000.00)
+      .input('DailyRate', sql.Decimal(10, 2), DailyRate !== undefined && DailyRate !== null ? DailyRate : 600.00)
+      .input('HourlyRate', sql.Decimal(10, 2), HourlyRate !== undefined && HourlyRate !== null ? HourlyRate : 75.00)
+      .input('OvertimeRatePerHour', sql.Decimal(10, 2), OvertimeRatePerHour !== undefined && OvertimeRatePerHour !== null ? OvertimeRatePerHour : 100.00)
+      .input('StandardWorkingHours', sql.Decimal(4, 2), StandardWorkingHours !== undefined && StandardWorkingHours !== null ? StandardWorkingHours : 8.00)
       .query(`
         UPDATE Users 
         SET Username = @Username, 
@@ -118,7 +158,17 @@ exports.updateUser = async (req, res) => {
             IsAdd = @IsAdd,
             IsEdit = @IsEdit,
             IsDelete = @IsDelete,
-            AllowedMenus = @AllowedMenus
+            AllowedMenus = @AllowedMenus,
+            FullName = @FullName,
+            BiometricCode = @BiometricCode,
+            Department = @Department,
+            Designation = @Designation,
+            SalaryType = @SalaryType,
+            MonthlySalary = @MonthlySalary,
+            DailyRate = @DailyRate,
+            HourlyRate = @HourlyRate,
+            OvertimeRatePerHour = @OvertimeRatePerHour,
+            StandardWorkingHours = @StandardWorkingHours
         WHERE UserId = @UserId
       `);
 
