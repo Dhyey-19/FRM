@@ -12,6 +12,9 @@ const upload = multer({
 // Upload and process biometric machine monthly log PDF
 router.post('/upload', upload.single('file'), attendanceController.uploadAttendance);
 
+// Recalculate monthly salaries directly as per User Master configurations
+router.post('/recalculate-master', attendanceController.recalculateSalariesAsPerMaster);
+
 // Get monthly attendance & salary summary list with stats
 router.get('/summary', attendanceController.getMonthlySummary);
 
@@ -28,3 +31,4 @@ router.put('/summary/:id', attendanceController.updateAttendanceSummary);
 router.delete('/month/:monthYear', attendanceController.deleteMonth);
 
 module.exports = router;
+

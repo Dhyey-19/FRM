@@ -71,3 +71,4 @@ CREATE INDEX IF NOT EXISTS "IX_AttendanceMonthlySummary_MonthYear" ON "Attendanc
 CREATE INDEX IF NOT EXISTS "IX_AttendanceMonthlySummary_BiometricCode" ON "AttendanceMonthlySummary" ("BiometricCode");
 CREATE INDEX IF NOT EXISTS "IX_AttendanceDailyLog_SummaryId" ON "AttendanceDailyLog" ("SummaryId");
 CREATE INDEX IF NOT EXISTS "IX_AttendanceDailyLog_MonthYear_BiometricCode" ON "AttendanceDailyLog" ("MonthYear", "BiometricCode");
+

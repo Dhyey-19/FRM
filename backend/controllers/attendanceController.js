@@ -3,6 +3,122 @@ const path = require('path');
 const { sql, connectDB, getDatabase } = require('../config/db');
 const { parseMonthlyAttendancePdf, parseTimeToDecimal, formatDecimalToTime } = require('../services/attendanceParserService');
 
+/**
+ * Robustly matches an attendance employee to a User Master record
+ * by: 1) Exact BiometricCode, 2) Integer BiometricCode, 3) FullName, 4) Username
+ */
+function matchUserWithMaster(bioCode, empName, masterUsers) {
+  const cleanBio = String(bioCode || '').trim();
+  const numBio = parseInt(cleanBio, 10);
+  const cleanName = String(empName || '').trim().toUpperCase();
+
+  // 1. Exact BiometricCode match
+  let found = masterUsers.find(u => u.BiometricCode && String(u.BiometricCode).trim() === cleanBio);
+  if (found) return found;
+
+  // 2. Numeric BiometricCode match (e.g. '0001' matches '1')
+  if (!isNaN(numBio)) {
+    found = masterUsers.find(u => u.BiometricCode && parseInt(u.BiometricCode, 10) === numBio);
+    if (found) return found;
+  }
+
+  // 3. FullName match
+  if (cleanName) {
+    found = masterUsers.find(u => u.FullName && u.FullName.trim().toUpperCase() === cleanName);
+    if (found) return found;
+
+    // 4. Username match
+    found = masterUsers.find(u => u.Username && u.Username.trim().toUpperCase() === cleanName);
+    if (found) return found;
+
+    // 5. Username without spaces match
+    const noSpaceName = cleanName.replace(/\s+/g, '');
+    found = masterUsers.find(u => u.Username && u.Username.replace(/\s+/g, '').toUpperCase() === noSpaceName);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+/**
+ * Calculates salary, overtime, and payable days strictly according to User Master rates & rules.
+ */
+function calculateEmployeeSalary(emp, masterUser, totalDaysInMonth) {
+  const salaryType = masterUser?.SalaryType || 'Monthly';
+  const monthlySalary = parseFloat(masterUser?.MonthlySalary) || 15000.00;
+  const dailyRate = parseFloat(masterUser?.DailyRate) || 600.00;
+  const hourlyRate = parseFloat(masterUser?.HourlyRate) || 75.00;
+  const otRate = parseFloat(masterUser?.OvertimeRatePerHour) || 100.00;
+  const stdHoursPerDay = parseFloat(masterUser?.StandardWorkingHours) || 8.00;
+
+  const presentDays = parseFloat(emp.PresentDays !== undefined ? emp.PresentDays : emp.presentDays) || 0;
+  const absentDays = parseFloat(emp.AbsentDays !== undefined ? emp.AbsentDays : emp.absentDays) || 0;
+  const weekOffDays = parseFloat(emp.WeekOffDays !== undefined ? emp.WeekOffDays : emp.weekOffDays) || 0;
+  const netWorkHours = parseFloat(emp.TotalNetWorkHoursDecimal !== undefined ? emp.TotalNetWorkHoursDecimal : emp.totalNetWorkHoursDecimal) || 0;
+  const grossHours = parseFloat(emp.TotalGrossHoursDecimal !== undefined ? emp.TotalGrossHoursDecimal : emp.totalGrossHoursDecimal) || 0;
+
+  // 1. Base Salary Rate
+  let baseSalary = monthlySalary;
+  if (salaryType === 'Daily') baseSalary = dailyRate;
+  if (salaryType === 'Hourly') baseSalary = hourlyRate;
+
+  // 2. Payable Days:
+  // Monthly: Present Days + Week Offs (if worked during the month)
+  // Daily: Present Days (paid per day worked)
+  // Hourly: Present Days
+  let payableDays = 0;
+  if (presentDays > 0 || grossHours > 0 || netWorkHours > 0) {
+    if (salaryType === 'Monthly') {
+      payableDays = parseFloat((presentDays + weekOffDays).toFixed(2));
+    } else {
+      payableDays = presentDays;
+    }
+  }
+
+  // 3. Calculated Base Salary & Overtime Hours
+  let calculatedSalary = 0;
+  let otHours = 0;
+  const expectedStandardHours = presentDays * stdHoursPerDay;
+
+  if (salaryType === 'Monthly') {
+    const perDayRate = totalDaysInMonth > 0 ? (monthlySalary / totalDaysInMonth) : 0;
+    calculatedSalary = Math.round(perDayRate * payableDays);
+
+    if (netWorkHours > expectedStandardHours && expectedStandardHours > 0) {
+      otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+    }
+  } else if (salaryType === 'Daily') {
+    calculatedSalary = Math.round(dailyRate * payableDays);
+
+    if (netWorkHours > expectedStandardHours && expectedStandardHours > 0) {
+      otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+    }
+  } else if (salaryType === 'Hourly') {
+    if (netWorkHours > expectedStandardHours && expectedStandardHours > 0 && otRate > 0) {
+      otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+      const regularHours = Math.min(netWorkHours, expectedStandardHours);
+      calculatedSalary = Math.round(hourlyRate * regularHours);
+    } else {
+      calculatedSalary = Math.round(hourlyRate * netWorkHours);
+    }
+  }
+
+  const overtimePay = Math.round(otHours * otRate);
+  const deductions = parseFloat(emp.Deductions) || 0;
+  const netSalary = Math.max(0, Math.round(calculatedSalary + overtimePay - deductions));
+
+  return {
+    salaryType,
+    baseSalary,
+    payableDays,
+    calculatedSalary,
+    otHours,
+    overtimePay,
+    deductions,
+    netSalary
+  };
+}
+
 // POST /api/attendance/upload
 // Handles biometric PDF upload and processes all records
 exports.uploadAttendance = async (req, res) => {
@@ -48,15 +164,6 @@ exports.uploadAttendance = async (req, res) => {
     `);
     const existingUsers = usersRes.recordset || [];
 
-    // Helper map for fast lookup
-    const userByBioCode = new Map();
-    const userByName = new Map();
-    for (const u of existingUsers) {
-      if (u.BiometricCode) userByBioCode.set(String(u.BiometricCode).trim(), u);
-      if (u.FullName) userByName.set(String(u.FullName).trim().toUpperCase(), u);
-      if (u.Username) userByName.set(String(u.Username).trim().toUpperCase(), u);
-    }
-
     // 3. Clear any existing records for this month to ensure clean re-upload
     await pool.request()
       .input('MonthYear', sql.VarChar(10), monthYear)
@@ -75,7 +182,7 @@ exports.uploadAttendance = async (req, res) => {
       const empDept = emp.department || 'LABOUR';
       const empDesig = emp.designation || 'Operator';
 
-      let matchedUser = userByBioCode.get(bioCode) || userByName.get(empName.toUpperCase());
+      let matchedUser = matchUserWithMaster(bioCode, empName, existingUsers);
 
       // If user does not exist in Users table, auto-seed them
       if (!matchedUser) {
@@ -133,9 +240,8 @@ exports.uploadAttendance = async (req, res) => {
             OvertimeRatePerHour: defOtRate,
             StandardWorkingHours: defStdHours
           };
-          userByBioCode.set(bioCode, matchedUser);
+          existingUsers.push(matchedUser);
         } catch (e) {
-          // If username collision or insert error, continue with default params
           matchedUser = {
             UserId: null,
             FullName: empName,
@@ -152,46 +258,8 @@ exports.uploadAttendance = async (req, res) => {
         }
       }
 
-      // Salary Configuration
-      const salaryType = matchedUser.SalaryType || 'Monthly';
-      const monthlySalary = parseFloat(matchedUser.MonthlySalary) || 15000.00;
-      const dailyRate = parseFloat(matchedUser.DailyRate) || 600.00;
-      const hourlyRate = parseFloat(matchedUser.HourlyRate) || 75.00;
-      const otRate = parseFloat(matchedUser.OvertimeRatePerHour) || 100.00;
-      const stdHoursPerDay = parseFloat(matchedUser.StandardWorkingHours) || 8.00;
-
-      // Base Salary depending on SalaryType
-      let baseSalary = monthlySalary;
-      if (salaryType === 'Daily') baseSalary = dailyRate;
-      if (salaryType === 'Hourly') baseSalary = hourlyRate;
-
-      // Payable Days: Present Days + Week-Offs (if present at least 1 day or has gross hours)
-      let payableDays = 0;
-      if (emp.presentDays > 0 || emp.totalGrossHoursDecimal > 0) {
-        payableDays = parseFloat((emp.presentDays + emp.weekOffDays).toFixed(2));
-      }
-
-      // Calculated Salary
-      let calculatedSalary = 0;
-      if (salaryType === 'Monthly') {
-        const perDayRate = totalDaysInMonth > 0 ? (monthlySalary / totalDaysInMonth) : 0;
-        calculatedSalary = Math.round(perDayRate * payableDays);
-      } else if (salaryType === 'Daily') {
-        calculatedSalary = Math.round(dailyRate * payableDays);
-      } else if (salaryType === 'Hourly') {
-        calculatedSalary = Math.round(hourlyRate * emp.totalNetWorkHoursDecimal);
-      }
-
-      // Overtime Hours & Pay
-      // Overtime is any net work hours exceeding standard working hours for present days
-      const expectedStandardHours = emp.presentDays * stdHoursPerDay;
-      let otHours = 0;
-      if (emp.totalNetWorkHoursDecimal > expectedStandardHours && expectedStandardHours > 0) {
-        otHours = parseFloat((emp.totalNetWorkHoursDecimal - expectedStandardHours).toFixed(2));
-      }
-      const overtimePay = Math.round(otHours * otRate);
-      const deductions = 0;
-      const netSalary = Math.round(calculatedSalary + overtimePay - deductions);
+      // Calculate salary as per User Master
+      const sal = calculateEmployeeSalary(emp, matchedUser, totalDaysInMonth);
 
       // Insert AttendanceMonthlySummary
       const summaryInsert = await pool.request()
@@ -210,19 +278,19 @@ exports.uploadAttendance = async (req, res) => {
         .input('PublicHolidays', sql.Decimal(5, 2), emp.publicHolidays || 0)
         .input('PaidLeaveDays', sql.Decimal(5, 2), emp.paidLeaveDays || 0)
         .input('UnpaidLeaveDays', sql.Decimal(5, 2), emp.unpaidLeaveDays || 0)
-        .input('PayableDays', sql.Decimal(5, 2), payableDays)
+        .input('PayableDays', sql.Decimal(5, 2), sal.payableDays)
         .input('TotalGrossHours', sql.VarChar(20), emp.totalGrossHours)
         .input('TotalGrossHoursDecimal', sql.Decimal(8, 2), emp.totalGrossHoursDecimal)
         .input('TotalBreakHours', sql.VarChar(20), emp.totalBreakHours)
         .input('TotalBreakHoursDecimal', sql.Decimal(8, 2), emp.totalBreakHoursDecimal)
         .input('TotalNetWorkHoursDecimal', sql.Decimal(8, 2), emp.totalNetWorkHoursDecimal)
-        .input('TotalOvertimeHoursDecimal', sql.Decimal(8, 2), otHours)
-        .input('SalaryType', sql.VarChar(20), salaryType)
-        .input('BaseSalary', sql.Decimal(12, 2), baseSalary)
-        .input('CalculatedSalary', sql.Decimal(12, 2), calculatedSalary)
-        .input('OvertimePay', sql.Decimal(12, 2), overtimePay)
-        .input('Deductions', sql.Decimal(12, 2), deductions)
-        .input('NetSalary', sql.Decimal(12, 2), netSalary)
+        .input('TotalOvertimeHoursDecimal', sql.Decimal(8, 2), sal.otHours)
+        .input('SalaryType', sql.VarChar(20), sal.salaryType)
+        .input('BaseSalary', sql.Decimal(12, 2), sal.baseSalary)
+        .input('CalculatedSalary', sql.Decimal(12, 2), sal.calculatedSalary)
+        .input('OvertimePay', sql.Decimal(12, 2), sal.overtimePay)
+        .input('Deductions', sql.Decimal(12, 2), sal.deductions)
+        .input('NetSalary', sql.Decimal(12, 2), sal.netSalary)
         .input('UploadedFileName', sql.VarChar(255), fileName)
         .query(`
           INSERT INTO AttendanceMonthlySummary (
@@ -292,14 +360,15 @@ exports.uploadAttendance = async (req, res) => {
         absentDays: emp.absentDays,
         weekOffDays: emp.weekOffDays,
         halfDays: emp.halfDays,
-        payableDays,
-        netSalary
+        payableDays: sal.payableDays,
+        salaryType: sal.salaryType,
+        netSalary: sal.netSalary
       });
     }
 
     res.status(200).json({
       success: true,
-      message: `Successfully processed biometric log for ${monthName}. Inserted ${employees.length} employee records.`,
+      message: `Successfully processed biometric log for ${monthName}. Calculated salaries as per User Master for ${employees.length} employees.`,
       organization,
       monthName,
       monthYear,
@@ -310,6 +379,86 @@ exports.uploadAttendance = async (req, res) => {
   } catch (error) {
     console.error('Error uploading and processing biometric attendance PDF:', error);
     res.status(500).json({ message: 'Error processing attendance file: ' + error.message });
+  }
+};
+
+// POST /api/attendance/recalculate-master
+// Recalculates all employee salaries for a given month directly from User Master settings
+exports.recalculateSalariesAsPerMaster = async (req, res) => {
+  try {
+    const { monthYear } = req.body;
+    if (!monthYear) {
+      return res.status(400).json({ message: 'monthYear is required (e.g. 2026-10)' });
+    }
+
+    const pool = await connectDB();
+
+    // 1. Fetch current User Master records
+    const usersRes = await pool.request().query(`
+      SELECT UserId, Username, FullName, BiometricCode, Department, Designation, 
+             SalaryType, MonthlySalary, DailyRate, HourlyRate, OvertimeRatePerHour, StandardWorkingHours 
+      FROM Users
+    `);
+    const masterUsers = usersRes.recordset || [];
+
+    // 2. Fetch all employee attendance summaries for this month
+    const summaryRes = await pool.request()
+      .input('MonthYear', sql.VarChar(10), monthYear)
+      .query(`SELECT * FROM AttendanceMonthlySummary WHERE MonthYear = @MonthYear`);
+    const summaries = summaryRes.recordset || [];
+
+    if (summaries.length === 0) {
+      return res.status(404).json({ message: `No attendance records found for month ${monthYear}` });
+    }
+
+    let updatedCount = 0;
+    const daysInMonth = summaries[0].TotalDaysInMonth || 31;
+
+    for (const record of summaries) {
+      const matchedUser = matchUserWithMaster(record.BiometricCode, record.EmployeeName, masterUsers);
+      if (!matchedUser) continue;
+
+      const calc = calculateEmployeeSalary(record, matchedUser, daysInMonth);
+
+      await pool.request()
+        .input('Id', sql.Int, record.Id)
+        .input('UserId', sql.Int, matchedUser.UserId || null)
+        .input('Department', sql.VarChar(50), matchedUser.Department || record.Department)
+        .input('Designation', sql.VarChar(50), matchedUser.Designation || record.Designation)
+        .input('SalaryType', sql.VarChar(20), calc.salaryType)
+        .input('BaseSalary', sql.Decimal(12, 2), calc.baseSalary)
+        .input('PayableDays', sql.Decimal(5, 2), calc.payableDays)
+        .input('CalculatedSalary', sql.Decimal(12, 2), calc.calculatedSalary)
+        .input('TotalOvertimeHoursDecimal', sql.Decimal(8, 2), calc.otHours)
+        .input('OvertimePay', sql.Decimal(12, 2), calc.overtimePay)
+        .input('NetSalary', sql.Decimal(12, 2), calc.netSalary)
+        .query(`
+          UPDATE AttendanceMonthlySummary
+          SET UserId = @UserId,
+              Department = @Department,
+              Designation = @Designation,
+              SalaryType = @SalaryType,
+              BaseSalary = @BaseSalary,
+              PayableDays = @PayableDays,
+              CalculatedSalary = @CalculatedSalary,
+              TotalOvertimeHoursDecimal = @TotalOvertimeHoursDecimal,
+              OvertimePay = @OvertimePay,
+              NetSalary = @NetSalary
+          WHERE Id = @Id
+        `);
+
+      updatedCount++;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully recalculated salaries as per User Master for ${updatedCount} employees.`,
+      monthYear,
+      updatedCount
+    });
+  } catch (error) {
+    console.error('Error recalculating salaries as per master:', error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };
 
@@ -595,3 +744,4 @@ exports.deleteMonth = async (req, res) => {
     res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };
+

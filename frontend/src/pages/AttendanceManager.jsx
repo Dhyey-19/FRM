@@ -50,7 +50,8 @@ import {
   CheckCircle as CheckIcon,
   Cancel as CancelIcon,
   Warning as WarningIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -114,7 +115,38 @@ const AttendanceManager = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
+  // Recalculate as per master state
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalculateMessage, setRecalculateMessage] = useState('');
+
   const API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/attendance`;
+
+  // Recalculate all employee salaries for the selected month as per current User Master
+  const handleRecalculateAsPerMaster = async () => {
+    if (!selectedMonth) return;
+    setRecalculating(true);
+    setRecalculateMessage('');
+    try {
+      const res = await fetch(`${API_BASE}/recalculate-master`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monthYear: selectedMonth })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRecalculateMessage(data.message || 'Salaries successfully recalculated as per User Master.');
+        fetchSummary(selectedMonth, selectedDept, searchTerm);
+        if (currentTab === 1) fetchMatrix(selectedMonth);
+      } else {
+        alert(data.message || 'Error recalculating salaries');
+      }
+    } catch (err) {
+      console.error('Error recalculating salaries:', err);
+      alert('Error recalculating salaries: ' + err.message);
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   // Fetch summary report for selected month
   const fetchSummary = async (monthToFetch = selectedMonth, dept = selectedDept, search = searchTerm) => {
@@ -574,7 +606,17 @@ const AttendanceManager = () => {
                 </Button>
               </Box>
 
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={recalculating ? <CircularProgress size={16} color="inherit" /> : <CalculateIcon />}
+                  onClick={handleRecalculateAsPerMaster}
+                  disabled={recalculating || records.length === 0}
+                  sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#0a2744' }, fontWeight: 700 }}
+                >
+                  {recalculating ? 'Calculating...' : 'Calculate Salary as per Master'}
+                </Button>
                 <Button
                   variant="outlined"
                   color="success"
@@ -598,6 +640,16 @@ const AttendanceManager = () => {
               </Box>
             </Box>
           </Paper>
+
+          {recalculateMessage && (
+            <Alert
+              severity="success"
+              onClose={() => setRecalculateMessage('')}
+              sx={{ mb: 2, fontWeight: 600 }}
+            >
+              {recalculateMessage}
+            </Alert>
+          )}
 
           {/* Metrics Summary Cards */}
           <Grid container spacing={2} sx={{ mb: 2.5 }}>
@@ -1086,14 +1138,27 @@ const AttendanceManager = () => {
                   </Grid>
                 </Grid>
 
-                <Button
-                  variant="contained"
-                  color="success"
-                  sx={{ mt: 3, fontWeight: 700 }}
-                  onClick={() => setCurrentTab(0)}
-                >
-                  View Attendance & Salary Report →
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    sx={{ fontWeight: 700 }}
+                    onClick={() => setCurrentTab(0)}
+                  >
+                    View Attendance & Salary Report →
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<CalculateIcon />}
+                    sx={{ fontWeight: 600, color: '#0F3B66', borderColor: '#0F3B66' }}
+                    onClick={() => {
+                      setCurrentTab(0);
+                      handleRecalculateAsPerMaster();
+                    }}
+                  >
+                    Calculate Salary as per Master
+                  </Button>
+                </Box>
               </Box>
             )}
           </Paper>
@@ -1388,3 +1453,4 @@ const AttendanceManager = () => {
 };
 
 export default AttendanceManager;
+

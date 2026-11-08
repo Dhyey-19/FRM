@@ -237,3 +237,4 @@ module.exports = {
   parseTimeToDecimal,
   formatDecimalToTime
 };
+
