@@ -1,4 +1,5 @@
 const { sql, connectDB } = require('../config/db');
+const { calculateEmployeeSalary } = require('./attendanceController');
 
 // GET /api/users
 exports.getUsers = async (req, res) => {
@@ -79,11 +80,11 @@ exports.createUser = async (req, res) => {
       .input('Department', sql.VarChar(50), Department || 'LABOUR')
       .input('Designation', sql.VarChar(50), Designation || 'Operator')
       .input('SalaryType', sql.VarChar(20), SalaryType || 'Monthly')
-      .input('MonthlySalary', sql.Decimal(12, 2), MonthlySalary !== undefined && MonthlySalary !== null ? MonthlySalary : 15000.00)
-      .input('DailyRate', sql.Decimal(10, 2), DailyRate !== undefined && DailyRate !== null ? DailyRate : 600.00)
-      .input('HourlyRate', sql.Decimal(10, 2), HourlyRate !== undefined && HourlyRate !== null ? HourlyRate : 75.00)
-      .input('OvertimeRatePerHour', sql.Decimal(10, 2), OvertimeRatePerHour !== undefined && OvertimeRatePerHour !== null ? OvertimeRatePerHour : 100.00)
-      .input('StandardWorkingHours', sql.Decimal(4, 2), StandardWorkingHours !== undefined && StandardWorkingHours !== null ? StandardWorkingHours : 8.00)
+      .input('MonthlySalary', sql.Decimal(12, 2), MonthlySalary !== undefined && MonthlySalary !== null && MonthlySalary !== '' ? parseFloat(MonthlySalary) : 15000.00)
+      .input('DailyRate', sql.Decimal(10, 2), DailyRate !== undefined && DailyRate !== null && DailyRate !== '' ? parseFloat(DailyRate) : 600.00)
+      .input('HourlyRate', sql.Decimal(10, 2), HourlyRate !== undefined && HourlyRate !== null && HourlyRate !== '' ? parseFloat(HourlyRate) : 75.00)
+      .input('OvertimeRatePerHour', sql.Decimal(10, 2), OvertimeRatePerHour !== undefined && OvertimeRatePerHour !== null && OvertimeRatePerHour !== '' ? parseFloat(OvertimeRatePerHour) : 0.00)
+      .input('StandardWorkingHours', sql.Decimal(4, 2), StandardWorkingHours !== undefined && StandardWorkingHours !== null && StandardWorkingHours !== '' ? parseFloat(StandardWorkingHours) : 8.00)
       .query(`
         INSERT INTO Users (
           Username, Password, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus,
@@ -143,11 +144,11 @@ exports.updateUser = async (req, res) => {
       .input('Department', sql.VarChar(50), Department || 'LABOUR')
       .input('Designation', sql.VarChar(50), Designation || 'Operator')
       .input('SalaryType', sql.VarChar(20), SalaryType || 'Monthly')
-      .input('MonthlySalary', sql.Decimal(12, 2), MonthlySalary !== undefined && MonthlySalary !== null ? MonthlySalary : 15000.00)
-      .input('DailyRate', sql.Decimal(10, 2), DailyRate !== undefined && DailyRate !== null ? DailyRate : 600.00)
-      .input('HourlyRate', sql.Decimal(10, 2), HourlyRate !== undefined && HourlyRate !== null ? HourlyRate : 75.00)
-      .input('OvertimeRatePerHour', sql.Decimal(10, 2), OvertimeRatePerHour !== undefined && OvertimeRatePerHour !== null ? OvertimeRatePerHour : 100.00)
-      .input('StandardWorkingHours', sql.Decimal(4, 2), StandardWorkingHours !== undefined && StandardWorkingHours !== null ? StandardWorkingHours : 8.00)
+      .input('MonthlySalary', sql.Decimal(12, 2), MonthlySalary !== undefined && MonthlySalary !== null && MonthlySalary !== '' ? parseFloat(MonthlySalary) : 15000.00)
+      .input('DailyRate', sql.Decimal(10, 2), DailyRate !== undefined && DailyRate !== null && DailyRate !== '' ? parseFloat(DailyRate) : 600.00)
+      .input('HourlyRate', sql.Decimal(10, 2), HourlyRate !== undefined && HourlyRate !== null && HourlyRate !== '' ? parseFloat(HourlyRate) : 75.00)
+      .input('OvertimeRatePerHour', sql.Decimal(10, 2), OvertimeRatePerHour !== undefined && OvertimeRatePerHour !== null && OvertimeRatePerHour !== '' ? parseFloat(OvertimeRatePerHour) : 0.00)
+      .input('StandardWorkingHours', sql.Decimal(4, 2), StandardWorkingHours !== undefined && StandardWorkingHours !== null && StandardWorkingHours !== '' ? parseFloat(StandardWorkingHours) : 8.00)
       .query(`
         UPDATE Users 
         SET Username = @Username, 
@@ -174,6 +175,66 @@ exports.updateUser = async (req, res) => {
 
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Auto-sync updated salary parameters with any existing AttendanceMonthlySummary records for this employee
+    try {
+      const bioCode = BiometricCode ? String(BiometricCode).trim() : '';
+      const checkAtt = await pool.request()
+        .input('BiometricCode', sql.VarChar(30), bioCode)
+        .input('UserId', sql.Int, id)
+        .query(`
+          SELECT * FROM AttendanceMonthlySummary 
+          WHERE UserId = @UserId OR (BiometricCode = @BiometricCode AND @BiometricCode != '')
+        `);
+
+      if (checkAtt.recordset && checkAtt.recordset.length > 0) {
+        const userSalaryConfig = {
+          UserId: id,
+          FullName: FullName,
+          BiometricCode: bioCode,
+          Department: Department || 'LABOUR',
+          Designation: Designation || 'Operator',
+          SalaryType: SalaryType || 'Monthly',
+          MonthlySalary: MonthlySalary !== undefined && MonthlySalary !== null && MonthlySalary !== '' ? parseFloat(MonthlySalary) : 15000.00,
+          DailyRate: DailyRate !== undefined && DailyRate !== null && DailyRate !== '' ? parseFloat(DailyRate) : 600.00,
+          HourlyRate: HourlyRate !== undefined && HourlyRate !== null && HourlyRate !== '' ? parseFloat(HourlyRate) : 75.00,
+          OvertimeRatePerHour: OvertimeRatePerHour !== undefined && OvertimeRatePerHour !== null && OvertimeRatePerHour !== '' ? parseFloat(OvertimeRatePerHour) : 0.00,
+          StandardWorkingHours: StandardWorkingHours !== undefined && StandardWorkingHours !== null && StandardWorkingHours !== '' ? parseFloat(StandardWorkingHours) : 8.00
+        };
+
+        for (const record of checkAtt.recordset) {
+          const calc = calculateEmployeeSalary(record, userSalaryConfig, record.TotalDaysInMonth || 31);
+          await pool.request()
+            .input('Id', sql.Int, record.Id)
+            .input('UserId', sql.Int, id)
+            .input('Department', sql.VarChar(50), userSalaryConfig.Department)
+            .input('Designation', sql.VarChar(50), userSalaryConfig.Designation)
+            .input('SalaryType', sql.VarChar(20), calc.salaryType)
+            .input('BaseSalary', sql.Decimal(12, 2), calc.baseSalary)
+            .input('PayableDays', sql.Decimal(5, 2), calc.payableDays)
+            .input('CalculatedSalary', sql.Decimal(12, 2), calc.calculatedSalary)
+            .input('TotalOvertimeHoursDecimal', sql.Decimal(8, 2), calc.otHours)
+            .input('OvertimePay', sql.Decimal(12, 2), calc.overtimePay)
+            .input('NetSalary', sql.Decimal(12, 2), calc.netSalary)
+            .query(`
+              UPDATE AttendanceMonthlySummary
+              SET UserId = @UserId,
+                  Department = @Department,
+                  Designation = @Designation,
+                  SalaryType = @SalaryType,
+                  BaseSalary = @BaseSalary,
+                  PayableDays = @PayableDays,
+                  CalculatedSalary = @CalculatedSalary,
+                  TotalOvertimeHoursDecimal = @TotalOvertimeHoursDecimal,
+                  OvertimePay = @OvertimePay,
+                  NetSalary = @NetSalary
+              WHERE Id = @Id
+            `);
+        }
+      }
+    } catch (syncErr) {
+      console.warn('Could not auto-sync attendance records on user update:', syncErr.message);
     }
 
     res.status(200).json({ message: 'User updated successfully' });

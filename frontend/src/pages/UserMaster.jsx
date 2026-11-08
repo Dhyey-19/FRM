@@ -80,7 +80,7 @@ const UserMaster = () => {
     MonthlySalary: 15000,
     DailyRate: 600,
     HourlyRate: 75,
-    OvertimeRatePerHour: 100,
+    OvertimeRatePerHour: 0,
     StandardWorkingHours: 8
   });
 
@@ -169,7 +169,7 @@ const UserMaster = () => {
         MonthlySalary: user.MonthlySalary !== undefined && user.MonthlySalary !== null ? user.MonthlySalary : 15000,
         DailyRate: user.DailyRate !== undefined && user.DailyRate !== null ? user.DailyRate : 600,
         HourlyRate: user.HourlyRate !== undefined && user.HourlyRate !== null ? user.HourlyRate : 75,
-        OvertimeRatePerHour: user.OvertimeRatePerHour !== undefined && user.OvertimeRatePerHour !== null ? user.OvertimeRatePerHour : 100,
+        OvertimeRatePerHour: user.OvertimeRatePerHour !== undefined && user.OvertimeRatePerHour !== null ? user.OvertimeRatePerHour : 0,
         StandardWorkingHours: user.StandardWorkingHours !== undefined && user.StandardWorkingHours !== null ? user.StandardWorkingHours : 8,
         AllowedMenus: (user.AllowedMenus !== undefined && user.AllowedMenus !== null)
           ? (user.AllowedMenus ? user.AllowedMenus.split(',').map(s => s.trim()).filter(Boolean) : [])
@@ -193,7 +193,7 @@ const UserMaster = () => {
         MonthlySalary: 15000,
         DailyRate: 600,
         HourlyRate: 75,
-        OvertimeRatePerHour: 100,
+        OvertimeRatePerHour: 0,
         StandardWorkingHours: 8,
         AllowedMenus: getAllMenuPaths() 
       });
@@ -448,7 +448,7 @@ const UserMaster = () => {
                           {salaryText}
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
-                          OT: ₹{row.OvertimeRatePerHour || 100}/hr • {row.StandardWorkingHours || 8}h/day
+                          OT: ₹{row.OvertimeRatePerHour !== undefined && row.OvertimeRatePerHour !== null ? row.OvertimeRatePerHour : 0}/hr • {row.StandardWorkingHours || 8}h/day
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -678,6 +678,7 @@ const UserMaster = () => {
                 onChange={handleInputChange} 
                 fullWidth 
                 size="small" 
+                helperText="Leave 0 if OT is not applicable"
               />
               <TextField 
                 label="Standard Working Hours / Day" 

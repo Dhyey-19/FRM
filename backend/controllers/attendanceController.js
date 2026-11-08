@@ -45,10 +45,15 @@ function matchUserWithMaster(bioCode, empName, masterUsers) {
  */
 function calculateEmployeeSalary(emp, masterUser, totalDaysInMonth) {
   const salaryType = masterUser?.SalaryType || 'Monthly';
-  const monthlySalary = parseFloat(masterUser?.MonthlySalary) || 15000.00;
-  const dailyRate = parseFloat(masterUser?.DailyRate) || 600.00;
-  const hourlyRate = parseFloat(masterUser?.HourlyRate) || 75.00;
-  const otRate = parseFloat(masterUser?.OvertimeRatePerHour) || 100.00;
+  const monthlySalary = parseFloat(masterUser?.MonthlySalary) || 0;
+  const dailyRate = parseFloat(masterUser?.DailyRate) || 0;
+  const hourlyRate = parseFloat(masterUser?.HourlyRate) || 0;
+  
+  // Overtime rate: strictly use what is configured in master; default to 0.00
+  const otRate = (masterUser?.OvertimeRatePerHour !== undefined && masterUser?.OvertimeRatePerHour !== null && masterUser?.OvertimeRatePerHour !== '')
+    ? parseFloat(masterUser.OvertimeRatePerHour)
+    : 0.0;
+  
   const stdHoursPerDay = parseFloat(masterUser?.StandardWorkingHours) || 8.00;
 
   const presentDays = parseFloat(emp.PresentDays !== undefined ? emp.PresentDays : emp.presentDays) || 0;
@@ -56,55 +61,81 @@ function calculateEmployeeSalary(emp, masterUser, totalDaysInMonth) {
   const weekOffDays = parseFloat(emp.WeekOffDays !== undefined ? emp.WeekOffDays : emp.weekOffDays) || 0;
   const netWorkHours = parseFloat(emp.TotalNetWorkHoursDecimal !== undefined ? emp.TotalNetWorkHoursDecimal : emp.totalNetWorkHoursDecimal) || 0;
   const grossHours = parseFloat(emp.TotalGrossHoursDecimal !== undefined ? emp.TotalGrossHoursDecimal : emp.totalGrossHoursDecimal) || 0;
+  const deductions = parseFloat(emp.Deductions) || 0;
 
-  // 1. Base Salary Rate
-  let baseSalary = monthlySalary;
-  if (salaryType === 'Daily') baseSalary = dailyRate;
-  if (salaryType === 'Hourly') baseSalary = hourlyRate;
+  const daysInMonth = parseInt(totalDaysInMonth, 10) || 30;
 
-  // 2. Payable Days:
-  // Monthly: Present Days + Week Offs (if worked during the month)
-  // Daily: Present Days (paid per day worked)
-  // Hourly: Present Days
+  let baseSalary = 0;
   let payableDays = 0;
-  if (presentDays > 0 || grossHours > 0 || netWorkHours > 0) {
-    if (salaryType === 'Monthly') {
-      payableDays = parseFloat((presentDays + weekOffDays).toFixed(2));
-    } else {
-      payableDays = presentDays;
-    }
-  }
-
-  // 3. Calculated Base Salary & Overtime Hours
   let calculatedSalary = 0;
   let otHours = 0;
-  const expectedStandardHours = presentDays * stdHoursPerDay;
+  let overtimePay = 0;
 
   if (salaryType === 'Monthly') {
-    const perDayRate = totalDaysInMonth > 0 ? (monthlySalary / totalDaysInMonth) : 0;
-    calculatedSalary = Math.round(perDayRate * payableDays);
+    baseSalary = monthlySalary;
+    // For Monthly employees:
+    // If the employee didn't work at all (presentDays === 0), they are not entitled to paid week offs or base pay.
+    if (presentDays > 0) {
+      // Payable days is Present + WeekOffs, capped at daysInMonth
+      payableDays = Math.min(daysInMonth, parseFloat((presentDays + weekOffDays).toFixed(2)));
+      const perDayRate = daysInMonth > 0 ? (monthlySalary / daysInMonth) : 0;
+      calculatedSalary = Math.round(perDayRate * payableDays);
+      if (payableDays >= daysInMonth) {
+        calculatedSalary = Math.round(monthlySalary);
+      }
+    } else {
+      payableDays = 0;
+      calculatedSalary = 0;
+    }
 
-    if (netWorkHours > expectedStandardHours && expectedStandardHours > 0) {
-      otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+    // Overtime for Monthly employees: ONLY if OvertimeRatePerHour > 0 is explicitly configured
+    if (otRate > 0 && presentDays > 0) {
+      const expectedStandardHours = presentDays * stdHoursPerDay;
+      if (netWorkHours > expectedStandardHours && expectedStandardHours > 0) {
+        otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+        overtimePay = Math.round(otHours * otRate);
+      }
     }
   } else if (salaryType === 'Daily') {
-    calculatedSalary = Math.round(dailyRate * payableDays);
+    baseSalary = dailyRate;
+    // For Daily wage workers:
+    // Payable days strictly equals Present Days
+    payableDays = presentDays;
+    calculatedSalary = Math.round(dailyRate * presentDays);
 
-    if (netWorkHours > expectedStandardHours && expectedStandardHours > 0) {
-      otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+    // Overtime for Daily workers: ONLY if OvertimeRatePerHour > 0 is explicitly configured
+    if (otRate > 0 && presentDays > 0) {
+      const expectedStandardHours = presentDays * stdHoursPerDay;
+      if (netWorkHours > expectedStandardHours && expectedStandardHours > 0) {
+        otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+        overtimePay = Math.round(otHours * otRate);
+      }
     }
   } else if (salaryType === 'Hourly') {
-    if (netWorkHours > expectedStandardHours && expectedStandardHours > 0 && otRate > 0) {
-      otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
-      const regularHours = Math.min(netWorkHours, expectedStandardHours);
-      calculatedSalary = Math.round(hourlyRate * regularHours);
+    baseSalary = hourlyRate;
+    // For Hourly workers:
+    // Payable days is Present Days
+    payableDays = presentDays;
+
+    if (otRate > 0 && presentDays > 0) {
+      const expectedStandardHours = presentDays * stdHoursPerDay;
+      if (netWorkHours > expectedStandardHours && expectedStandardHours > 0) {
+        otHours = parseFloat((netWorkHours - expectedStandardHours).toFixed(2));
+        const regularHours = expectedStandardHours;
+        calculatedSalary = Math.round(hourlyRate * regularHours);
+        overtimePay = Math.round(otHours * otRate);
+      } else {
+        calculatedSalary = Math.round(hourlyRate * netWorkHours);
+        otHours = 0;
+        overtimePay = 0;
+      }
     } else {
       calculatedSalary = Math.round(hourlyRate * netWorkHours);
+      otHours = 0;
+      overtimePay = 0;
     }
   }
 
-  const overtimePay = Math.round(otHours * otRate);
-  const deductions = parseFloat(emp.Deductions) || 0;
   const netSalary = Math.max(0, Math.round(calculatedSalary + overtimePay - deductions));
 
   return {
@@ -192,7 +223,7 @@ exports.uploadAttendance = async (req, res) => {
           const defMonthlySalary = empDept.toUpperCase() === 'OFFICE' ? 20000.00 : 15000.00;
           const defDailyRate = 600.00;
           const defHourlyRate = 75.00;
-          const defOtRate = 100.00;
+          const defOtRate = 0.00;
           const defStdHours = 8.00;
 
           const createRes = await pool.request()
@@ -252,7 +283,7 @@ exports.uploadAttendance = async (req, res) => {
             MonthlySalary: 15000.00,
             DailyRate: 600.00,
             HourlyRate: 75.00,
-            OvertimeRatePerHour: 100.00,
+            OvertimeRatePerHour: 0.00,
             StandardWorkingHours: 8.00
           };
         }
@@ -744,4 +775,7 @@ exports.deleteMonth = async (req, res) => {
     res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };
+
+exports.calculateEmployeeSalary = calculateEmployeeSalary;
+exports.matchUserWithMaster = matchUserWithMaster;
 

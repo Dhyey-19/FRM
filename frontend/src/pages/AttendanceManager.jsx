@@ -834,7 +834,20 @@ const AttendanceManager = () => {
                             </Typography>
                           </TableCell>
                           <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            ₹{(row.CalculatedSalary || 0).toLocaleString('en-IN')}
+                            <Tooltip
+                              title={
+                                row.SalaryType === 'Daily'
+                                  ? `Daily Wage: ₹${row.BaseSalary} × ${row.PayableDays} present days = ₹${row.CalculatedSalary}`
+                                  : row.SalaryType === 'Hourly'
+                                  ? `Hourly Rate: ₹${row.BaseSalary} × ${row.TotalNetWorkHoursDecimal || 0} hrs = ₹${row.CalculatedSalary}`
+                                  : `Monthly: (₹${row.BaseSalary} / ${row.TotalDaysInMonth || 31} days) × ${row.PayableDays} payable days = ₹${row.CalculatedSalary}`
+                              }
+                              arrow
+                            >
+                              <Box sx={{ cursor: 'help' }}>
+                                ₹{(row.CalculatedSalary || 0).toLocaleString('en-IN')}
+                              </Box>
+                            </Tooltip>
                           </TableCell>
                           <TableCell align="right" sx={{ color: row.OvertimePay > 0 ? '#b45309' : 'inherit', fontWeight: row.OvertimePay > 0 ? 700 : 400 }}>
                             {row.OvertimePay > 0 ? `+₹${row.OvertimePay.toLocaleString('en-IN')}` : '₹0'}
@@ -843,7 +856,14 @@ const AttendanceManager = () => {
                             {row.Deductions > 0 ? `-₹${row.Deductions.toLocaleString('en-IN')}` : '₹0'}
                           </TableCell>
                           <TableCell align="right" sx={{ fontWeight: 800, color: '#15803d', fontSize: '0.95rem' }}>
-                            ₹{(row.NetSalary || 0).toLocaleString('en-IN')}
+                            <Tooltip
+                              title={`Net Salary = Base Earned (₹${row.CalculatedSalary || 0}) + OT (₹${row.OvertimePay || 0}) - Deductions (₹${row.Deductions || 0}) = ₹${row.NetSalary || 0}`}
+                              arrow
+                            >
+                              <Box sx={{ cursor: 'help' }}>
+                                ₹{(row.NetSalary || 0).toLocaleString('en-IN')}
+                              </Box>
+                            </Tooltip>
                           </TableCell>
                           <TableCell align="center">
                             <Tooltip title="Edit / Adjust Salary & Days">

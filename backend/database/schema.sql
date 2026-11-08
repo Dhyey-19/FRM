@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS "Users" (
     "MonthlySalary" DECIMAL(12, 2) DEFAULT 15000.00,
     "DailyRate" DECIMAL(10, 2) DEFAULT 600.00,
     "HourlyRate" DECIMAL(10, 2) DEFAULT 75.00,
-    "OvertimeRatePerHour" DECIMAL(10, 2) DEFAULT 100.00,
+    "OvertimeRatePerHour" DECIMAL(10, 2) DEFAULT 0.00,
     "StandardWorkingHours" DECIMAL(4, 2) DEFAULT 8.00,
     CONSTRAINT "UQ_Users_Username" UNIQUE ("Username")
 );
