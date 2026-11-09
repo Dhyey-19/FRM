@@ -691,13 +691,21 @@ const DashboardLayout = () => {
                 <PhoneAndroid sx={{ fontSize: 18, color: '#10b981' }} /> Android (Chrome) Instructions:
               </Typography>
               <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
-                Install FRM as a fast, native mobile app:
+                To install FRM on your phone over local Wi-Fi:
               </Typography>
               <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
                 <li>Tap the <strong>three dots menu (⋮)</strong> in the top-right corner of Chrome.</li>
-                <li>Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
-                <li>Confirm by tapping <strong>Install</strong>.</li>
-                <li>FRM will now open like a standalone app with full screen view!</li>
+                <li>Tap <strong>"Add to Home screen"</strong> or <strong>"Create shortcut"</strong> (below <em>Install app</em>).</li>
+                <li>Tap <strong>Add</strong> / <strong>Install</strong>.</li>
+                <li>FRM will now open directly from your home screen like a native mobile app!</li>
+              </Box>
+              <Box sx={{ mt: 2, p: 1.5, bgcolor: '#eff6ff', borderRadius: 1.5, border: '1px solid #bfdbfe' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#1e40af', display: 'block', mb: 0.5 }}>
+                  💡 Seeing "This app cannot be installed"?
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#1e3a8a', display: 'block', lineHeight: 1.4 }}>
+                  Google Chrome disables cloud WebAPK package building for local Wi-Fi IP addresses (<code>192.168.x.x</code>). Simply choose <strong>"Add to Home screen"</strong> / <strong>"Create shortcut"</strong> in the Chrome menu, or use Samsung Internet / Firefox for 1-tap direct install.
+                </Typography>
               </Box>
             </Box>
           ) : (

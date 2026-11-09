@@ -9,6 +9,7 @@
   "orientation": "any",
   "background_color": "#0F3B66",
   "theme_color": "#0F3B66",
+  "prefer_related_applications": false,
   "categories": ["business", "productivity", "utilities"],
   "icons": [
     {
