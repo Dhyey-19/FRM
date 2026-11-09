@@ -1153,7 +1153,7 @@ const StockTransfer = ({ user }) => {
                     <TableCell align="center" sx={{ fontWeight: 600, color: '#ed6c02', bgcolor: '#fff3e0' }}>SCRAP</TableCell>
                     <TableCell sx={{ width: 220, maxWidth: 240 }}>
                       <Autocomplete
-                        options={items.filter(i => i.ItemType && i.ItemType.toLowerCase() === 'scrap')}
+                        options={items.filter(i => (i.ItemType && i.ItemType.toLowerCase() === 'scrap') || (i.ItemName && i.ItemName.toLowerCase().includes('scrap')))}
                         getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
                         value={items.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || null}
                         onChange={(e, newValue) => handleArrayItemSelect(setScrapItems, scrapItems, index, newValue)}

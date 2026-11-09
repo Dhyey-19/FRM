@@ -156,6 +156,17 @@ const ItemMaster = () => {
     }
   };
 
+  const getItemTypeLabel = (code) => {
+    if (!code) return '';
+    const map = {
+      'FG': 'FG (Finished Good)',
+      'RM': 'RM (Raw Material)',
+      'SF': 'SF (Semi-Finished)',
+      'BOP': 'BOP (Bought Out Part)'
+    };
+    return map[code.toUpperCase()] || code;
+  };
+
   const fetchItemTypes = async () => {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/item-types`);
@@ -648,7 +659,7 @@ const ItemMaster = () => {
             >
               <MenuItem value="All">All Types</MenuItem>
               {itemTypes.map(t => (
-                <MenuItem key={t} value={t}>{t}</MenuItem>
+                <MenuItem key={t} value={t}>{getItemTypeLabel(t)}</MenuItem>
               ))}
             </TextField>
             <TextField
@@ -1091,6 +1102,12 @@ const ItemMaster = () => {
                 autoHighlight
                 autoSelect
                 options={itemTypes}
+                getOptionLabel={(option) => getItemTypeLabel(option)}
+                renderOption={(props, option) => (
+                  <li {...props} key={option}>
+                    {getItemTypeLabel(option)}
+                  </li>
+                )}
                 value={formData.ItemType}
                 onChange={(event, newValue) => {
                   setFormData({ ...formData, ItemType: newValue || '' });

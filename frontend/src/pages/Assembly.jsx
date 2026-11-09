@@ -281,7 +281,10 @@ const Assembly = ({ user }) => {
                     <Grid item xs={12} sm={4}>
                         <Autocomplete
                             fullWidth
-                            options={items.filter(item => item.ItemType && item.ItemType.toLowerCase() === 'finished')}
+                            options={items.filter(item => {
+                                const t = (item.ItemType || '').trim().toLowerCase();
+                                return ['fg', 'sf', 'finished', 'finished good', 'semi-finished'].includes(t) || item.Category === 'Inhouse';
+                            })}
                             getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
                             value={selectedItem}
                             onChange={(e, newValue) => setSelectedItem(newValue)}

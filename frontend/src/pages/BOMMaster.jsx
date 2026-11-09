@@ -47,6 +47,8 @@ const BOMMaster = () => {
             const type = (item.ItemType || '').trim().toUpperCase();
             const cat = (item.Category || '').trim().toUpperCase();
             return (
+              type === 'FG' ||
+              type === 'SF' ||
               type.includes('FINISH') ||
               type.includes('ASSEMBLY') ||
               type === 'FINISHED GOOD' ||

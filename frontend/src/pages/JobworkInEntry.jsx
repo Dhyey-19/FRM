@@ -1056,7 +1056,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
                       {/* Scrap Item */}
                       <TableCell colSpan={2}>
                         <Autocomplete
-                          options={items.filter(item => (item.ItemType || '').toLowerCase() === 'scrap')}
+                          options={items.filter(item => (item.ItemType || '').toLowerCase() === 'scrap' || (item.ItemName || '').toLowerCase().includes('scrap'))}
                           getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
                           value={items.find(i => i.ItemCode === row.SCRAPITEMCODE && (i.SubCode || '') === (row.SCRAPSUBCODE || '')) || null}
                           onChange={(e, newValue) => handleItemSelect(index, 'SCRAPITEMCODE', newValue)}

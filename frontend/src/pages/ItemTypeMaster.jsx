@@ -3,7 +3,7 @@ import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../uti
 import { 
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
-  IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert
+  IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Chip
 } from '@mui/material';
 import { 
   Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Category as CategoryIcon
@@ -27,7 +27,7 @@ const ItemTypeMaster = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
-  const [formData, setFormData] = useState({ ItemType: '' });
+  const [formData, setFormData] = useState({ ItemType: '', Description: '' });
 
   const fetchItemTypes = async () => {
     try {
@@ -54,7 +54,9 @@ const ItemTypeMaster = () => {
 
   const filteredItemTypes = itemTypes.filter(type => {
     const searchLower = searchTerm.toLowerCase();
-    return type.ItemType && type.ItemType.toLowerCase().includes(searchLower);
+    const matchesCode = type.ItemType && type.ItemType.toLowerCase().includes(searchLower);
+    const matchesDesc = type.Description && type.Description.toLowerCase().includes(searchLower);
+    return matchesCode || matchesDesc;
   });
 
   const handleOpenDialog = (mode, type = null) => {
@@ -62,10 +64,10 @@ const ItemTypeMaster = () => {
     setDialogError('');
     if (mode === 'edit' && type) {
       setSelectedItemType(type.ItemType);
-      setFormData({ ItemType: type.ItemType });
+      setFormData({ ItemType: type.ItemType, Description: type.Description || '' });
     } else {
       setSelectedItemType(null);
-      setFormData({ ItemType: '' });
+      setFormData({ ItemType: '', Description: '' });
     }
     setOpenDialog(true);
   };
@@ -73,6 +75,7 @@ const ItemTypeMaster = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setSelectedItemType(null);
+    setFormData({ ItemType: '', Description: '' });
     setDialogError('');
   };
 
@@ -89,7 +92,10 @@ const ItemTypeMaster = () => {
       
       const method = dialogMode === 'add' ? 'POST' : 'PUT';
       
-      const payload = { ItemType: formData.ItemType };
+      const payload = { 
+        ItemType: formData.ItemType.trim().toUpperCase(),
+        Description: (formData.Description || '').trim()
+      };
 
       const response = await fetch(url, {
         method,
@@ -167,47 +173,84 @@ const ItemTypeMaster = () => {
         </Toolbar>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 500, '& .MuiTableRow-root': { height: 32 } }}>
+          <Table size="small" sx={{ minWidth: 500, '& .MuiTableRow-root': { height: 38 } }}>
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Item Type Name</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600, width: 80 }}>Edit</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600, width: 80 }}>Delete</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 140 }}>Item Type Code</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Description / Meaning</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 140 }}>Classification</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 70 }}>Edit</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 70 }}>Delete</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredItemTypes
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((row) => (
-                  <TableRow hover tabIndex={-1} key={row.ItemType}>
-                    <TableCell sx={{ fontWeight: 500 }}>{row.ItemType}</TableCell>
-                    <TableCell align="center">
-                      <IconButton 
-                        color="primary" 
-                        size="small" 
-                        onClick={() => handleOpenDialog('edit', row)}
-                        disabled={!hasEditPermission() || row.IsSystem === true || row.IsSystem === 1}
-                        title={(row.IsSystem === true || row.IsSystem === 1) ? "System Item Types cannot be edited" : "Edit Item Type"}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton 
-                        color="error" 
-                        size="small" 
-                        onClick={() => openDeleteConfirm(row.ItemType)}
-                        disabled={!hasDeletePermission() || row.IsSystem === true || row.IsSystem === 1}
-                        title={(row.IsSystem === true || row.IsSystem === 1) ? "System Item Types cannot be deleted" : "Delete Item Type"}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-              ))}
+                .map((row) => {
+                  const isSystem = row.IsSystem === true || row.IsSystem === 1;
+                  return (
+                    <TableRow hover tabIndex={-1} key={row.ItemType}>
+                      <TableCell sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
+                            {row.ItemType}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ color: '#334155', fontWeight: 500 }}>
+                        {row.Description || (
+                          row.ItemType === 'FG' ? 'Finished Good' :
+                          row.ItemType === 'RM' ? 'Raw Material' :
+                          row.ItemType === 'SF' ? 'Semi-Finished' :
+                          row.ItemType === 'BOP' ? 'Bought Out Part' : '-'
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
+                        {isSystem ? (
+                          <Chip 
+                            label="System Default" 
+                            size="small" 
+                            color="primary" 
+                            variant="filled"
+                            sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} 
+                          />
+                        ) : (
+                          <Chip 
+                            label="Custom" 
+                            size="small" 
+                            variant="outlined" 
+                            sx={{ fontWeight: 500, fontSize: '0.7rem', height: 22, color: '#64748b' }} 
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton 
+                          color="primary" 
+                          size="small" 
+                          onClick={() => handleOpenDialog('edit', row)}
+                          disabled={!hasEditPermission() || isSystem}
+                          title={isSystem ? "System Item Types (FG, RM, SF, BOP) cannot be edited" : "Edit Item Type"}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton 
+                          color="error" 
+                          size="small" 
+                          onClick={() => openDeleteConfirm(row.ItemType)}
+                          disabled={!hasDeletePermission() || isSystem}
+                          title={isSystem ? "System Item Types (FG, RM, SF, BOP) cannot be deleted" : "Delete Item Type"}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               {filteredItemTypes.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={3} align="center" sx={{ py: 3 }}>No item types found.</TableCell>
+                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: '#94a3b8' }}>No item types found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -226,16 +269,38 @@ const ItemTypeMaster = () => {
       </Paper>
 
       <Dialog open={openDialog} onClose={(event, reason) => { if (reason !== 'backdropClick') handleCloseDialog(); }} maxWidth="sm" fullWidth>
-        <DialogTitle>{dialogMode === 'add' ? 'Add New Item Type' : 'Edit Item Type'}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66' }}>
+          {dialogMode === 'add' ? 'Add New Item Type' : 'Edit Item Type'}
+        </DialogTitle>
         <DialogContent dividers>
           {dialogError && <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>}
           <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField label="Item Type Name" name="ItemType" value={formData.ItemType} onChange={handleInputChange} fullWidth size="small" required />
+            <TextField 
+              label="Item Type Code (e.g. FG, RM, SF, BOP)" 
+              name="ItemType" 
+              value={formData.ItemType} 
+              onChange={handleInputChange} 
+              fullWidth 
+              size="small" 
+              required 
+              disabled={dialogMode === 'edit' && (selectedItemType === 'FG' || selectedItemType === 'RM' || selectedItemType === 'SF' || selectedItemType === 'BOP')}
+              inputProps={{ style: { textTransform: 'uppercase', fontWeight: 600 } }}
+              helperText="Short uppercase code used across item inventory"
+            />
+            <TextField 
+              label="Description / Meaning (e.g. Finished Good, Raw Material)" 
+              name="Description" 
+              value={formData.Description} 
+              onChange={handleInputChange} 
+              fullWidth 
+              size="small" 
+              helperText="Full descriptive name of this item type"
+            />
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-          <Button onClick={handleSaveItemType} variant="contained" color="primary">Save</Button>
+          <Button onClick={handleSaveItemType} variant="contained" color="primary" sx={{ fontWeight: 600 }}>Save</Button>
         </DialogActions>
       </Dialog>
 
