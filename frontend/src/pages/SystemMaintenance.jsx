@@ -110,6 +110,7 @@ const SystemMaintenance = () => {
   useEffect(() => {
     fetchStatus();
     fetchBackups();
+    handleCheckUpdates();
   }, []);
 
   const handleCreateBackup = async () => {

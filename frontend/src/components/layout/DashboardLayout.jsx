@@ -20,7 +20,9 @@ import {
   Home, 
   GetApp as InstallIcon,
   Menu as MenuIcon,
-  Notifications as NotificationsIcon
+  Notifications as NotificationsIcon,
+  SystemUpdateAlt as UpdateIcon,
+  Backup as BackupIcon
 } from '@mui/icons-material';
 import Sidebar from './Sidebar';
 import ErrorBoundary from '../common/ErrorBoundary';
@@ -525,6 +527,40 @@ const DashboardLayout = () => {
 
             {/* Top Bar Right Actions: Global Alerts Bell & PWA Install Button */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Tooltip title="Application & Database Update">
+                <IconButton 
+                  size="small" 
+                  onClick={() => navigate('/dashboard/system-maintenance?tab=updates')}
+                  sx={{ 
+                    color: '#ea580c', 
+                    bgcolor: '#fff7ed', 
+                    border: '1px solid #fed7aa',
+                    borderRadius: 1.5,
+                    p: 0.7,
+                    '&:hover': { bgcolor: '#ffedd5', color: '#c2410c' } 
+                  }}
+                >
+                  <UpdateIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="SQL Database Backup">
+                <IconButton 
+                  size="small" 
+                  onClick={() => navigate('/dashboard/system-maintenance?tab=backup')}
+                  sx={{ 
+                    color: '#10b981', 
+                    bgcolor: '#ecfdf5', 
+                    border: '1px solid #a7f3d0',
+                    borderRadius: 1.5,
+                    p: 0.7,
+                    '&:hover': { bgcolor: '#d1fae5', color: '#059669' } 
+                  }}
+                >
+                  <BackupIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="Notifications & Alert Logs">
                 <IconButton 
                   size="small" 

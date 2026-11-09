@@ -307,8 +307,10 @@ const Sidebar = ({
             const hasMenuAccess = (path) => {
               if (!path || path === '/dashboard') return true;
 
+              const cleanPath = path.split('?')[0];
+
               // Always ensure Admin has access to critical management routes
-              if (isAdmin && (path === '/dashboard/user-access' || path === '/dashboard/users' || path === '/dashboard/company-profile')) {
+              if (isAdmin && (cleanPath === '/dashboard/user-access' || cleanPath === '/dashboard/users' || cleanPath === '/dashboard/company-profile' || cleanPath === '/dashboard/system-maintenance')) {
                 return true;
               }
 
@@ -327,17 +329,17 @@ const Sidebar = ({
                 ? rawMenus
                 : String(rawMenus).split(',').map(p => p.trim());
 
-              if (path === '/dashboard/subcontract') {
+              if (cleanPath === '/dashboard/subcontract') {
                 return allowed.includes('/dashboard/subcontract') || 
                        allowed.includes('/dashboard/jobwork-ins') || 
                        allowed.includes('/dashboard/jobwork-outs');
               }
 
-              if (path === '/dashboard/jobwork-ins' || path === '/dashboard/jobwork-outs') {
-                return allowed.includes(path) || allowed.includes('/dashboard/subcontract');
+              if (cleanPath === '/dashboard/jobwork-ins' || cleanPath === '/dashboard/jobwork-outs') {
+                return allowed.includes(cleanPath) || allowed.includes('/dashboard/subcontract');
               }
 
-              return allowed.includes(path);
+              return allowed.includes(path) || allowed.includes(cleanPath);
             };
 
             const renderMenuItem = (item, level = 0) => {
