@@ -23,7 +23,10 @@ import {
   InputAdornment,
   Tooltip,
   Tabs,
-  Tab
+  Tab,
+  Card,
+  CardContent,
+  Avatar
 } from '@mui/material';
 import { 
   PictureAsPdf, 
@@ -38,7 +41,10 @@ import {
   Inventory2,
   PrecisionManufacturing,
   Warehouse,
-  AccountBalanceWallet
+  AccountBalanceWallet,
+  TrendingUp,
+  TrendingDown,
+  ReceiptLong
 } from '@mui/icons-material';
 import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
@@ -405,15 +411,15 @@ const ProfitLossReport = () => {
   const modalTotalValuation = Math.round(filteredModalItems.reduce((acc, i) => acc + (i.valuation || 0), 0) * 100) / 100;
 
   return (
-    <Box sx={{ p: 1, height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+    <Box sx={{ p: 1, width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       {/* Header Panel */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5, fontSize: { xs: '1.5rem', sm: '1.85rem', md: '2.125rem' } }}>
             Profit & Loss Statement
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Standard reporting period statement with department stock in-process valuation.
+            Standard reporting period statement as per accounting rules with department stock in-process valuation.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
@@ -460,31 +466,164 @@ const ProfitLossReport = () => {
         </Box>
       </Box>
 
-      {/* Side-by-Side Columns Layout for Expenses and Incomes/Closing Stock */}
+      {/* KPI Cards Row - Auto-stretch & fit row */}
       <Box sx={{ 
-        display: 'flex', 
-        flexDirection: { xs: 'column', md: 'row' }, 
-        gap: 3, 
-        flexGrow: 1, 
+        display: 'grid', 
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, 
+        gap: { xs: 2, sm: 2.5, md: 3 }, 
+        width: '100%', 
+        alignItems: 'stretch' 
+      }}>
+        {/* Card 1: Total Incomes & Credit */}
+        <Card sx={{ 
+          borderRadius: 3, 
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+          border: '1px solid #e2e8f0',
+          borderTop: '4px solid #10b981',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box'
+        }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Total Incomes & Credit
+              </Typography>
+              <Avatar sx={{ bgcolor: '#d1fae5', color: '#10b981', width: 40, height: 40, borderRadius: 2 }}>
+                <TrendingUp />
+              </Avatar>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#10b981', fontSize: { xs: '1.3rem', md: '1.45rem' } }}>
+              {formatCurrency(reportData.totalIncomes)}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5 }}>
+              Sales, Direct & Indirect Incomes + Closing Stock
+            </Typography>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Total Expenses & Debit */}
+        <Card sx={{ 
+          borderRadius: 3, 
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+          border: '1px solid #e2e8f0',
+          borderTop: '4px solid #ea580c',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box'
+        }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Total Expenses & Debit
+              </Typography>
+              <Avatar sx={{ bgcolor: '#ffedd5', color: '#ea580c', width: 40, height: 40, borderRadius: 2 }}>
+                <AccountBalanceWallet />
+              </Avatar>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#ea580c', fontSize: { xs: '1.3rem', md: '1.45rem' } }}>
+              {formatCurrency(reportData.totalExpenses)}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5 }}>
+              Purchases, Expenses, Opening Stock & Losses
+            </Typography>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Total Closing Stock */}
+        <Card sx={{ 
+          borderRadius: 3, 
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+          border: '1px solid #e2e8f0',
+          borderTop: '4px solid #0284c7',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box'
+        }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Closing Stock Valuation
+              </Typography>
+              <Avatar sx={{ bgcolor: '#e0f2fe', color: '#0284c7', width: 40, height: 40, borderRadius: 2 }}>
+                <Inventory2 />
+              </Avatar>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.3rem', md: '1.45rem' } }}>
+              {formatCurrency(reportData.closingStockValue || 0)}
+            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Main Store + Dept WIP
+              </Typography>
+              <Button size="small" onClick={() => openDeptCosting()} sx={{ p: 0, minWidth: 0, fontSize: '0.68rem', textTransform: 'none', fontWeight: 700, color: '#0284c7' }}>
+                View WIP ↗
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Net Profit / Net Loss */}
+        <Card sx={{ 
+          borderRadius: 3, 
+          boxShadow: isProfit ? '0 4px 14px rgba(16, 185, 129, 0.15)' : '0 4px 14px rgba(239, 68, 68, 0.15)',
+          border: `1px solid ${isProfit ? '#a7f3d0' : '#fecaca'}`,
+          borderTop: `4px solid ${isProfit ? '#10b981' : '#ef4444'}`,
+          bgcolor: isProfit ? '#f0fdf4' : '#fef2f2',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box'
+        }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: isProfit ? '#047857' : '#b91c1c', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {isProfit ? 'Net Profit (Surplus)' : 'Net Loss (Deficit)'}
+              </Typography>
+              <Avatar sx={{ bgcolor: isProfit ? '#dcfce7' : '#fee2e2', color: isProfit ? '#15803d' : '#dc2626', width: 40, height: 40, borderRadius: 2 }}>
+                {isProfit ? <TrendingUp /> : <TrendingDown />}
+              </Avatar>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 900, color: isProfit ? '#15803d' : '#dc2626', fontSize: { xs: '1.3rem', md: '1.45rem' } }}>
+              {formatCurrency(Math.abs(reportData.netProfit || 0))}
+            </Typography>
+            <Typography variant="caption" sx={{ color: isProfit ? '#047857' : '#b91c1c', fontWeight: 600, mt: 0.5 }}>
+              {isProfit ? 'Transferred to Balance Sheet (Capital A/c)' : 'Carried forward to Balance Sheet'}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* Side-by-Side Columns Layout as per Account Rules (Debit Dr. vs Credit Cr.) */}
+      <Box sx={{ 
+        display: 'grid', 
+        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, 
+        gap: { xs: 2, sm: 2.5, md: 3 }, 
+        width: '100%', 
         alignItems: 'stretch' 
       }}>
         {/* Left Side: Expenses & Purchases (Debit) */}
         <Box sx={{ 
-          flex: 1, 
-          width: { xs: '100%', md: '50%' }, 
-          minWidth: 0,
-          p: 2.5, 
+          width: '100%', 
+          p: { xs: 2, sm: 2.5 }, 
           border: '1px solid #e2e8f0', 
-          borderRadius: 2, 
+          borderRadius: 3, 
           display: 'flex', 
           flexDirection: 'column', 
           bgcolor: '#ffffff',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+          boxSizing: 'border-box'
         }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #0F3B66' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-              Expenses & Purchases (Debit)
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                Expenses & Purchases (Dr.)
+              </Typography>
+              <Chip label="Debit" size="small" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, bgcolor: '#eff6ff', color: '#1e40af' }} />
+            </Box>
             <Typography variant="caption" color="text.secondary">
               Click group to expand/collapse
             </Typography>
@@ -493,9 +632,9 @@ const ProfitLossReport = () => {
             <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                  <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Particulars / Ledger Group</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount (₹)</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -582,6 +721,27 @@ const ProfitLossReport = () => {
                     </React.Fragment>
                   );
                 })}
+
+                {/* To Net Profit row as per Account Rules (Debit Side Balancing Figure) */}
+                {isProfit && (
+                  <TableRow sx={{ bgcolor: '#f0fdf4', borderTop: '2px dashed #10b981' }}>
+                    <TableCell sx={{ pl: 2, py: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 800, color: '#15803d' }}>
+                          To Net Profit c/d
+                        </Typography>
+                        <Chip size="small" label="Transfer to B/S Capital" sx={{ height: 18, fontSize: '0.62rem', fontWeight: 800, bgcolor: '#dcfce7', color: '#166534' }} />
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ py: 1, color: '#15803d', fontSize: '0.8rem', fontWeight: 600 }}>
+                      Carried to Capital A/c
+                    </TableCell>
+                    <TableCell align="right" sx={{ py: 1, fontWeight: 900, color: '#15803d' }}>
+                      {formatCurrency(reportData.netProfit)}
+                    </TableCell>
+                  </TableRow>
+                )}
+
                 {reportData.leftSide.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
@@ -592,34 +752,49 @@ const ProfitLossReport = () => {
               </TableBody>
             </Table>
           </TableContainer>
-          <Divider sx={{ my: 2 }} />
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-              Total Expenses & Opening Stock
-            </Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-              {formatCurrency(reportData.totalExpenses)}
-            </Typography>
+          
+          <Divider sx={{ my: 1.5 }} />
+          <Box sx={{ mt: 'auto', pt: 0.5 }}>
+            {isProfit && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                  Subtotal (Expenses & Opening Stock):
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                  {formatCurrency(reportData.totalExpenses)}
+                </Typography>
+              </Box>
+            )}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5, borderTop: isProfit ? '1px dashed #cbd5e1' : 'none' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#0F3B66' }}>
+                Balanced Total (Debit)
+              </Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#0F3B66' }}>
+                {formatCurrency(isProfit ? reportData.totalIncomes : reportData.totalExpenses)}
+              </Typography>
+            </Box>
           </Box>
         </Box>
 
         {/* Right Side: Incomes, Sales & Closing Stock (Credit) */}
         <Box sx={{ 
-          flex: 1, 
-          width: { xs: '100%', md: '50%' }, 
-          minWidth: 0,
-          p: 2.5, 
+          width: '100%', 
+          p: { xs: 2, sm: 2.5 }, 
           border: '1px solid #e2e8f0', 
-          borderRadius: 2, 
+          borderRadius: 3, 
           display: 'flex', 
           flexDirection: 'column', 
           bgcolor: '#ffffff',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+          boxSizing: 'border-box'
         }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #10b981' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#10b981' }}>
-              Incomes, Sales & Closing Stock (Credit)
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#10b981' }}>
+                Incomes, Sales & Closing Stock (Cr.)
+              </Typography>
+              <Chip label="Credit" size="small" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, bgcolor: '#ecfdf5', color: '#065f46' }} />
+            </Box>
             <Typography variant="caption" color="text.secondary">
               Click group to expand/collapse
             </Typography>
@@ -628,9 +803,9 @@ const ProfitLossReport = () => {
             <Table size="small" sx={{ '& .MuiTableCell-head': { py: 0.75, lineHeight: '1.2' } }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                  <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Ledger / Group</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '50%' }}>Particulars / Ledger Group</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Account Group</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }} align="right">Amount (₹)</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -743,6 +918,27 @@ const ProfitLossReport = () => {
                     </React.Fragment>
                   );
                 })}
+
+                {/* By Net Loss row as per Account Rules (Credit Side Balancing Figure) */}
+                {!isProfit && (
+                  <TableRow sx={{ bgcolor: '#fef2f2', borderTop: '2px dashed #ef4444' }}>
+                    <TableCell sx={{ pl: 2, py: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 800, color: '#b91c1c' }}>
+                          By Net Loss c/d
+                        </Typography>
+                        <Chip size="small" label="Transfer to B/S" sx={{ height: 18, fontSize: '0.62rem', fontWeight: 800, bgcolor: '#fee2e2', color: '#dc2626' }} />
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ py: 1, color: '#b91c1c', fontSize: '0.8rem', fontWeight: 600 }}>
+                      Carried to Balance Sheet
+                    </TableCell>
+                    <TableCell align="right" sx={{ py: 1, fontWeight: 900, color: '#b91c1c' }}>
+                      {formatCurrency(Math.abs(reportData.netProfit))}
+                    </TableCell>
+                  </TableRow>
+                )}
+
                 {reportData.rightSide.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} align="center" color="text.secondary" sx={{ py: 4 }}>
@@ -753,14 +949,27 @@ const ProfitLossReport = () => {
               </TableBody>
             </Table>
           </TableContainer>
-          <Divider sx={{ my: 2 }} />
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#10b981' }}>
-              Total Incomes & Closing Stock
-            </Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#10b981' }}>
-              {formatCurrency(reportData.totalIncomes)}
-            </Typography>
+          
+          <Divider sx={{ my: 1.5 }} />
+          <Box sx={{ mt: 'auto', pt: 0.5 }}>
+            {!isProfit && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                  Subtotal (Incomes & Closing Stock):
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#10b981' }}>
+                  {formatCurrency(reportData.totalIncomes)}
+                </Typography>
+              </Box>
+            )}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5, borderTop: !isProfit ? '1px dashed #cbd5e1' : 'none' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#10b981' }}>
+                Balanced Total (Credit)
+              </Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#10b981' }}>
+                {formatCurrency(isProfit ? reportData.totalIncomes : reportData.totalExpenses)}
+              </Typography>
+            </Box>
           </Box>
         </Box>
       </Box>

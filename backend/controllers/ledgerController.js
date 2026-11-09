@@ -324,13 +324,140 @@ const plIncomeGroups = ['Sales Accounts', 'Direct Incomes', 'Indirect Incomes'];
 const bsAssetGroups = [
   'Bank Accounts', 'Cash-in-Hand', 'Current Assets', 'Deposits (Asset)',
   'Fixed Assets', 'Investments', 'Loans & Advances (Asset)', 'Misc. Expenses (ASSET)',
-  'Sundry Debtors', 'Party'
+  'Sundry Debtors', 'Party', 'Stock-in-Hand'
 ];
 const bsLiabilityGroups = [
   'Capital Account', 'Current Liabilities', 'Duties & Taxes', 'Loans (Liability)',
   'Provisions', 'Reserves & Surplus', 'Secured Loans', 'Sundry Creditors',
   'Unsecured Loans', 'Vendor'
 ];
+
+// Helper to fetch live Inventory & WIP Valuation (shared between Profit & Loss and Balance Sheet)
+const getInventoryAndWIPValuation = async (pool) => {
+  // Stock valuation from ItemMaster
+  const stockResult = await pool.request().query(`
+    SELECT 
+      ISNULL(SUM(ISNULL(OpeningStock, 0) * ISNULL(Costing, 0)), 0) AS totalOpeningStockValue,
+      ISNULL(SUM(ISNULL(ClosingStock, 0) * ISNULL(Costing, 0)), 0) AS totalClosingStockValue
+    FROM ItemMaster
+  `);
+  
+  const openingStockValue = Math.round((stockResult.recordset[0]?.totalOpeningStockValue || 0) * 100) / 100;
+  const mainClosingStockValue = Math.round((stockResult.recordset[0]?.totalClosingStockValue || 0) * 100) / 100;
+
+  // In-process stock valuation from DepartmentStock using Stock Transfer rates & valuation
+  const deptStockResult = await pool.request().query(`
+    WITH TransferRates AS (
+      SELECT 
+        ds.DeptID,
+        ds.ItemCode,
+        COALESCE(
+          (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+          (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+          (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+          im.Costing,
+          0
+        ) AS TransferRate,
+        COALESCE(
+          (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+          (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+          (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
+          im.Unit
+        ) AS ValuationUnit
+      FROM DepartmentStock ds
+      JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+    )
+    SELECT 
+      dm.DeptID,
+      dm.DeptName,
+      ds.ItemCode,
+      im.ItemName,
+      im.Costing AS MasterCosting,
+      tr.TransferRate AS Costing,
+      tr.TransferRate AS Rate,
+      tr.ValuationUnit AS Unit,
+      ISNULL(ds.Pcs, 0) AS Pcs,
+      ISNULL(ds.Weight, 0) AS Weight,
+      (CASE 
+        WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+        WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
+        WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+        ELSE ISNULL(ds.Pcs, 0)
+      END) AS EffectiveQty,
+      ROUND(
+        (CASE 
+          WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+          WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
+          WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+          ELSE ISNULL(ds.Pcs, 0)
+        END) * tr.TransferRate,
+        2
+      ) AS Valuation
+    FROM DepartmentStock ds
+    JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID
+    JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
+    JOIN TransferRates tr ON ds.DeptID = tr.DeptID AND ds.ItemCode = tr.ItemCode
+    WHERE (ISNULL(ds.Pcs, 0) > 0 OR ISNULL(ds.Weight, 0) > 0)
+      AND LOWER(dm.DeptName) != 'stock'
+    ORDER BY dm.DeptName ASC, im.ItemName ASC
+  `);
+
+  const deptMap = {};
+  let processStockValue = 0;
+
+  deptStockResult.recordset.forEach(row => {
+    if (!deptMap[row.DeptID]) {
+      deptMap[row.DeptID] = {
+        deptId: row.DeptID,
+        deptName: row.DeptName,
+        totalPcs: 0,
+        totalWeight: 0,
+        totalValuation: 0,
+        items: []
+      };
+    }
+    deptMap[row.DeptID].totalPcs += (row.Pcs || 0);
+    deptMap[row.DeptID].totalWeight = Math.round((deptMap[row.DeptID].totalWeight + (row.Weight || 0)) * 1000) / 1000;
+    deptMap[row.DeptID].totalValuation = Math.round((deptMap[row.DeptID].totalValuation + (row.Valuation || 0)) * 100) / 100;
+    deptMap[row.DeptID].items.push({
+      itemCode: row.ItemCode,
+      itemName: row.ItemName,
+      unit: row.Unit,
+      costing: row.Costing,
+      rate: row.Rate,
+      masterCosting: row.MasterCosting,
+      pcs: row.Pcs,
+      weight: row.Weight,
+      effectiveQty: row.EffectiveQty,
+      valuation: row.Valuation
+    });
+
+    processStockValue = Math.round((processStockValue + (row.Valuation || 0)) * 100) / 100;
+  });
+
+  const departmentStockBreakdown = Object.values(deptMap);
+  const combinedClosingStockValue = Math.round((mainClosingStockValue + processStockValue) * 100) / 100;
+
+  // Stock Transfer Process Loss
+  const lossResult = await pool.request().query(`
+    SELECT ISNULL(SUM(TransferLoss), 0) AS totalStockTransferLoss
+    FROM (
+      SELECT TransferID, MAX(ISNULL(LossAmount, 0)) AS TransferLoss
+      FROM StockTransfer
+      GROUP BY TransferID
+    ) t
+  `);
+  const stockTransferLoss = Math.round((lossResult.recordset[0]?.totalStockTransferLoss || 0) * 100) / 100;
+
+  return {
+    openingStockValue,
+    mainClosingStockValue,
+    processStockValue,
+    combinedClosingStockValue,
+    departmentStockBreakdown,
+    stockTransferLoss
+  };
+};
 
 exports.getProfitLossReport = async (req, res) => {
   try {
@@ -383,148 +510,35 @@ exports.getProfitLossReport = async (req, res) => {
         }
       }
     });
-    
-    // Stock valuation from ItemMaster
-    const stockResult = await pool.request().query(`
-      SELECT 
-        ISNULL(SUM(ISNULL(OpeningStock, 0) * ISNULL(Costing, 0)), 0) AS totalOpeningStockValue,
-        ISNULL(SUM(ISNULL(ClosingStock, 0) * ISNULL(Costing, 0)), 0) AS totalClosingStockValue
-      FROM ItemMaster
-    `);
-    
-    const openingStockValue = Math.round((stockResult.recordset[0]?.totalOpeningStockValue || 0) * 100) / 100;
-    const mainClosingStockValue = Math.round((stockResult.recordset[0]?.totalClosingStockValue || 0) * 100) / 100;
 
-    // In-process stock valuation from DepartmentStock using Stock Transfer rates & valuation
-    const deptStockResult = await pool.request().query(`
-      WITH TransferRates AS (
-        SELECT 
-          ds.DeptID,
-          ds.ItemCode,
-          COALESCE(
-            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            im.Costing,
-            0
-          ) AS TransferRate,
-          COALESCE(
-            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-            im.Unit
-          ) AS ValuationUnit
-        FROM DepartmentStock ds
-        JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
-      )
-      SELECT 
-        dm.DeptID,
-        dm.DeptName,
-        ds.ItemCode,
-        im.ItemName,
-        im.Costing AS MasterCosting,
-        tr.TransferRate AS Costing,
-        tr.TransferRate AS Rate,
-        tr.ValuationUnit AS Unit,
-        ISNULL(ds.Pcs, 0) AS Pcs,
-        ISNULL(ds.Weight, 0) AS Weight,
-        (CASE 
-          WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
-          WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
-          WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
-          ELSE ISNULL(ds.Pcs, 0)
-        END) AS EffectiveQty,
-        ROUND(
-          (CASE 
-            WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
-            WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
-            WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
-            ELSE ISNULL(ds.Pcs, 0)
-          END) * tr.TransferRate,
-          2
-        ) AS Valuation
-      FROM DepartmentStock ds
-      JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID
-      JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
-      JOIN TransferRates tr ON ds.DeptID = tr.DeptID AND ds.ItemCode = tr.ItemCode
-      WHERE (ISNULL(ds.Pcs, 0) > 0 OR ISNULL(ds.Weight, 0) > 0)
-        AND LOWER(dm.DeptName) != 'stock'
-      ORDER BY dm.DeptName ASC, im.ItemName ASC
-    `);
+    // Fetch shared live inventory & WIP valuation
+    const inventory = await getInventoryAndWIPValuation(pool);
 
-    const deptMap = {};
-    let processStockValue = 0;
-
-    deptStockResult.recordset.forEach(row => {
-      if (!deptMap[row.DeptID]) {
-        deptMap[row.DeptID] = {
-          deptId: row.DeptID,
-          deptName: row.DeptName,
-          totalPcs: 0,
-          totalWeight: 0,
-          totalValuation: 0,
-          items: []
-        };
-      }
-      deptMap[row.DeptID].totalPcs += (row.Pcs || 0);
-      deptMap[row.DeptID].totalWeight = Math.round((deptMap[row.DeptID].totalWeight + (row.Weight || 0)) * 1000) / 1000;
-      deptMap[row.DeptID].totalValuation = Math.round((deptMap[row.DeptID].totalValuation + (row.Valuation || 0)) * 100) / 100;
-      deptMap[row.DeptID].items.push({
-        itemCode: row.ItemCode,
-        itemName: row.ItemName,
-        unit: row.Unit,
-        costing: row.Costing,
-        rate: row.Rate,
-        masterCosting: row.MasterCosting,
-        pcs: row.Pcs,
-        weight: row.Weight,
-        effectiveQty: row.EffectiveQty,
-        valuation: row.Valuation
-      });
-
-      processStockValue = Math.round((processStockValue + (row.Valuation || 0)) * 100) / 100;
-    });
-
-    const departmentStockBreakdown = Object.values(deptMap);
-    const combinedClosingStockValue = Math.round((mainClosingStockValue + processStockValue) * 100) / 100;
-
-    // Stock Transfer Process Loss
-    const lossResult = await pool.request().query(`
-      SELECT ISNULL(SUM(TransferLoss), 0) AS totalStockTransferLoss
-      FROM (
-        SELECT TransferID, MAX(ISNULL(LossAmount, 0)) AS TransferLoss
-        FROM StockTransfer
-        GROUP BY TransferID
-      ) t
-    `);
-    const stockTransferLoss = Math.round((lossResult.recordset[0]?.totalStockTransferLoss || 0) * 100) / 100;
-
-    if (stockTransferLoss > 0) {
+    if (inventory.stockTransferLoss > 0) {
       if (expenseGroupsMap['Direct Expenses']) {
         expenseGroupsMap['Direct Expenses'].ledgers.push({
           ledgerName: 'Stock Transfer Process Loss',
-          balance: stockTransferLoss
+          balance: inventory.stockTransferLoss
         });
-        expenseGroupsMap['Direct Expenses'].total = Math.round((expenseGroupsMap['Direct Expenses'].total + stockTransferLoss) * 100) / 100;
-        totalExpenses = Math.round((totalExpenses + stockTransferLoss) * 100) / 100;
+        expenseGroupsMap['Direct Expenses'].total = Math.round((expenseGroupsMap['Direct Expenses'].total + inventory.stockTransferLoss) * 100) / 100;
+        totalExpenses = Math.round((totalExpenses + inventory.stockTransferLoss) * 100) / 100;
       } else {
         expenseGroupsMap['Direct Expenses'] = {
           groupName: 'Direct Expenses',
-          ledgers: [{ ledgerName: 'Stock Transfer Process Loss', balance: stockTransferLoss }],
-          total: stockTransferLoss
+          ledgers: [{ ledgerName: 'Stock Transfer Process Loss', balance: inventory.stockTransferLoss }],
+          total: inventory.stockTransferLoss
         };
-        totalExpenses = Math.round((totalExpenses + stockTransferLoss) * 100) / 100;
+        totalExpenses = Math.round((totalExpenses + inventory.stockTransferLoss) * 100) / 100;
       }
     }
 
-    // Clean empty groups and inject stock
     const leftSide = [];
-    if (openingStockValue > 0) {
+    if (inventory.openingStockValue > 0) {
       leftSide.push({
         groupName: 'Opening Stock',
         isStock: true,
-        ledgers: [{ ledgerName: 'Opening Stock', balance: openingStockValue }],
-        total: openingStockValue
+        ledgers: [{ ledgerName: 'Opening Stock', balance: inventory.openingStockValue }],
+        total: inventory.openingStockValue
       });
     }
     leftSide.push(...Object.values(expenseGroupsMap).filter(g => g.ledgers.length > 0));
@@ -533,14 +547,14 @@ exports.getProfitLossReport = async (req, res) => {
     
     // Build Closing Stock group including Main Store stock + Stock in Process per Department
     const closingStockLedgers = [];
-    if (mainClosingStockValue > 0) {
+    if (inventory.mainClosingStockValue > 0) {
       closingStockLedgers.push({
         ledgerName: 'Closing Stock (Main Store)',
-        balance: mainClosingStockValue,
+        balance: inventory.mainClosingStockValue,
         type: 'main_stock'
       });
     }
-    departmentStockBreakdown.forEach(dept => {
+    inventory.departmentStockBreakdown.forEach(dept => {
       if (dept.totalValuation > 0) {
         closingStockLedgers.push({
           ledgerName: `Stock in Process - ${dept.deptName}`,
@@ -561,26 +575,26 @@ exports.getProfitLossReport = async (req, res) => {
         groupName: 'Closing Stock',
         isStock: true,
         ledgers: closingStockLedgers,
-        total: combinedClosingStockValue
+        total: inventory.combinedClosingStockValue
       });
     }
     
     const ledgerExpenses = totalExpenses;
     const ledgerIncomes = totalIncomes;
 
-    const finalTotalExpenses = Math.round((ledgerExpenses + openingStockValue) * 100) / 100;
-    const finalTotalIncomes = Math.round((ledgerIncomes + combinedClosingStockValue) * 100) / 100;
+    const finalTotalExpenses = Math.round((ledgerExpenses + inventory.openingStockValue) * 100) / 100;
+    const finalTotalIncomes = Math.round((ledgerIncomes + inventory.combinedClosingStockValue) * 100) / 100;
     const netProfit = Math.round((finalTotalIncomes - finalTotalExpenses) * 100) / 100;
     
     res.status(200).json({
       leftSide,
       rightSide,
-      openingStockValue,
-      mainClosingStockValue,
-      processStockValue,
-      closingStockValue: combinedClosingStockValue,
-      departmentStockBreakdown,
-      stockTransferLoss,
+      openingStockValue: inventory.openingStockValue,
+      mainClosingStockValue: inventory.mainClosingStockValue,
+      processStockValue: inventory.processStockValue,
+      closingStockValue: inventory.combinedClosingStockValue,
+      departmentStockBreakdown: inventory.departmentStockBreakdown,
+      stockTransferLoss: inventory.stockTransferLoss,
       ledgerExpenses,
       ledgerIncomes,
       totalExpenses: finalTotalExpenses,
@@ -623,7 +637,10 @@ exports.getBalanceSheetReport = async (req, res) => {
     `);
     const fixedAssetsList = assetsListResult.recordset;
 
-    // Calculate Net Profit from PL accounts
+    // Fetch exact same live inventory & WIP valuation as Profit & Loss
+    const inventory = await getInventoryAndWIPValuation(pool);
+
+    // Calculate Net Profit identically from PL accounts + stock
     let totalExpenses = 0;
     let totalIncomes = 0;
     records.forEach(r => {
@@ -634,7 +651,14 @@ exports.getBalanceSheetReport = async (req, res) => {
         totalIncomes += Math.abs(balance);
       }
     });
-    const netProfit = Math.round((totalIncomes - totalExpenses) * 100) / 100;
+
+    if (inventory.stockTransferLoss > 0) {
+      totalExpenses = Math.round((totalExpenses + inventory.stockTransferLoss) * 100) / 100;
+    }
+
+    const finalTotalExpenses = Math.round((totalExpenses + inventory.openingStockValue) * 100) / 100;
+    const finalTotalIncomes = Math.round((totalIncomes + inventory.combinedClosingStockValue) * 100) / 100;
+    const netProfit = Math.round((finalTotalIncomes - finalTotalExpenses) * 100) / 100;
     
     // Group Balance Sheet accounts
     const assetGroupsMap = {};
@@ -669,6 +693,41 @@ exports.getBalanceSheetReport = async (req, res) => {
       };
       rawAssetsTotal += totalAssetValue;
     }
+
+    // Add Closing Stock under Current Assets / Stock-in-Hand (Exact match to Profit & Loss!)
+    const closingStockLedgers = [];
+    if (inventory.mainClosingStockValue > 0) {
+      closingStockLedgers.push({
+        ledgerName: 'Closing Stock (Main Store)',
+        balance: inventory.mainClosingStockValue,
+        type: 'main_stock'
+      });
+    }
+    inventory.departmentStockBreakdown.forEach(dept => {
+      if (dept.totalValuation > 0) {
+        closingStockLedgers.push({
+          ledgerName: `Stock in Process - ${dept.deptName}`,
+          balance: dept.totalValuation,
+          type: 'department_wip',
+          deptId: dept.deptId,
+          deptName: dept.deptName,
+          totalPcs: dept.totalPcs,
+          totalWeight: dept.totalWeight,
+          itemsCount: dept.items.length,
+          items: dept.items
+        });
+      }
+    });
+
+    if (closingStockLedgers.length > 0) {
+      assetGroupsMap['Stock-in-Hand'] = {
+        groupName: 'Stock-in-Hand (Closing Stock)',
+        isStock: true,
+        ledgers: closingStockLedgers,
+        total: inventory.combinedClosingStockValue
+      };
+      rawAssetsTotal += inventory.combinedClosingStockValue;
+    }
     
     records.forEach(r => {
       const balance = r.ClosingBalance;
@@ -701,14 +760,17 @@ exports.getBalanceSheetReport = async (req, res) => {
       }
     });
     
-    // Clean empty groups - put Fixed Assets first on Assets side
+    // Clean empty groups - put Fixed Assets first, then Stock-in-Hand, then other Assets
     const leftSide = Object.values(liabilityGroupsMap).filter(g => g.ledgers.length > 0);
     const rightSide = [];
     if (assetGroupsMap['Fixed Assets'] && assetGroupsMap['Fixed Assets'].ledgers.length > 0) {
       rightSide.push(assetGroupsMap['Fixed Assets']);
     }
+    if (assetGroupsMap['Stock-in-Hand'] && assetGroupsMap['Stock-in-Hand'].ledgers.length > 0) {
+      rightSide.push(assetGroupsMap['Stock-in-Hand']);
+    }
     Object.values(assetGroupsMap).forEach(g => {
-      if (g.groupName !== 'Fixed Assets' && g.ledgers.length > 0) {
+      if (g.groupName !== 'Fixed Assets' && g.groupName !== 'Stock-in-Hand (Closing Stock)' && g.ledgers.length > 0) {
         rightSide.push(g);
       }
     });
@@ -750,8 +812,13 @@ exports.getBalanceSheetReport = async (req, res) => {
       rawLiabilitiesTotal,
       differenceAmount,
       differenceSide,
-      totalAssets: assetsSum,
-      totalLiabilities: liabilitiesSum
+      totalAssets: Math.round(assetsSum * 100) / 100,
+      totalLiabilities: Math.round(liabilitiesSum * 100) / 100,
+      openingStockValue: inventory.openingStockValue,
+      mainClosingStockValue: inventory.mainClosingStockValue,
+      processStockValue: inventory.processStockValue,
+      closingStockValue: inventory.combinedClosingStockValue,
+      departmentStockBreakdown: inventory.departmentStockBreakdown
     });
   } catch (error) {
     console.error('Error generating Balance Sheet report:', error);
