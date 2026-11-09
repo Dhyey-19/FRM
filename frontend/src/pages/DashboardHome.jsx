@@ -119,7 +119,7 @@ const DashboardHome = () => {
 
   const topKpis = [
     {
-      title: 'Total Stock Valuation',
+      title: 'Total Stock',
       subtitle: 'Closing Stock * Costing',
       value: formatCurrency(kpis?.totalValue || 0),
       icon: <StockIcon sx={{ fontSize: 26 }} />,
@@ -451,15 +451,15 @@ const DashboardHome = () => {
       )}
 
       {/* Row 1: Core KPI Metrics (4 Cards) */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 3 }}>
+      <Grid container spacing={{ xs: 2, sm: 2, md: 2.5 }} sx={{ mb: 3 }}>
         {topKpis.map((card, index) => (
-          <Grid item xs={12} sm={6} md={6} lg={3} key={index}>
+          <Grid item xs={12} sm={6} md={3} key={index} sx={{ display: 'flex' }}>
             <Card sx={{ 
               borderRadius: 3, 
               boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
               border: '1px solid #e2e8f0',
               borderTop: `4px solid ${card.color}`,
-              height: '100%',
+              width: '100%',
               display: 'flex',
               flexDirection: 'column',
               transition: 'transform 0.2s, box-shadow 0.2s',
@@ -470,42 +470,76 @@ const DashboardHome = () => {
             }}>
               <CardActionArea 
                 onClick={() => card.onClick ? card.onClick() : navigate(card.link)} 
-                sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: 0 }}
+                sx={{ 
+                  flexGrow: 1, 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'stretch', 
+                  justifyContent: 'space-between', 
+                  height: '100%', 
+                  p: 0 
+                }}
               >
-                <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {card.title}
-                    </Typography>
-                    <Avatar sx={{ 
-                      bgcolor: card.bgColor, 
-                      color: card.color, 
-                      width: 44, 
-                      height: 44, 
-                      borderRadius: 2
-                    }}>
-                      {card.icon}
-                    </Avatar>
-                  </Box>
-
-                  {loading ? (
-                    <Box sx={{ mt: 'auto' }}>
-                      <Skeleton variant="text" width={110} height={36} />
-                      <Skeleton variant="rectangular" height={70} sx={{ mt: 1, borderRadius: 1 }} />
-                    </Box>
-                  ) : (
-                    <Box sx={{ mt: 'auto' }}>
-                      <Typography variant="h5" sx={{ fontWeight: 800, color: card.valueColor || '#1e293b', fontSize: { xs: '1.25rem', sm: '1.5rem' }, wordBreak: 'break-word' }}>
-                        {card.value}
+                <CardContent sx={{ 
+                  p: { xs: 2, sm: 2.2 }, 
+                  '&:last-child': { pb: { xs: 2, sm: 2.2 } }, 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  justifyContent: 'space-between', 
+                  flexGrow: 1, 
+                  height: '100%',
+                  boxSizing: 'border-box' 
+                }}>
+                  {/* Top Header & Value Section */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1, minHeight: 44 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.3 }}>
+                        {card.title}
                       </Typography>
-                      {card.subtitle && (
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.3, mb: 0.5 }}>
+                      <Avatar sx={{ 
+                        bgcolor: card.bgColor, 
+                        color: card.color, 
+                        width: 42, 
+                        height: 42, 
+                        borderRadius: 2,
+                        flexShrink: 0,
+                        ml: 1
+                      }}>
+                        {card.icon}
+                      </Avatar>
+                    </Box>
+
+                    {loading ? (
+                      <Box sx={{ mt: 1 }}>
+                        <Skeleton variant="text" width={110} height={36} />
+                        <Skeleton variant="rectangular" height={70} sx={{ mt: 1, borderRadius: 1 }} />
+                      </Box>
+                    ) : (
+                      <Box sx={{ mt: 0.5 }}>
+                        <Typography 
+                          variant="h5" 
+                          sx={{ 
+                            fontWeight: 800, 
+                            color: card.valueColor || '#1e293b', 
+                            fontSize: { xs: '1.25rem', sm: '1.35rem', md: '1.4rem', lg: '1.5rem' }, 
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            lineHeight: 1.2
+                          }}
+                          title={card.value}
+                        >
+                          {card.value}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.3, mb: 0.5, height: 18, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {card.subtitle}
                         </Typography>
-                      )}
-                      {card.customFooter}
-                    </Box>
-                  )}
+                      </Box>
+                    )}
+                  </Box>
+
+                  {/* Bottom Footer Section */}
+                  {!loading && card.customFooter}
                 </CardContent>
               </CardActionArea>
             </Card>
