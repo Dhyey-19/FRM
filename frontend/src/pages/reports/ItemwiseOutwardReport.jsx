@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -219,23 +220,24 @@ const ItemwiseOutwardReport = () => {
       'Sub Code': row.SUBCODE || '-',
       'Item Name': row.ItemName,
       'Unit': row.UNIT,
-      'Total Qty': row.QUANTITY,
-      'Total Gross Wt': row.GROSSWT,
-      'Total Net Wt': row.NETWT,
-      'Total Amount': row.AMOUNT
+      'Total Qty': Number(row.QUANTITY) || 0,
+      'Total Gross Wt': Number(row.GROSSWT) || 0,
+      'Total Net Wt': Number(row.NETWT) || 0,
+      'Total Amount': Number(row.AMOUNT) || 0
     }));
     exportData.push({
       'Item Code': '',
       'Sub Code': '',
       'Item Name': 'GRAND TOTAL',
       'Unit': '',
-      'Total Qty': displayedTotals.totalQty,
-      'Total Gross Wt': displayedTotals.totalGrossWt,
-      'Total Net Wt': displayedTotals.totalNetWt,
-      'Total Amount': displayedTotals.totalAmount
+      'Total Qty': Number(displayedTotals.totalQty) || 0,
+      'Total Gross Wt': Number(displayedTotals.totalGrossWt) || 0,
+      'Total Net Wt': Number(displayedTotals.totalNetWt) || 0,
+      'Total Amount': Number(displayedTotals.totalAmount) || 0
     });
     
     const ws = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Itemwise Sales');
     XLSX.writeFile(wb, 'Itemwise_Sales_Report.xlsx');

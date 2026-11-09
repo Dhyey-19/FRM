@@ -54,6 +54,7 @@ import {
   Calculate as CalculateIcon
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -399,25 +400,26 @@ const AttendanceManager = () => {
       'Employee Name': r.EmployeeName,
       'Department': r.Department,
       'Designation': r.Designation,
-      'Total Month Days': r.TotalDaysInMonth,
-      'Present Days': r.PresentDays,
-      'Absent Days': r.AbsentDays,
-      'Half Days': r.HalfDays,
-      'Week-Offs': r.WeekOffDays,
-      'Payable Days': r.PayableDays,
-      'Gross Hours': r.TotalGrossHours,
-      'Net Work Hours': r.TotalNetWorkHoursDecimal,
-      'Overtime Hours': r.TotalOvertimeHoursDecimal,
+      'Total Month Days': Number(r.TotalDaysInMonth) || 0,
+      'Present Days': Number(r.PresentDays) || 0,
+      'Absent Days': Number(r.AbsentDays) || 0,
+      'Half Days': Number(r.HalfDays) || 0,
+      'Week-Offs': Number(r.WeekOffDays) || 0,
+      'Payable Days': Number(r.PayableDays) || 0,
+      'Gross Hours': Number(r.TotalGrossHours) || 0,
+      'Net Work Hours': Number(r.TotalNetWorkHoursDecimal) || 0,
+      'Overtime Hours': Number(r.TotalOvertimeHoursDecimal) || 0,
       'Salary Type': r.SalaryType,
-      'Base Salary (₹)': r.BaseSalary,
-      'Calculated Salary (₹)': r.CalculatedSalary,
-      'Overtime Pay (₹)': r.OvertimePay,
-      'Deductions (₹)': r.Deductions,
-      'Net Salary (₹)': r.NetSalary,
+      'Base Salary (₹)': Number(r.BaseSalary) || 0,
+      'Calculated Salary (₹)': Number(r.CalculatedSalary) || 0,
+      'Overtime Pay (₹)': Number(r.OvertimePay) || 0,
+      'Deductions (₹)': Number(r.Deductions) || 0,
+      'Net Salary (₹)': Number(r.NetSalary) || 0,
       'Remarks': r.Remarks || ''
     }));
 
     const ws = XLSX.utils.json_to_sheet(excelRows);
+    ensureNumericWorksheet(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance_Salary');
     XLSX.writeFile(wb, `Attendance_Salary_${selectedMonth || 'Report'}.xlsx`);
@@ -437,15 +439,16 @@ const AttendanceManager = () => {
       for (let d = 1; d <= daysCount; d++) {
         row[`D${d}`] = emp.days[d] ? emp.days[d].status : '-';
       }
-      row['Present'] = emp.PresentDays;
-      row['Absent'] = emp.AbsentDays;
-      row['Week-Off'] = emp.WeekOffDays;
-      row['Half Day'] = emp.HalfDays;
-      row['Net Salary (₹)'] = emp.NetSalary;
+      row['Present'] = Number(emp.PresentDays) || 0;
+      row['Absent'] = Number(emp.AbsentDays) || 0;
+      row['Week-Off'] = Number(emp.WeekOffDays) || 0;
+      row['Half Day'] = Number(emp.HalfDays) || 0;
+      row['Net Salary (₹)'] = Number(emp.NetSalary) || 0;
       return row;
     });
 
     const ws = XLSX.utils.json_to_sheet(rows);
+    ensureNumericWorksheet(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Muster_Roll');
     XLSX.writeFile(wb, `Muster_Roll_${selectedMonth || 'Report'}.xlsx`);

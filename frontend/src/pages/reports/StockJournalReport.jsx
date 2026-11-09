@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -172,11 +173,12 @@ const StockJournalReport = () => {
       'Item Code': row.ItemCode,
       'Sub Code': row.SubCode || '-',
       'Item Name': row.ItemName,
-      'Qty': row.Qty,
+      'Qty': Number(row.Qty) || 0,
       'Remarks': row.Remarks
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock Journal');
     XLSX.writeFile(workbook, 'stock_journal_report.xlsx');

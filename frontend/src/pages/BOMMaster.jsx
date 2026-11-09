@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Save as SaveIcon, FileUpload as ImportIcon, FileDownload as ExportIcon } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const BOMMaster = () => {
   const [items, setItems] = useState([]);
@@ -213,9 +214,10 @@ const BOMMaster = () => {
           ParentSubCode: b.ParentSubCode || '',
           ChildItemCode: b.ChildItemCode,
           ChildSubCode: b.ChildSubCode || '',
-          Quantity: b.Quantity
+          Quantity: Number(b.Quantity) || 0
         }));
         const worksheet = XLSX.utils.json_to_sheet(exportData);
+        ensureNumericWorksheet(worksheet);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "BOM");
         XLSX.writeFile(workbook, "BOMMaster.xlsx");

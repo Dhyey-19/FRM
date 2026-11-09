@@ -37,6 +37,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const PayableReport = () => {
   const navigate = useNavigate();
@@ -372,34 +373,35 @@ const PayableReport = () => {
         'Ledger ID': row.RowId,
         'Vendor Name': row.VendorName,
         'Mobile No': row.MobileNo || '-',
-        'With Bill Payable (Rs.)': parseFloat(row.PayableWithBill || 0).toFixed(2)
+        'With Bill Payable (Rs.)': Number(parseFloat(row.PayableWithBill || 0).toFixed(2))
       }));
     } else if (viewMode === 'without_bill') {
       exportData = filteredRows.map(row => ({
         'Ledger ID': row.RowId,
         'Vendor Name': row.VendorName,
         'Mobile No': row.MobileNo || '-',
-        'Without Bill Payable (Rs.)': parseFloat(row.PayableWithoutBill || 0).toFixed(2)
+        'Without Bill Payable (Rs.)': Number(parseFloat(row.PayableWithoutBill || 0).toFixed(2))
       }));
     } else if (viewMode === 'all_columns') {
       exportData = filteredRows.map(row => ({
         'Ledger ID': row.RowId,
         'Vendor Name': row.VendorName,
         'Mobile No': row.MobileNo || '-',
-        'With Bill Payable (Rs.)': parseFloat(row.PayableWithBill || 0).toFixed(2),
-        'Without Bill Payable (Rs.)': parseFloat(row.PayableWithoutBill || 0).toFixed(2),
-        'Combined Payable (Rs.)': parseFloat(row.PayableCombined || 0).toFixed(2)
+        'With Bill Payable (Rs.)': Number(parseFloat(row.PayableWithBill || 0).toFixed(2)),
+        'Without Bill Payable (Rs.)': Number(parseFloat(row.PayableWithoutBill || 0).toFixed(2)),
+        'Combined Payable (Rs.)': Number(parseFloat(row.PayableCombined || 0).toFixed(2))
       }));
     } else {
       exportData = filteredRows.map(row => ({
         'Ledger ID': row.RowId,
         'Vendor Name': row.VendorName,
         'Mobile No': row.MobileNo || '-',
-        'Combined Payable (Rs.)': parseFloat(row.PayableCombined || 0).toFixed(2)
+        'Combined Payable (Rs.)': Number(parseFloat(row.PayableCombined || 0).toFixed(2))
       }));
     }
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Payable');
     XLSX.writeFile(workbook, `payable_report_${viewMode}.xlsx`);

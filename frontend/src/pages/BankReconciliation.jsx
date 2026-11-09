@@ -21,6 +21,7 @@ import {
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useNavigate } from 'react-router-dom';
@@ -379,17 +380,18 @@ const BankReconciliation = () => {
         'Stmt Particulars': stmt ? stmt.description : '-',
         'Stmt Ref / Chq No': stmt ? stmt.refNo : '-',
         'Stmt Type': stmt ? stmt.type : '-',
-        'Stmt Amount': stmt ? stmt.amount : 0,
+        'Stmt Amount': stmt ? (Number(stmt.amount) || 0) : 0,
         'Book Date': book ? book.dateDisplay : '-',
         'Voucher No': book ? `V${book.voucherNo}` : '-',
         'Voucher Type': book ? book.voucherType : '-',
         'Particulars (Party/Account)': book ? getOppositeLedgerName(book.voucherNo, book.mode) : '-',
         'Book Mode': book ? (book.mode === 'Debit' ? 'Debit (Deposit)' : 'Credit (Payment)') : '-',
-        'Book Amount': book ? book.amount : 0
+        'Book Amount': book ? (Number(book.amount) || 0) : 0
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Reconciliation');
     

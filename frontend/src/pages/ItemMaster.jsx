@@ -48,6 +48,7 @@ import {
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const ItemMaster = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -501,19 +502,20 @@ const ItemMaster = () => {
       Location: item.Location || '',
       ItemType: item.ItemType || '',
       Series: item.Series || '',
-      StdWeight: item.StdWeight || 0,
+      StdWeight: Number(item.StdWeight) || 0,
       Unit: item.Unit || '',
-      MRP: item.MRP || 0,
-      Costing: item.Costing || 0,
-      OpeningStock: item.OpeningStock || 0,
-      ClosingStock: item.ClosingStock || 0,
+      MRP: Number(item.MRP) || 0,
+      Costing: Number(item.Costing) || 0,
+      OpeningStock: Number(item.OpeningStock) || 0,
+      ClosingStock: Number(item.ClosingStock) || 0,
       HSNCode: item.HSNCode || '',
-      ReorderLevel: item.ReorderLevel || 0,
+      ReorderLevel: Number(item.ReorderLevel) || 0,
       DeadStockType: item.DeadStockType || 'None',
-      DeadStockDays: item.DeadStockDays || 0,
-      IsDeadStock: item.IsDeadStock || 0
+      DeadStockDays: Number(item.DeadStockDays) || 0,
+      IsDeadStock: Number(item.IsDeadStock) || 0
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Items");
     XLSX.writeFile(workbook, "ItemMaster.xlsx");

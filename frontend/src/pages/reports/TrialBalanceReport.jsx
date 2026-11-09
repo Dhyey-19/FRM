@@ -9,6 +9,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const TrialBalanceReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -164,26 +165,27 @@ const TrialBalanceReport = () => {
     const flatData = rowData.map(row => ({
       'Ledger Name': row.name,
       'Account Group': row.group,
-      'Debit (Dr)': row.debit || 0,
-      'Credit (Cr)': row.credit || 0
+      'Debit (Dr)': row.debit > 0 ? Number(row.debit.toFixed(2)) : 0,
+      'Credit (Cr)': row.credit > 0 ? Number(row.credit.toFixed(2)) : 0
     }));
 
     if (rowData.length > 0) {
       flatData.push({
         'Ledger Name': 'Total', 'Account Group': '',
-        'Debit (Dr)': totalDebit,
-        'Credit (Cr)': totalCredit
+        'Debit (Dr)': Number(totalDebit.toFixed(2)),
+        'Credit (Cr)': Number(totalCredit.toFixed(2))
       });
       if (diff > 0) {
         flatData.push({
           'Ledger Name': 'Difference in Trial Balance', 'Account Group': '',
-          'Debit (Dr)': totalDebit > totalCredit ? 0 : diff,
-          'Credit (Cr)': totalCredit > totalDebit ? 0 : diff
+          'Debit (Dr)': totalDebit > totalCredit ? 0 : Number(diff.toFixed(2)),
+          'Credit (Cr)': totalCredit > totalDebit ? 0 : Number(diff.toFixed(2))
         });
       }
     }
 
     const worksheet = XLSX.utils.json_to_sheet(flatData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Trial Balance');
     XLSX.writeFile(workbook, 'trial_balance_report.xlsx');

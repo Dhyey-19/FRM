@@ -27,6 +27,7 @@ import {
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const PendingPODReport = () => {
   const navigate = useNavigate();
@@ -256,19 +257,20 @@ const PendingPODReport = () => {
       'Customer / Party': r.LedgerName || '—',
       'Destination City': r.City || '—',
       'Destination State': r.State || '—',
-      'Expected Delivery Days (Master)': r.ExpectedDeliveryDays || 0,
+      'Expected Delivery Days (Master)': Number(r.ExpectedDeliveryDays) || 0,
       'Expected Delivery Date': formatDateDisplay(r.ExpectedDeliveryDate),
-      'Days Elapsed': r.DaysElapsed || 0,
+      'Days Elapsed': Number(r.DaysElapsed) || 0,
       'Courier / Transport Company': r.CourierCompany || '—',
       'AWB No. / Tracking No.': r.AwbNo || '—',
       'Transport Mode': r.TransportMode || '—',
       'Delivery Status': r.DeliveryStatus || 'Pending POD',
-      'Overdue Days': r.IsOverdue ? r.OverdueDays : 0,
-      'Invoice Amount (₹)': parseFloat(r.TOTALAMOUNT) || 0,
+      'Overdue Days': r.IsOverdue ? (Number(r.OverdueDays) || 0) : 0,
+      'Invoice Amount (₹)': Math.round((parseFloat(r.TOTALAMOUNT) || 0) * 100) / 100,
       'Remarks': r.PodRemarks || r.REMARK || ''
     }));
 
     const ws = XLSX.utils.json_to_sheet(excelRows);
+    ensureNumericWorksheet(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Pending POD Report');
     XLSX.writeFile(wb, `Pending_POD_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);

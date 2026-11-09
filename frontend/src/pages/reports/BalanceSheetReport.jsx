@@ -47,6 +47,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet, toExcelNum } from '../../utils/excelHelper';
 
 const BalanceSheetReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -134,13 +135,13 @@ const BalanceSheetReport = () => {
       [`Report Date: ${new Date().toLocaleDateString()}`],
       [],
       ['SUMMARY OF ASSETS & LIABILITIES (ACCOUNTING RULES)'],
-      ['Total Balance Sheet Assets', '', reportData.totalAssets || 0],
-      ['Total Liabilities & Capital', '', reportData.totalLiabilities || 0],
-      ['Main Store Closing Stock', '', reportData.mainClosingStockValue || 0],
-      ['Stock in Process (Departments WIP)', '', reportData.processStockValue || 0],
-      ['Total Stock-in-Hand (Closing Stock)', '', reportData.closingStockValue || 0],
-      ['Total Asset Value (Fixed Assets Master)', '', reportData.totalAssetValue || 0],
-      [reportData.netProfit >= 0 ? 'Net Profit (Transferred to Capital)' : 'Net Loss', '', Math.abs(reportData.netProfit || 0)],
+      ['Total Balance Sheet Assets', '', Number(reportData.totalAssets) || 0],
+      ['Total Liabilities & Capital', '', Number(reportData.totalLiabilities) || 0],
+      ['Main Store Closing Stock', '', Number(reportData.mainClosingStockValue) || 0],
+      ['Stock in Process (Departments WIP)', '', Number(reportData.processStockValue) || 0],
+      ['Total Stock-in-Hand (Closing Stock)', '', Number(reportData.closingStockValue) || 0],
+      ['Total Asset Value (Fixed Assets Master)', '', Number(reportData.totalAssetValue) || 0],
+      [reportData.netProfit >= 0 ? 'Net Profit (Transferred to Capital)' : 'Net Loss', '', Math.abs(Number(reportData.netProfit) || 0)],
       [],
       ['LIABILITIES & CAPITAL (LEFT SIDE / CREDIT)', '', '', 'ASSETS (RIGHT SIDE / DEBIT)', '', ''],
       ['Particulars / Ledger Name', 'Group Name', 'Amount (INR)', 'Particulars / Ledger Name', 'Group Name', 'Amount (INR)']
@@ -150,46 +151,47 @@ const BalanceSheetReport = () => {
     // Regular Liabilities
     reportData.leftSide.forEach(group => {
       group.ledgers.forEach(ledger => {
-        leftItems.push([ledger.ledgerName, group.groupName, ledger.balance]);
+        leftItems.push([ledger.ledgerName, group.groupName, Number(ledger.balance) || 0]);
       });
     });
     // Profit/Loss Item if on Left
     if (reportData.profitLossItem && reportData.netProfit > 0) {
-      leftItems.push([reportData.profitLossItem.label, 'P&L Transfer to Capital', reportData.profitLossItem.amount]);
+      leftItems.push([reportData.profitLossItem.label, 'P&L Transfer to Capital', Number(reportData.profitLossItem.amount) || 0]);
     }
     // Difference in Trial Balance if on Left
     if (reportData.differenceAmount > 0 && reportData.differenceSide === 'left') {
-      leftItems.push(['Difference in Trial Balance', 'Suspense/Adjustment', reportData.differenceAmount]);
+      leftItems.push(['Difference in Trial Balance', 'Suspense/Adjustment', Number(reportData.differenceAmount) || 0]);
     }
 
     const rightItems = [];
     // Regular Assets
     reportData.rightSide.forEach(group => {
       group.ledgers.forEach(ledger => {
-        rightItems.push([ledger.ledgerName, group.groupName, ledger.balance]);
+        rightItems.push([ledger.ledgerName, group.groupName, Number(ledger.balance) || 0]);
       });
     });
     // Profit/Loss Item if on Right
     if (reportData.profitLossItem && reportData.netProfit < 0) {
-      rightItems.push([reportData.profitLossItem.label, 'P&L Transfer', reportData.profitLossItem.amount]);
+      rightItems.push([reportData.profitLossItem.label, 'P&L Transfer', Number(reportData.profitLossItem.amount) || 0]);
     }
     // Difference in Trial Balance if on Right
     if (reportData.differenceAmount > 0 && reportData.differenceSide === 'right') {
-      rightItems.push(['Difference in Trial Balance', 'Suspense/Adjustment', reportData.differenceAmount]);
+      rightItems.push(['Difference in Trial Balance', 'Suspense/Adjustment', Number(reportData.differenceAmount) || 0]);
     }
 
     const maxLength = Math.max(leftItems.length, rightItems.length);
 
     for (let i = 0; i < maxLength; i++) {
-      const leftRow = leftItems[i] || ['', '', ''];
-      const rightRow = rightItems[i] || ['', '', ''];
+      const leftRow = leftItems[i] || ['', '', null];
+      const rightRow = rightItems[i] || ['', '', null];
       rows.push([...leftRow, ...rightRow]);
     }
 
     rows.push([]);
-    rows.push(['Total Liabilities & Capital', '', reportData.totalLiabilities, 'Total Assets', '', reportData.totalAssets]);
+    rows.push(['Total Liabilities & Capital', '', Number(reportData.totalLiabilities) || 0, 'Total Assets', '', Number(reportData.totalAssets) || 0]);
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Balance Sheet');
 
@@ -209,19 +211,20 @@ const BalanceSheetReport = () => {
             item.itemCode,
             item.itemName || '-',
             item.unit || '-',
-            item.rate || item.costing || 0,
-            item.pcs || 0,
-            item.weight || 0,
-            item.valuation || 0
+            Number(item.rate || item.costing || 0),
+            Number(item.pcs || 0),
+            Number(item.weight || 0),
+            Number(item.valuation || 0)
           ]);
         });
-        wipRows.push([`${dept.deptName} Subtotal`, '', '', '', '', dept.totalPcs, dept.totalWeight, dept.totalValuation]);
+        wipRows.push([`${dept.deptName} Subtotal`, '', '', '', '', Number(dept.totalPcs) || 0, Number(dept.totalWeight) || 0, Number(dept.totalValuation) || 0]);
         wipRows.push([]);
       });
 
-      wipRows.push(['Total Stock in Process Valuation', '', '', '', '', '', '', reportData.processStockValue || 0]);
+      wipRows.push(['Total Stock in Process Valuation', '', '', '', '', '', '', Number(reportData.processStockValue) || 0]);
 
       const wipWorksheet = XLSX.utils.aoa_to_sheet(wipRows);
+      ensureNumericWorksheet(wipWorksheet);
       XLSX.utils.book_append_sheet(workbook, wipWorksheet, 'Stock in Process');
     }
 

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from './excelHelper';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure pdfjs worker using module URL with fallback
@@ -695,6 +696,7 @@ export const downloadSampleBankStatement = () => {
   ];
 
   const worksheet = XLSX.utils.json_to_sheet(sampleData);
+  ensureNumericWorksheet(worksheet);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Bank Statement');
   XLSX.writeFile(workbook, 'Sample_Bank_Statement.xlsx');

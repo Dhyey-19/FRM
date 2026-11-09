@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const BrandReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -104,6 +105,7 @@ const BrandReport = () => {
 
   const handleExportExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(brands.map(b => ({ 'Brand ID': b.BrandId, 'Brand Name': b.BrandName })));
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Brands');
     XLSX.writeFile(workbook, 'brand_report.xlsx');

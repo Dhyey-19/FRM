@@ -13,6 +13,7 @@ import DeleteConfirmModal from '../../components/common/DeleteConfirmModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const BOMReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -253,9 +254,9 @@ const BOMReport = () => {
         'Code': group.ParentSubCode ? `${group.ParentItemCode} / ${group.ParentSubCode}` : group.ParentItemCode,
         'Name': group.ParentItemName,
         'Brand': group.ParentBrandName,
-        'Quantity': '',
-        'Costing': '',
-        'Total Cost': group.ParentTotalCost.toFixed(2)
+        'Quantity': null,
+        'Costing': null,
+        'Total Cost': Number(group.ParentTotalCost.toFixed(2))
       });
       group.children.forEach(child => {
         flatData.push({
@@ -263,14 +264,15 @@ const BOMReport = () => {
           'Code': child.ChildSubCode ? `${child.ChildItemCode} / ${child.ChildSubCode}` : child.ChildItemCode,
           'Name': child.ChildItemName,
           'Brand': '-',
-          'Quantity': child.Quantity,
-          'Costing': child.ChildCosting.toFixed(2),
-          'Total Cost': child.TotalChildCost.toFixed(2)
+          'Quantity': Number(child.Quantity) || 0,
+          'Costing': Number(Number(child.ChildCosting || 0).toFixed(2)),
+          'Total Cost': Number(Number(child.TotalChildCost || 0).toFixed(2))
         });
       });
     });
 
     const worksheet = XLSX.utils.json_to_sheet(flatData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'BOM Report');
     XLSX.writeFile(workbook, 'bom_grouped_report.xlsx');

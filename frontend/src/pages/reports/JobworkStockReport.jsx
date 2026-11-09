@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const JobworkStockReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -179,15 +180,16 @@ const JobworkStockReport = () => {
       'Item Code': row.ItemCode,
       'Sub Code': row.SubCode || '-',
       'Item Name': row.ItemName,
-      'Sent Qty': row.OutQty,
-      'Sent Wt': row.OutNetWt,
-      'Ret Qty': row.InQty,
-      'Ret Wt': row.InNetWt,
-      'Outs Qty': row.BalQty,
-      'Outs Wt': row.BalNetWt
+      'Sent Qty': Number(row.OutQty) || 0,
+      'Sent Wt': Number(row.OutNetWt) || 0,
+      'Ret Qty': Number(row.InQty) || 0,
+      'Ret Wt': Number(row.InNetWt) || 0,
+      'Outs Qty': Number(row.BalQty) || 0,
+      'Outs Wt': Number(row.BalNetWt) || 0
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Outstanding Stock');
     XLSX.writeFile(workbook, 'jobwork_stock_report.xlsx');

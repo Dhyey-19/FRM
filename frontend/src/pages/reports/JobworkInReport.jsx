@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -199,19 +200,20 @@ const JobworkInReport = () => {
       'Fin Item Name': row.InItemName,
       'Process': row.PROCESS,
       'Unit': row.UNIT,
-      'Qty': row.QUANTITY,
-      'Gross Wt': row.GROSSWT,
-      'Net Wt': row.NETWT,
+      'Qty': Number(row.QUANTITY) || 0,
+      'Gross Wt': Number(row.GROSSWT) || 0,
+      'Net Wt': Number(row.NETWT) || 0,
       'Scrap Item Code': row.SCRAPITEMCODE,
       'Scrap Sub Code': row.SCRAPSUBCODE || '-',
       'Scrap Item Name': row.ScrapItemName,
-      'Scrap Pcs': row.SCRAPPCS,
-      'Scrap Wt': row.SCRAPWT,
-      'Rate': row.RATE,
-      'Amount': row.AMOUNT
+      'Scrap Pcs': Number(row.SCRAPPCS) || 0,
+      'Scrap Wt': Number(row.SCRAPWT) || 0,
+      'Rate': Number(row.RATE) || 0,
+      'Amount': Number(row.AMOUNT) || 0
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Jobwork In');
     XLSX.writeFile(workbook, 'jobwork_inward_report.xlsx');

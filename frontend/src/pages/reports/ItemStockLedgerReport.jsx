@@ -17,6 +17,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -263,12 +264,12 @@ const ItemStockLedgerReport = () => {
       'Type': 'Opening',
       'Bill': '',
       'Particulars / Route': 'Initial / Period Balance',
-      'In Qty (+)': '',
-      'Out Qty (-)': '',
+      'In Qty (+)': null,
+      'Out Qty (-)': null,
       'Unit': selectedItem.Unit || '',
-      'Rate (Rs.)': '',
-      'Amount (Rs.)': '',
-      'Balance Stock': ledgerData?.summary?.openingStock ?? 0,
+      'Rate (Rs.)': null,
+      'Amount (Rs.)': null,
+      'Balance Stock': Number(ledgerData?.summary?.openingStock ?? 0),
       'Remarks': ''
     });
 
@@ -280,12 +281,12 @@ const ItemStockLedgerReport = () => {
         'Type': tx.type,
         'Bill': tx.bill ? 'With Bill' : 'Without Bill',
         'Particulars / Route': tx.particulars || '-',
-        'In Qty (+)': tx.direction === 'IN' ? tx.effectiveQty : '',
-        'Out Qty (-)': tx.direction === 'OUT' ? tx.effectiveQty : '',
+        'In Qty (+)': tx.direction === 'IN' ? (Number(tx.effectiveQty) || 0) : null,
+        'Out Qty (-)': tx.direction === 'OUT' ? (Number(tx.effectiveQty) || 0) : null,
         'Unit': tx.unit || selectedItem.Unit,
-        'Rate (Rs.)': tx.rate ? tx.rate.toFixed(2) : '',
-        'Amount (Rs.)': tx.amount ? tx.amount.toFixed(2) : '',
-        'Balance Stock': tx.runningStock,
+        'Rate (Rs.)': tx.rate ? Number(tx.rate.toFixed(2)) : null,
+        'Amount (Rs.)': tx.amount ? Number(tx.amount.toFixed(2)) : null,
+        'Balance Stock': Number(tx.runningStock) || 0,
         'Remarks': tx.remark || ''
       });
     });
@@ -298,12 +299,12 @@ const ItemStockLedgerReport = () => {
       'Type': '',
       'Bill': '',
       'Particulars / Route': `Total In: ${displaySummary.totalIn} | Total Out: ${displaySummary.totalOut} | Net Movement: ${displaySummary.netMovement}`,
-      'In Qty (+)': displaySummary.totalIn,
-      'Out Qty (-)': displaySummary.totalOut,
+      'In Qty (+)': Number(displaySummary.totalIn) || 0,
+      'Out Qty (-)': Number(displaySummary.totalOut) || 0,
       'Unit': selectedItem.Unit || '',
-      'Rate (Rs.)': '',
-      'Amount (Rs.)': '',
-      'Balance Stock': '',
+      'Rate (Rs.)': null,
+      'Amount (Rs.)': null,
+      'Balance Stock': null,
       'Remarks': ''
     });
 
@@ -313,12 +314,12 @@ const ItemStockLedgerReport = () => {
       'Type': '',
       'Bill': '',
       'Particulars / Route': '',
-      'In Qty (+)': '',
-      'Out Qty (-)': '',
+      'In Qty (+)': null,
+      'Out Qty (-)': null,
       'Unit': selectedItem.Unit || '',
-      'Rate (Rs.)': '',
-      'Amount (Rs.)': '',
-      'Balance Stock': displaySummary.closingStock,
+      'Rate (Rs.)': null,
+      'Amount (Rs.)': null,
+      'Balance Stock': Number(displaySummary.closingStock) || 0,
       'Remarks': ''
     });
 
@@ -331,12 +332,12 @@ const ItemStockLedgerReport = () => {
         'Type': '',
         'Bill': '',
         'Particulars / Route': '',
-        'In Qty (+)': '',
-        'Out Qty (-)': '',
+        'In Qty (+)': null,
+        'Out Qty (-)': null,
         'Unit': '',
-        'Rate (Rs.)': '',
-        'Amount (Rs.)': '',
-        'Balance Stock': '',
+        'Rate (Rs.)': null,
+        'Amount (Rs.)': null,
+        'Balance Stock': null,
         'Remarks': ''
       });
 
@@ -346,12 +347,12 @@ const ItemStockLedgerReport = () => {
         'Type': 'Godown Stock',
         'Bill': '',
         'Particulars / Route': 'Central Finished Goods / Raw Store Godown',
-        'In Qty (+)': '',
-        'Out Qty (-)': '',
+        'In Qty (+)': null,
+        'Out Qty (-)': null,
         'Unit': selectedItem.Unit || '',
-        'Rate (Rs.)': '',
-        'Amount (Rs.)': '',
-        'Balance Stock': ledgerData.stockBifurcation.mainStock.qty,
+        'Rate (Rs.)': null,
+        'Amount (Rs.)': null,
+        'Balance Stock': Number(ledgerData.stockBifurcation.mainStock.qty) || 0,
         'Remarks': 'ItemMaster Closing Stock'
       });
 
@@ -362,12 +363,12 @@ const ItemStockLedgerReport = () => {
           'Type': 'Department Stock (WIP)',
           'Bill': '',
           'Particulars / Route': `In-process stock in ${d.deptName}${d.weight > 0 ? ` (Weight: ${d.weight} KG)` : ''}`,
-          'In Qty (+)': '',
-          'Out Qty (-)': '',
+          'In Qty (+)': null,
+          'Out Qty (-)': null,
           'Unit': selectedItem.Unit || '',
-          'Rate (Rs.)': '',
-          'Amount (Rs.)': '',
-          'Balance Stock': d.qty,
+          'Rate (Rs.)': null,
+          'Amount (Rs.)': null,
+          'Balance Stock': Number(d.qty) || 0,
           'Remarks': d.weight > 0 ? `Weight: ${d.weight} KG` : ''
         });
       });
@@ -378,12 +379,12 @@ const ItemStockLedgerReport = () => {
         'Type': 'Total WIP',
         'Bill': '',
         'Particulars / Route': 'Sum of in-process department positions',
-        'In Qty (+)': '',
-        'Out Qty (-)': '',
+        'In Qty (+)': null,
+        'Out Qty (-)': null,
         'Unit': selectedItem.Unit || '',
-        'Rate (Rs.)': '',
-        'Amount (Rs.)': '',
-        'Balance Stock': ledgerData.stockBifurcation.totalDepartmentStock,
+        'Rate (Rs.)': null,
+        'Amount (Rs.)': null,
+        'Balance Stock': Number(ledgerData.stockBifurcation.totalDepartmentStock) || 0,
         'Remarks': ledgerData.stockBifurcation.totalDepartmentWeight > 0 ? `Total Wt: ${ledgerData.stockBifurcation.totalDepartmentWeight} KG` : ''
       });
 
@@ -393,17 +394,18 @@ const ItemStockLedgerReport = () => {
         'Type': 'Grand Total',
         'Bill': '',
         'Particulars / Route': 'Main Store Stock + All Department WIP Positions',
-        'In Qty (+)': '',
-        'Out Qty (-)': '',
+        'In Qty (+)': null,
+        'Out Qty (-)': null,
         'Unit': selectedItem.Unit || '',
-        'Rate (Rs.)': '',
-        'Amount (Rs.)': '',
-        'Balance Stock': ledgerData.stockBifurcation.totalCompanyStock,
+        'Rate (Rs.)': null,
+        'Amount (Rs.)': null,
+        'Balance Stock': Number(ledgerData.stockBifurcation.totalCompanyStock) || 0,
         'Remarks': 'Enterprise Total'
       });
     }
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock Ledger');
 

@@ -19,6 +19,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 // Error Boundary to catch render exceptions and prevent blank page
 class ErrorBoundary extends React.Component {
@@ -715,15 +716,15 @@ const StockReportContent = () => {
           'Type': '',
           'Series': '',
           'Unit': '',
-          'Costing (Rs.)': '',
-          'Main Stock': totals.mainStock,
-          'Department Stock Total': totals.deptStock,
+          'Costing (Rs.)': null,
+          'Main Stock': Number(totals.mainStock) || 0,
+          'Department Stock Total': Number(totals.deptStock) || 0,
           'Department Breakdown': '',
-          'Jobwork Stock Total': totals.jwStock,
+          'Jobwork Stock Total': Number(totals.jwStock) || 0,
           'Jobwork Ledger Breakdown': '',
-          'Total Combined Stock': totals.totalStock,
-          'Total Weight (KG)': totals.totalWeight,
-          'Valuation (Rs.)': totals.totalValuation
+          'Total Combined Stock': Number(totals.totalStock) || 0,
+          'Total Weight (KG)': Number(totals.totalWeight) || 0,
+          'Valuation (Rs.)': Number(totals.totalValuation) || 0
         });
       }
     } else if (reportType === 'item') {
@@ -735,17 +736,17 @@ const StockReportContent = () => {
           'Type': row.ItemType || '-',
           'Series': row.Series || '-',
           'Unit': row.Unit || '-',
-          'MRP': row.MRP || 0,
-          'Costing': row.Costing || 0,
-          'Opening Stock': row.OpeningStock || 0,
-          'Closing Stock': row.ClosingStock || 0
+          'MRP': Number(row.MRP) || 0,
+          'Costing': Number(row.Costing) || 0,
+          'Opening Stock': Number(row.OpeningStock) || 0,
+          'Closing Stock': Number(row.ClosingStock) || 0
         });
       });
       if (sortedData.length > 0) {
         flatData.push({
-          'Code': '', 'Sub Code': '', 'Item Name': '', 'Type': '', 'Series': '', 'Unit': '', 'MRP': '', 'Costing': 'Total:',
-          'Opening Stock': totals.totalOpening,
-          'Closing Stock': totals.totalClosing
+          'Code': '', 'Sub Code': '', 'Item Name': '', 'Type': '', 'Series': '', 'Unit': '', 'MRP': null, 'Costing': 'Total:',
+          'Opening Stock': Number(totals.totalOpening) || 0,
+          'Closing Stock': Number(totals.totalClosing) || 0
         });
       }
     } else if (reportType === 'department') {
@@ -757,17 +758,17 @@ const StockReportContent = () => {
           'Item Name': row.ItemName || '-',
           'Unit': row.Unit || '-',
           'Costing': Number(row.Costing || 0),
-          'Pcs': row.Pcs || 0,
+          'Pcs': Number(row.Pcs) || 0,
           'Weight': Number(row.Weight || 0),
           'Valuation': Number(row.Valuation || 0)
         });
       });
       if (sortedData.length > 0) {
         flatData.push({
-          'Department': '', 'Code': '', 'Sub Code': '', 'Item Name': 'Total:', 'Unit': '', 'Costing': '',
-          'Pcs': totals.totalPcs,
-          'Weight': totals.totalWeight,
-          'Valuation': totals.totalValuation
+          'Department': '', 'Code': '', 'Sub Code': '', 'Item Name': 'Total:', 'Unit': '', 'Costing': null,
+          'Pcs': Number(totals.totalPcs) || 0,
+          'Weight': Number(totals.totalWeight) || 0,
+          'Valuation': Number(totals.totalValuation) || 0
         });
       }
     } else {
@@ -792,17 +793,18 @@ const StockReportContent = () => {
           'Code': '',
           'Sub Code': '',
           'Item Name': '',
-          'Sent Qty': totals.totalOutQty,
-          'Sent Wt (KG)': totals.totalOutWt,
-          'Received Qty': totals.totalInQty,
-          'Received Wt (KG)': totals.totalInWt,
-          'Outstanding Qty': totals.totalBalQty,
-          'Outstanding Wt (KG)': totals.totalBalWt
+          'Sent Qty': Number(totals.totalOutQty) || 0,
+          'Sent Wt (KG)': Number(totals.totalOutWt) || 0,
+          'Received Qty': Number(totals.totalInQty) || 0,
+          'Received Wt (KG)': Number(totals.totalInWt) || 0,
+          'Outstanding Qty': Number(totals.totalBalQty) || 0,
+          'Outstanding Wt (KG)': Number(totals.totalBalWt) || 0
         });
       }
     }
 
     const worksheet = XLSX.utils.json_to_sheet(flatData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     const baseSheetName = reportType === 'combined' 
       ? 'Combined Stock' 
@@ -964,12 +966,12 @@ const StockReportContent = () => {
         'Warehouse': '',
         'Location': '',
         'Unit': '',
-        'Main Stock': '',
-        'Dept Stock': '',
-        'Jobwork Stock': '',
-        'Total Stock': deadStockTotals.totalQty,
-        'Costing (Rs.)': '',
-        'Dead Stock Valuation (Rs.)': deadStockTotals.totalValuation,
+        'Main Stock': null,
+        'Dept Stock': null,
+        'Jobwork Stock': null,
+        'Total Stock': Number(deadStockTotals.totalQty) || 0,
+        'Costing (Rs.)': null,
+        'Dead Stock Valuation (Rs.)': Number(deadStockTotals.totalValuation) || 0,
         'Declaration Type': '',
         'Threshold (Days)': '',
         'Last Movement Date': '',
@@ -979,6 +981,7 @@ const StockReportContent = () => {
     }
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Dead Stock');
     XLSX.writeFile(workbook, 'Dead_Stock_Report.xlsx');

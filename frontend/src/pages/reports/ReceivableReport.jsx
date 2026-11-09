@@ -31,6 +31,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const ReceivableReport = () => {
   const navigate = useNavigate();
@@ -343,34 +344,35 @@ const ReceivableReport = () => {
         'Ledger ID': row.RowId,
         'Party Name': row.PartyName,
         'Mobile No': row.MobileNo || '-',
-        'With Bill Receivable (Rs.)': parseFloat(row.ReceivableWithBill || 0).toFixed(2)
+        'With Bill Receivable (Rs.)': Number(parseFloat(row.ReceivableWithBill || 0).toFixed(2))
       }));
     } else if (viewMode === 'without_bill') {
       exportData = filteredRows.map(row => ({
         'Ledger ID': row.RowId,
         'Party Name': row.PartyName,
         'Mobile No': row.MobileNo || '-',
-        'Without Bill Receivable (Rs.)': parseFloat(row.ReceivableWithoutBill || 0).toFixed(2)
+        'Without Bill Receivable (Rs.)': Number(parseFloat(row.ReceivableWithoutBill || 0).toFixed(2))
       }));
     } else if (viewMode === 'all_columns') {
       exportData = filteredRows.map(row => ({
         'Ledger ID': row.RowId,
         'Party Name': row.PartyName,
         'Mobile No': row.MobileNo || '-',
-        'With Bill Receivable (Rs.)': parseFloat(row.ReceivableWithBill || 0).toFixed(2),
-        'Without Bill Receivable (Rs.)': parseFloat(row.ReceivableWithoutBill || 0).toFixed(2),
-        'Combined Receivable (Rs.)': parseFloat(row.ReceivableCombined || 0).toFixed(2)
+        'With Bill Receivable (Rs.)': Number(parseFloat(row.ReceivableWithBill || 0).toFixed(2)),
+        'Without Bill Receivable (Rs.)': Number(parseFloat(row.ReceivableWithoutBill || 0).toFixed(2)),
+        'Combined Receivable (Rs.)': Number(parseFloat(row.ReceivableCombined || 0).toFixed(2))
       }));
     } else {
       exportData = filteredRows.map(row => ({
         'Ledger ID': row.RowId,
         'Party Name': row.PartyName,
         'Mobile No': row.MobileNo || '-',
-        'Combined Receivable (Rs.)': parseFloat(row.ReceivableCombined || 0).toFixed(2)
+        'Combined Receivable (Rs.)': Number(parseFloat(row.ReceivableCombined || 0).toFixed(2))
       }));
     }
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Receivable');
     XLSX.writeFile(workbook, `receivable_report_${viewMode}.xlsx`);

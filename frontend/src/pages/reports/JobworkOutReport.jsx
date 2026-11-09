@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -187,14 +188,15 @@ const JobworkOutReport = () => {
       'Item Name': row.ItemName,
       'Process': row.PROCESS,
       'Unit': row.UNIT,
-      'Qty': row.QUANTITY,
-      'Gross Wt': row.GROSSWT,
-      'Net Wt': row.NETWT,
-      'Rate': row.RATE,
-      'Amount': row.AMOUNT
+      'Qty': Number(row.QUANTITY) || 0,
+      'Gross Wt': Number(row.GROSSWT) || 0,
+      'Net Wt': Number(row.NETWT) || 0,
+      'Rate': Number(row.RATE) || 0,
+      'Amount': Number(row.AMOUNT) || 0
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Jobwork Out');
     XLSX.writeFile(workbook, 'jobwork_outward_report.xlsx');

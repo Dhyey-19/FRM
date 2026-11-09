@@ -7,6 +7,7 @@ import EInvoiceModal from '../../components/common/EInvoiceModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -288,12 +289,12 @@ const OutwardReport = () => {
       'Sub Code': row.SUBCODE || '-',
       'Item Name': row.ItemName,
       'Unit': row.UNIT,
-      'Qty': row.QUANTITY,
-      'Gross Wt': row.GROSSWT,
-      'Net Wt': row.NETWT,
-      'Rate': row.RATE,
-      'Disc %': row.DISCOUNT ? `${parseFloat(row.DISCOUNT).toFixed(2)}%` : '',
-      'Amount': row.AMOUNT
+      'Qty': Number(row.QUANTITY) || 0,
+      'Gross Wt': Number(row.GROSSWT) || 0,
+      'Net Wt': Number(row.NETWT) || 0,
+      'Rate': Number(row.RATE) || 0,
+      'Disc %': row.DISCOUNT != null && row.DISCOUNT !== '' ? Number(row.DISCOUNT) : null,
+      'Amount': Number(row.AMOUNT) || 0
     }));
     
     exportData.push({
@@ -304,15 +305,16 @@ const OutwardReport = () => {
       'Sub Code': '',
       'Item Name': 'GRAND TOTAL',
       'Unit': '',
-      'Qty': displayedTotals.totalQty,
-      'Gross Wt': displayedTotals.totalGrossWt,
-      'Net Wt': displayedTotals.totalNetWt,
-      'Rate': '',
-      'Disc %': '',
-      'Amount': displayedTotals.totalAmount
+      'Qty': Number(displayedTotals.totalQty) || 0,
+      'Gross Wt': Number(displayedTotals.totalGrossWt) || 0,
+      'Net Wt': Number(displayedTotals.totalNetWt) || 0,
+      'Rate': null,
+      'Disc %': null,
+      'Amount': Number(displayedTotals.totalAmount) || 0
     });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Outward');
     XLSX.writeFile(workbook, 'outward_report.xlsx');

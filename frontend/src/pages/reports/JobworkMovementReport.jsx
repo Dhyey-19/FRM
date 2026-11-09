@@ -17,6 +17,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -239,6 +240,7 @@ const JobworkMovementReportContent = () => {
     }));
 
     const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    ensureNumericWorksheet(wsSummary);
     XLSX.utils.book_append_sheet(workbook, wsSummary, 'Jobwork Balances Summary');
 
     // Sheet 2: Detailed Movement Register
@@ -254,19 +256,20 @@ const JobworkMovementReportContent = () => {
       'Sub Code': t.subCode || '-',
       'Item Name': t.itemName,
       'Process': t.process || '-',
-      'Sent Qty (+)': (t.outQty || 0) > 0 ? t.outQty : '',
-      'Sent Wt KG (+)': (t.outWt || 0) > 0 ? t.outWt : '',
-      'Received Qty (-)': (t.inQty || 0) > 0 ? t.inQty : '',
-      'Received Wt KG (-)': (t.inWt || 0) > 0 ? t.inWt : '',
-      'Scrap Pcs': (t.scrapQty || 0) > 0 ? t.scrapQty : '',
-      'Scrap Wt KG': (t.scrapWt || 0) > 0 ? t.scrapWt : '',
-      'Running Bal Qty': t.runningBalQty != null ? t.runningBalQty : 0,
+      'Sent Qty (+)': (t.outQty || 0) > 0 ? Number(t.outQty) : null,
+      'Sent Wt KG (+)': (t.outWt || 0) > 0 ? Number(t.outWt) : null,
+      'Received Qty (-)': (t.inQty || 0) > 0 ? Number(t.inQty) : null,
+      'Received Wt KG (-)': (t.inWt || 0) > 0 ? Number(t.inWt) : null,
+      'Scrap Pcs': (t.scrapQty || 0) > 0 ? Number(t.scrapQty) : null,
+      'Scrap Wt KG': (t.scrapWt || 0) > 0 ? Number(t.scrapWt) : null,
+      'Running Bal Qty': Number(t.runningBalQty || 0),
       'Running Bal Wt (KG)': Number(t.runningBalWt || 0),
       'Remarks': t.remark || '',
       'Entered By': t.createdBy || ''
     }));
 
     const wsMovement = XLSX.utils.json_to_sheet(movementRows);
+    ensureNumericWorksheet(wsMovement);
     XLSX.utils.book_append_sheet(workbook, wsMovement, 'Detailed Movement Register');
 
     const fileName = `Jobwork_Movement_${selectedParty ? selectedParty.name.replace(/\s+/g, '_') : 'All_Parties'}_${new Date().toISOString().split('T')[0]}.xlsx`;

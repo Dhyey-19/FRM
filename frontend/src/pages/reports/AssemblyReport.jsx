@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -169,11 +170,12 @@ const AssemblyReport = () => {
       'Item Code': row.ItemCode,
       'Sub Code': row.SubCode || '-',
       'Item Name': row.ItemName,
-      'Qty': row.Quantity,
+      'Qty': Number(row.Quantity) || 0,
       'Remark': row.Remark
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Assembly Transactions');
     XLSX.writeFile(workbook, 'assembly_report.xlsx');

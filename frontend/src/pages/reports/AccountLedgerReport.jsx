@@ -17,6 +17,7 @@ import { generateInvoicePDF } from '../../utils/invoicePdfHelper';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -385,7 +386,7 @@ const AccountLedgerReport = () => {
     const generateExcelData = (metrics, title) => {
       const flatData = [];
       if (title) {
-        flatData.push({ 'Date': title, 'Voucher No': '', 'Voucher Type': '', 'Bill Type': '', 'Particulars': '', 'Remarks': '', 'Debit (To)': '', 'Credit (From)': '' });
+        flatData.push({ 'Date': title, 'Voucher No': '', 'Voucher Type': '', 'Bill Type': '', 'Particulars': '', 'Remarks': '', 'Debit (To)': null, 'Credit (From)': null });
       }
       
       // Opening Balance
@@ -396,11 +397,12 @@ const AccountLedgerReport = () => {
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
-        'Debit (To)': metrics.periodOpeningBalance >= 0 ? metrics.periodOpeningBalance.toFixed(2) : '',
-        'Credit (From)': metrics.periodOpeningBalance < 0 ? Math.abs(metrics.periodOpeningBalance).toFixed(2) : ''
+        'Debit (To)': metrics.periodOpeningBalance >= 0 ? Number(metrics.periodOpeningBalance.toFixed(2)) : null,
+        'Credit (From)': metrics.periodOpeningBalance < 0 ? Number(Math.abs(metrics.periodOpeningBalance).toFixed(2)) : null
       });
 
       metrics.vouchersList.forEach(v => {
+        const amt = Math.round((parseFloat(v.Amount) || 0) * 100) / 100;
         flatData.push({
           'Date': v.VoucherDate ? v.VoucherDate.split('T')[0] : '-',
           'Voucher No': `V${v.VoucherNo}`,
@@ -408,8 +410,8 @@ const AccountLedgerReport = () => {
           'Bill Type': v.Bill !== false && v.Bill !== 0 ? 'With Bill' : 'Without Bill',
           'Particulars': getOppositeLedgers(v.VoucherNo, v.Mode),
           'Remarks': v.Remark || '-',
-          'Debit (To)': v.Mode === 'Debit' ? parseFloat(v.Amount).toFixed(2) : '',
-          'Credit (From)': v.Mode === 'Credit' ? parseFloat(v.Amount).toFixed(2) : ''
+          'Debit (To)': v.Mode === 'Debit' ? amt : null,
+          'Credit (From)': v.Mode === 'Credit' ? amt : null
         });
       });
 
@@ -420,8 +422,8 @@ const AccountLedgerReport = () => {
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
-        'Debit (To)': metrics.grossDebit.toFixed(2),
-        'Credit (From)': metrics.grossCredit.toFixed(2)
+        'Debit (To)': Number(metrics.grossDebit.toFixed(2)),
+        'Credit (From)': Number(metrics.grossCredit.toFixed(2))
       });
 
       flatData.push({
@@ -431,8 +433,8 @@ const AccountLedgerReport = () => {
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
-        'Debit (To)': metrics.closingDebit > 0 ? metrics.closingDebit.toFixed(2) : '',
-        'Credit (From)': metrics.closingCredit > 0 ? metrics.closingCredit.toFixed(2) : ''
+        'Debit (To)': metrics.closingDebit > 0 ? Number(metrics.closingDebit.toFixed(2)) : null,
+        'Credit (From)': metrics.closingCredit > 0 ? Number(metrics.closingCredit.toFixed(2)) : null
       });
 
       flatData.push({
@@ -442,8 +444,8 @@ const AccountLedgerReport = () => {
         'Bill Type': '',
         'Particulars': '',
         'Remarks': '',
-        'Debit (To)': metrics.grandTotal.toFixed(2),
-        'Credit (From)': metrics.grandTotal.toFixed(2)
+        'Debit (To)': Number(metrics.grandTotal.toFixed(2)),
+        'Credit (From)': Number(metrics.grandTotal.toFixed(2))
       });
 
       return flatData;
@@ -454,18 +456,22 @@ const AccountLedgerReport = () => {
     if (viewMode === 'split') {
       const withBillData = generateExcelData(withBillMetrics, 'WITH BILL LEDGER');
       const ws1 = XLSX.utils.json_to_sheet(withBillData);
+      ensureNumericWorksheet(ws1);
       XLSX.utils.book_append_sheet(workbook, ws1, 'With Bill');
 
       const withoutBillData = generateExcelData(withoutBillMetrics, 'WITHOUT BILL LEDGER');
       const ws2 = XLSX.utils.json_to_sheet(withoutBillData);
+      ensureNumericWorksheet(ws2);
       XLSX.utils.book_append_sheet(workbook, ws2, 'Without Bill');
 
       const combinedData = generateExcelData(combinedMetrics, 'COMBINED LEDGER');
       const ws3 = XLSX.utils.json_to_sheet(combinedData);
+      ensureNumericWorksheet(ws3);
       XLSX.utils.book_append_sheet(workbook, ws3, 'Combined');
     } else {
       const activeData = generateExcelData(activeMetrics, `${viewMode.toUpperCase()} LEDGER`);
       const worksheet = XLSX.utils.json_to_sheet(activeData);
+      ensureNumericWorksheet(worksheet);
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Ledger Report');
     }
 

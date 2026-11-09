@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const AssetMaster = () => {
   const [assets, setAssets] = useState([]);
@@ -209,10 +210,11 @@ const AssetMaster = () => {
         AssetName: asset.AssetName,
         Quantity: q,
         UnitValue: u,
-        TotalValue: asset.TotalValue != null ? Number(asset.TotalValue) : (q * u)
+        TotalValue: asset.TotalValue != null ? (Number(asset.TotalValue) || 0) : (q * u)
       };
     });
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Assets");
     XLSX.writeFile(workbook, "AssetMaster.xlsx");

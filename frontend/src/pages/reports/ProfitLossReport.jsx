@@ -50,6 +50,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet, toExcelNum } from '../../utils/excelHelper';
 
 const ProfitLossReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -137,10 +138,10 @@ const ProfitLossReport = () => {
       [`Report Date: ${new Date().toLocaleDateString()}`],
       [],
       ['SUMMARY OF INVENTORY VALUATION'],
-      ['Total Opening Stock Value', '', reportData.openingStockValue || 0],
-      ['Main Store Closing Stock Value', '', reportData.mainClosingStockValue || 0],
-      ['Stock in Process (Departments WIP)', '', reportData.processStockValue || 0],
-      ['Total Closing Stock Valuation', '', reportData.closingStockValue || 0],
+      ['Total Opening Stock Value', '', Number(reportData.openingStockValue) || 0],
+      ['Main Store Closing Stock Value', '', Number(reportData.mainClosingStockValue) || 0],
+      ['Stock in Process (Departments WIP)', '', Number(reportData.processStockValue) || 0],
+      ['Total Closing Stock Valuation', '', Number(reportData.closingStockValue) || 0],
       [],
       ['EXPENSES / PURCHASES (LEFT SIDE)', '', '', 'INCOMES / SALES & CLOSING STOCK (RIGHT SIDE)', '', ''],
       ['Ledger Name', 'Group Name', 'Amount (INR)', 'Ledger Name', 'Group Name', 'Amount (INR)']
@@ -149,36 +150,37 @@ const ProfitLossReport = () => {
     const leftItems = [];
     reportData.leftSide.forEach(group => {
       group.ledgers.forEach(ledger => {
-        leftItems.push([ledger.ledgerName, group.groupName, ledger.balance]);
+        leftItems.push([ledger.ledgerName, group.groupName, Number(ledger.balance) || 0]);
       });
     });
 
     const rightItems = [];
     reportData.rightSide.forEach(group => {
       group.ledgers.forEach(ledger => {
-        rightItems.push([ledger.ledgerName, group.groupName, ledger.balance]);
+        rightItems.push([ledger.ledgerName, group.groupName, Number(ledger.balance) || 0]);
       });
     });
 
     const maxLength = Math.max(leftItems.length, rightItems.length);
 
     for (let i = 0; i < maxLength; i++) {
-      const leftRow = leftItems[i] || ['', '', ''];
-      const rightRow = rightItems[i] || ['', '', ''];
+      const leftRow = leftItems[i] || ['', '', null];
+      const rightRow = rightItems[i] || ['', '', null];
       rows.push([...leftRow, ...rightRow]);
     }
 
     rows.push([]);
-    rows.push(['Total Expenses & Opening Stock', '', reportData.totalExpenses, 'Total Incomes & Closing Stock', '', reportData.totalIncomes]);
+    rows.push(['Total Expenses & Opening Stock', '', Number(reportData.totalExpenses) || 0, 'Total Incomes & Closing Stock', '', Number(reportData.totalIncomes) || 0]);
     rows.push([]);
     
     if (reportData.netProfit >= 0) {
-      rows.push(['Net Profit', '', reportData.netProfit]);
+      rows.push(['Net Profit', '', Number(reportData.netProfit) || 0]);
     } else {
-      rows.push(['Net Loss', '', Math.abs(reportData.netProfit)]);
+      rows.push(['Net Loss', '', Math.abs(Number(reportData.netProfit) || 0)]);
     }
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Profit & Loss');
 
@@ -198,19 +200,20 @@ const ProfitLossReport = () => {
             item.itemCode,
             item.itemName || '-',
             item.unit || '-',
-            item.rate || item.costing || 0,
-            item.pcs || 0,
-            item.weight || 0,
-            item.valuation || 0
+            Number(item.rate || item.costing || 0),
+            Number(item.pcs || 0),
+            Number(item.weight || 0),
+            Number(item.valuation || 0)
           ]);
         });
-        wipRows.push([`${dept.deptName} Subtotal`, '', '', '', '', dept.totalPcs, dept.totalWeight, dept.totalValuation]);
+        wipRows.push([`${dept.deptName} Subtotal`, '', '', '', '', Number(dept.totalPcs) || 0, Number(dept.totalWeight) || 0, Number(dept.totalValuation) || 0]);
         wipRows.push([]);
       });
 
-      wipRows.push(['Total Stock in Process Valuation', '', '', '', '', '', '', reportData.processStockValue || 0]);
+      wipRows.push(['Total Stock in Process Valuation', '', '', '', '', '', '', Number(reportData.processStockValue) || 0]);
 
       const wipWorksheet = XLSX.utils.aoa_to_sheet(wipRows);
+      ensureNumericWorksheet(wipWorksheet);
       XLSX.utils.book_append_sheet(workbook, wipWorksheet, 'Stock in Process');
     }
 

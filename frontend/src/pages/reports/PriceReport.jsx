@@ -6,6 +6,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 
 const PriceReport = () => {
   const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -113,8 +114,9 @@ const PriceReport = () => {
       'Item Code': i.ItemCode, 
       'Item Name': i.ItemName, 
       'Series Name': i.Series,
-      'MRP': i.MRP
+      'MRP': Number(i.MRP) || 0
     })));
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Prices');
     XLSX.writeFile(workbook, 'price_report.xlsx');

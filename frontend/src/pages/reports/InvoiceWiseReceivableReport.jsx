@@ -36,6 +36,7 @@ import PdfPreviewModal from '../../components/common/PdfPreviewModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../../utils/excelHelper';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -499,16 +500,17 @@ const InvoiceWiseReceivableReport = () => {
       'Invoice No': row.outwardNo,
       'Bill Type': row.bill ? 'With Bill' : 'Without Bill',
       'Invoice Date': formatDate(row.outwardDate),
-      'Invoice Amount (Rs.)': parseFloat(row.invoiceAmount || 0).toFixed(2),
-      'Credit Days': row.creditDays,
+      'Invoice Amount (Rs.)': Number((parseFloat(row.invoiceAmount) || 0).toFixed(2)),
+      'Credit Days': Number(row.creditDays) || 0,
       'Due Date': formatDate(row.dueDate),
-      'Days Left/Overdue': row.dueDays,
+      'Days Left/Overdue': Number(row.dueDays) || 0,
       'Aging Category': getAgingBucketInfo(row.dueDays).label,
-      'Outstanding Amount (Rs.)': parseFloat(viewMode === 'with_bill' ? row.outstandingWithBill : (viewMode === 'without_bill' ? row.outstandingWithoutBill : row.outstandingAmount) || 0).toFixed(2),
+      'Outstanding Amount (Rs.)': Number((parseFloat(viewMode === 'with_bill' ? row.outstandingWithBill : (viewMode === 'without_bill' ? row.outstandingWithoutBill : row.outstandingAmount)) || 0).toFixed(2)),
       'Status': row.status
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Receivable Aging');
     XLSX.writeFile(workbook, `outward_receivable_aging_${viewMode}.xlsx`);
