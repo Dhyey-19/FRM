@@ -397,3 +397,49 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ==========================================================================
+   GLOBAL DATE & TIME INPUT LABEL OVERLAP FIX
+   Forces labels for type="date", type="time", type="datetime-local"
+   to stay shrunk at the top border with a solid background shield, preventing
+   any overlap with native browser placeholder (dd-mm-yyyy) across all forms.
+   ========================================================================== */
+.MuiFormControl-root:has(input[type="date"]) .MuiInputLabel-root,
+.MuiFormControl-root:has(input[type="time"]) .MuiInputLabel-root,
+.MuiFormControl-root:has(input[type="datetime-local"]) .MuiInputLabel-root,
+.MuiFormControl-root:has(input[type="month"]) .MuiInputLabel-root {
+  transform: translate(14px, -9px) scale(0.75) !important;
+  transform-origin: top left !important;
+  background-color: #ffffff !important;
+  padding: 0 4px !important;
+  z-index: 2 !important;
+  max-width: calc(133% - 24px) !important;
+  pointer-events: auto !important;
+}
+
+/* When inside tinted dialog panels (like #f8fafc) */
+.MuiDialogContent-root .MuiFormControl-root:has(input[type="date"]) .MuiInputLabel-root,
+.MuiPaper-root[style*="f8fafc"] .MuiFormControl-root:has(input[type="date"]) .MuiInputLabel-root,
+[style*="background-color: #f8fafc"] .MuiFormControl-root:has(input[type="date"]) .MuiInputLabel-root {
+  background-color: #f8fafc !important;
+}
+
+/* Ensure all shrunk labels in Material UI have background shield and z-index */
+.MuiInputLabel-root.MuiInputLabel-shrink {
+  background-color: #ffffff !important;
+  padding: 0 4px !important;
+  z-index: 2 !important;
+}
+
+.MuiDialogContent-root .MuiInputLabel-root.MuiInputLabel-shrink,
+.MuiPaper-root[style*="f8fafc"] .MuiInputLabel-root.MuiInputLabel-shrink,
+[style*="background-color: #f8fafc"] .MuiInputLabel-root.MuiInputLabel-shrink {
+  background-color: #f8fafc !important;
+}
+
+/* Ensure the notched outline border doesn't strike through the label */
+.MuiFormControl-root:has(input[type="date"]) .MuiOutlinedInput-notchedOutline legend,
+.MuiFormControl-root:has(input[type="time"]) .MuiOutlinedInput-notchedOutline legend,
+.MuiFormControl-root:has(input[type="datetime-local"]) .MuiOutlinedInput-notchedOutline legend {
+  max-width: 100% !important;
+}

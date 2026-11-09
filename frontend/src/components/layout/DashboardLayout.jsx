@@ -109,6 +109,27 @@ const theme = createTheme({
         },
       },
     },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          '&.MuiInputLabel-shrink': {
+            backgroundColor: '#ffffff',
+            padding: '0 4px',
+            zIndex: 2,
+            borderRadius: '2px'
+          }
+        }
+      }
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          '& input[type="date"]': {
+            minHeight: '1.4375em'
+          }
+        }
+      }
+    },
     MuiDataGrid: {
       defaultProps: {
         rowHeight: 32,
