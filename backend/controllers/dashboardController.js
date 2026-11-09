@@ -689,6 +689,42 @@ exports.getDashboardNotifications = async (req, res) => {
   try {
     const pool = await connectDB();
 
+    // Query status tracking table
+    let statusMap = new Map();
+    let closedRowsList = [];
+    try {
+      await pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NotificationLogStatus')
+        BEGIN
+          CREATE TABLE [dbo].[NotificationLogStatus] (
+            [NotificationId] VARCHAR(150) NOT NULL PRIMARY KEY,
+            [NotificationType] VARCHAR(50) NULL,
+            [Title] NVARCHAR(255) NULL,
+            [Message] NVARCHAR(1000) NULL,
+            [Status] VARCHAR(20) NOT NULL DEFAULT 'Open',
+            [GeneratedAt] DATETIME NOT NULL DEFAULT GETDATE(),
+            [ClosedAt] DATETIME NULL,
+            [ClosedBy] VARCHAR(100) NULL,
+            [ClosedReason] NVARCHAR(500) NULL,
+            [UpdatedAt] DATETIME NOT NULL DEFAULT GETDATE()
+          );
+        END
+      `);
+
+      const statusRes = await pool.request().query(`
+        SELECT NotificationId, NotificationType, Title, Message, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason
+        FROM NotificationLogStatus
+      `);
+      (statusRes.recordset || []).forEach(r => {
+        statusMap.set(r.NotificationId, r);
+        if (r.Status === 'Closed') {
+          closedRowsList.push(r);
+        }
+      });
+    } catch (stErr) {
+      console.warn('Notice querying NotificationLogStatus:', stErr.message);
+    }
+
     // 1. Low stock / below reorder level items
     const reorderResult = await pool.request().query(`
       SELECT 
@@ -1071,17 +1107,76 @@ exports.getDashboardNotifications = async (req, res) => {
       console.error('Error fetching overdue POD notifications:', podErr);
     }
 
+    // Map status and lock generated timestamp for all notifications
+    for (const n of notifications) {
+      const existing = statusMap.get(n.id);
+      if (existing) {
+        n.status = existing.Status || 'Open';
+        n.generatedAt = existing.GeneratedAt ? new Date(existing.GeneratedAt).toISOString() : n.timestamp;
+        n.closedAt = existing.ClosedAt ? new Date(existing.ClosedAt).toISOString() : null;
+        n.closedBy = existing.ClosedBy || null;
+        n.closedReason = existing.ClosedReason || null;
+      } else {
+        n.status = 'Open';
+        n.generatedAt = n.timestamp || new Date().toISOString();
+        n.closedAt = null;
+        n.closedBy = null;
+        n.closedReason = null;
+
+        // Persist discovered open alert so its initial GeneratedAt timestamp is recorded
+        try {
+          await pool.request()
+            .input('NotificationId', n.id)
+            .input('NotificationType', n.type || '')
+            .input('Title', (n.title || '').slice(0, 255))
+            .input('Message', (n.message || '').slice(0, 1000))
+            .input('GeneratedAt', new Date(n.generatedAt))
+            .query(`
+              IF NOT EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
+              BEGIN
+                INSERT INTO NotificationLogStatus (NotificationId, NotificationType, Title, Message, Status, GeneratedAt)
+                VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Open', @GeneratedAt)
+              END
+            `);
+        } catch (e) {
+          // ignore duplicate insert errors
+        }
+      }
+    }
+
+    // Include closed alerts from historical database records if not already in dynamic list
+    closedRowsList.forEach(r => {
+      if (!notifications.some(x => x.id === r.NotificationId)) {
+        notifications.push({
+          id: r.NotificationId,
+          type: r.NotificationType || 'general',
+          category: r.NotificationType ? r.NotificationType.replace(/_/g, ' ').toUpperCase() : 'Closed Alert',
+          severity: 'info',
+          title: r.Title || 'Closed Alert',
+          message: r.Message || 'This alert was marked as closed.',
+          status: 'Closed',
+          generatedAt: r.GeneratedAt ? new Date(r.GeneratedAt).toISOString() : new Date().toISOString(),
+          closedAt: r.ClosedAt ? new Date(r.ClosedAt).toISOString() : new Date().toISOString(),
+          closedBy: r.ClosedBy || 'User',
+          closedReason: r.ClosedReason || 'Closed by user confirmation',
+          timestamp: r.GeneratedAt ? new Date(r.GeneratedAt).toISOString() : new Date().toISOString()
+        });
+      }
+    });
+
     const summary = {
       total: notifications.length,
-      reorder: notifications.filter(n => n.type === 'reorder').length,
-      shortfall: notifications.filter(n => n.type === 'shortfall').length,
-      dispatchReady: notifications.filter(n => n.type === 'dispatch_ready').length,
-      receivables: notifications.filter(n => n.type === 'receivable_overdue').length,
-      payables: notifications.filter(n => n.type === 'payable_overdue').length,
-      overduePod: notifications.filter(n => n.type === 'overdue_pod').length,
-      critical: notifications.filter(n => n.severity === 'critical').length,
-      warning: notifications.filter(n => n.severity === 'warning').length,
-      success: notifications.filter(n => n.severity === 'success').length
+      open: notifications.filter(n => n.status !== 'Closed').length,
+      closed: notifications.filter(n => n.status === 'Closed').length,
+      reorder: notifications.filter(n => n.type === 'reorder' && n.status !== 'Closed').length,
+      shortfall: notifications.filter(n => n.type === 'shortfall' && n.status !== 'Closed').length,
+      dispatchReady: notifications.filter(n => n.type === 'dispatch_ready' && n.status !== 'Closed').length,
+      receivables: notifications.filter(n => n.type === 'receivable_overdue' && n.status !== 'Closed').length,
+      payables: notifications.filter(n => n.type === 'payable_overdue' && n.status !== 'Closed').length,
+      overduePod: notifications.filter(n => n.type === 'overdue_pod' && n.status !== 'Closed').length,
+      critical: notifications.filter(n => n.severity === 'critical' && n.status !== 'Closed').length,
+      warning: notifications.filter(n => n.severity === 'warning' && n.status !== 'Closed').length,
+      success: notifications.filter(n => n.severity === 'success' && n.status !== 'Closed').length
     };
 
     res.status(200).json({
@@ -1091,5 +1186,64 @@ exports.getDashboardNotifications = async (req, res) => {
   } catch (error) {
     console.error('Error fetching dashboard notifications:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/dashboard/notifications/:id/close
+exports.closeNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { closedBy, closedReason, type, title, message } = req.body || {};
+    const currentUser = req.headers['x-username'] || closedBy || 'User';
+    const pool = await connectDB();
+
+    await pool.request()
+      .input('NotificationId', id)
+      .input('NotificationType', type || null)
+      .input('Title', title ? String(title).slice(0, 255) : null)
+      .input('Message', message ? String(message).slice(0, 1000) : null)
+      .input('ClosedBy', currentUser)
+      .input('ClosedReason', closedReason || 'Closed by user confirmation')
+      .query(`
+        IF EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
+        BEGIN
+          UPDATE NotificationLogStatus
+          SET Status = 'Closed',
+              ClosedAt = GETDATE(),
+              ClosedBy = @ClosedBy,
+              ClosedReason = @ClosedReason,
+              UpdatedAt = GETDATE()
+          WHERE NotificationId = @NotificationId
+        END
+        ELSE
+        BEGIN
+          INSERT INTO NotificationLogStatus (NotificationId, NotificationType, Title, Message, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason, UpdatedAt)
+          VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Closed', GETDATE(), GETDATE(), @ClosedBy, @ClosedReason, GETDATE())
+        END
+      `);
+
+    return res.status(200).json({ success: true, message: 'Notification closed successfully' });
+  } catch (error) {
+    console.error('Error closing notification:', error);
+    return res.status(500).json({ message: 'Server error while closing notification' });
+  }
+};
+
+// POST /api/dashboard/notifications/:id/reopen
+exports.reopenNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await connectDB();
+    await pool.request()
+      .input('NotificationId', id)
+      .query(`
+        UPDATE NotificationLogStatus
+        SET Status = 'Open', ClosedAt = NULL, ClosedBy = NULL, UpdatedAt = GETDATE()
+        WHERE NotificationId = @NotificationId
+      `);
+    return res.status(200).json({ success: true, message: 'Notification reopened successfully' });
+  } catch (error) {
+    console.error('Error reopening notification:', error);
+    return res.status(500).json({ message: 'Server error while reopening notification' });
   }
 };

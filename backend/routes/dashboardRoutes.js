@@ -6,5 +6,7 @@ const dashboardController = require('../controllers/dashboardController');
 router.get('/kpis', dashboardController.getDashboardKPIs);
 router.get('/notifications', dashboardController.getDashboardNotifications);
 router.get('/logs', dashboardController.getDashboardNotifications);
+router.post('/notifications/:id/close', dashboardController.closeNotification);
+router.post('/notifications/:id/reopen', dashboardController.reopenNotification);
 
 module.exports = router;

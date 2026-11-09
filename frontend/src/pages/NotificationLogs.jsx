@@ -3,9 +3,6 @@ import {
   Box, 
   Typography, 
   Paper, 
-  Grid, 
-  Card, 
-  CardContent, 
   Chip, 
   IconButton, 
   Button, 
@@ -16,14 +13,18 @@ import {
   Avatar, 
   CircularProgress,
   Tooltip,
-  Divider,
-  Alert
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
+  Alert,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import { 
   Notifications as NotificationsIcon,
   WarningAmber as WarningIcon,
-  Error as CriticalIcon,
-  Info as InfoIcon,
   Search as SearchIcon,
   Refresh as RefreshIcon,
   Inventory as InventoryIcon,
@@ -31,7 +32,10 @@ import {
   CallMade as PayableIcon,
   ArrowForward as ArrowForwardIcon,
   CheckCircle as HealthyIcon,
-  LocalShipping as ShippingIcon
+  LocalShipping as ShippingIcon,
+  Close as CloseIcon,
+  TaskAlt as ClosedIcon,
+  AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -40,6 +44,8 @@ const NotificationLogs = () => {
   const [notifications, setNotifications] = useState([]);
   const [summary, setSummary] = useState({
     total: 0,
+    open: 0,
+    closed: 0,
     reorder: 0,
     receivables: 0,
     payables: 0,
@@ -51,8 +57,17 @@ const NotificationLogs = () => {
   });
   const [loading, setLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('open'); // 'open' | 'closed' | 'all'
   const [searchTerm, setSearchTerm] = useState('');
-  const [severityFilter, setSeverityFilter] = useState('all');
+
+  // Close Confirmation Dialog state
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [selectedNotif, setSelectedNotif] = useState(null);
+  const [confirmInput, setConfirmInput] = useState('');
+  const [closingInProgress, setClosingInProgress] = useState(false);
+
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -76,17 +91,64 @@ const NotificationLogs = () => {
     fetchLogs();
   }, []);
 
+  const handleOpenCloseDialog = (item, e) => {
+    if (e) e.stopPropagation();
+    setSelectedNotif(item);
+    setConfirmInput('');
+    setCloseDialogOpen(true);
+  };
+
+  const handleConfirmClose = async () => {
+    if (!selectedNotif) return;
+    if (confirmInput.trim().toLowerCase() !== 'close') return;
+
+    setClosingInProgress(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/dashboard/notifications/${encodeURIComponent(selectedNotif.id)}/close`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: selectedNotif.type,
+            title: selectedNotif.title,
+            message: selectedNotif.message
+          })
+        }
+      );
+
+      if (response.ok) {
+        setSnackbar({ open: true, message: `Notification "${selectedNotif.title}" closed successfully.`, severity: 'success' });
+        setCloseDialogOpen(false);
+        setSelectedNotif(null);
+        setConfirmInput('');
+        // Refresh notifications to reflect closed status and timestamp
+        await fetchLogs();
+      } else {
+        const errData = await response.json();
+        setSnackbar({ open: true, message: errData.message || 'Failed to close notification.', severity: 'error' });
+      }
+    } catch (err) {
+      console.error('Error closing notification:', err);
+      setSnackbar({ open: true, message: 'Server connection error.', severity: 'error' });
+    } finally {
+      setClosingInProgress(false);
+    }
+  };
+
   const filteredNotifications = notifications.filter(item => {
-    // Tab filter
+    // Status filter
+    const itemStatus = (item.status || 'Open').toLowerCase();
+    if (statusFilter === 'open' && itemStatus === 'closed') return false;
+    if (statusFilter === 'closed' && itemStatus !== 'closed') return false;
+
+    // Type tab filter
     if (currentTab === 'reorder' && item.type !== 'reorder') return false;
     if (currentTab === 'overdue_pod' && item.type !== 'overdue_pod') return false;
     if (currentTab === 'shortfall' && item.type !== 'shortfall') return false;
     if (currentTab === 'dispatch_ready' && item.type !== 'dispatch_ready') return false;
     if (currentTab === 'receivables' && item.type !== 'receivable_overdue') return false;
     if (currentTab === 'payables' && item.type !== 'payable_overdue') return false;
-
-    // Severity filter
-    if (severityFilter !== 'all' && item.severity !== severityFilter) return false;
 
     // Search filter
     if (searchTerm.trim()) {
@@ -102,10 +164,29 @@ const NotificationLogs = () => {
     return true;
   });
 
+  const formatDateTime = (dateVal) => {
+    if (!dateVal) return '—';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return String(dateVal);
+      return d.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return String(dateVal);
+    }
+  };
+
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 3.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <NotificationsIcon sx={{ fontSize: 36, color: '#0F3B66' }} /> Notification & Alert Logs
@@ -146,113 +227,10 @@ const NotificationLogs = () => {
         </Box>
       </Box>
 
-      {/* Summary KPI Badges */}
-      <Grid container spacing={{ xs: 2, sm: 2.5 }} sx={{ mb: 3.5 }}>
-        <Grid item xs={12} sm={6} md={4} lg={2.4}>
-          <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Total Active Alerts
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, color: summary.total > 0 ? '#0F3B66' : '#10b981', mt: 0.5 }}>
-                    {summary.total}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: summary.total > 0 ? '#fff7ed' : '#d1fae5', color: summary.total > 0 ? '#ea580c' : '#10b981', width: 44, height: 44, borderRadius: 2 }}>
-                  {summary.total > 0 ? <WarningIcon /> : <HealthyIcon />}
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4} lg={2.4}>
-          <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Low Stock (Reorder)
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, color: summary.reorder > 0 ? '#ef4444' : '#1e293b', mt: 0.5 }}>
-                    {summary.reorder}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: summary.reorder > 0 ? '#fee2e2' : '#f1f5f9', color: summary.reorder > 0 ? '#ef4444' : '#64748b', width: 44, height: 44, borderRadius: 2 }}>
-                  <InventoryIcon />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4} lg={2.4}>
-          <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Overdue POD
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, color: (summary.overduePod || 0) > 0 ? '#ea580c' : '#1e293b', mt: 0.5 }}>
-                    {summary.overduePod || 0}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: (summary.overduePod || 0) > 0 ? '#fff7ed' : '#f1f5f9', color: (summary.overduePod || 0) > 0 ? '#ea580c' : '#64748b', width: 44, height: 44, borderRadius: 2 }}>
-                  <ShippingIcon />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4} lg={2.4}>
-          <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Overdue Receivables
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, color: summary.receivables > 0 ? '#2563eb' : '#1e293b', mt: 0.5 }}>
-                    {summary.receivables}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: summary.receivables > 0 ? '#eff6ff' : '#f1f5f9', color: summary.receivables > 0 ? '#2563eb' : '#64748b', width: 44, height: 44, borderRadius: 2 }}>
-                  <ReceivableIcon />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4} lg={2.4}>
-          <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Overdue Payables
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, color: summary.payables > 0 ? '#dc2626' : '#1e293b', mt: 0.5 }}>
-                    {summary.payables}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: summary.payables > 0 ? '#fef2f2' : '#f1f5f9', color: summary.payables > 0 ? '#dc2626' : '#64748b', width: 44, height: 44, borderRadius: 2 }}>
-                  <PayableIcon />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
       {/* Main Container */}
       <Paper sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(15, 59, 102, 0.04)', overflow: 'hidden' }}>
-        {/* Tabs & Search Filter Bar */}
-        <Box sx={{ px: { xs: 1.5, sm: 3 }, pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        {/* Type Tabs */}
+        <Box sx={{ px: { xs: 1.5, sm: 3 }, pt: 1.5, borderBottom: '1px solid #e2e8f0' }}>
           <Tabs 
             value={currentTab} 
             onChange={(e, val) => setCurrentTab(val)}
@@ -260,11 +238,10 @@ const NotificationLogs = () => {
             scrollButtons="auto"
             allowScrollButtonsMobile
             sx={{
-              maxWidth: { xs: '100%', md: 'calc(100% - 240px)' },
               '& .MuiTabs-indicator': { backgroundColor: '#F88A01', height: 3 },
               '& .MuiTab-root': {
                 fontWeight: 700,
-                fontSize: { xs: '0.82rem', sm: '0.9rem' },
+                fontSize: { xs: '0.82rem', sm: '0.88rem' },
                 textTransform: 'none',
                 minHeight: 46,
                 color: '#64748b',
@@ -273,7 +250,7 @@ const NotificationLogs = () => {
               }
             }}
           >
-            <Tab label={`All (${summary.total})`} value="all" />
+            <Tab label={`All (${summary.total || 0})`} value="all" />
             <Tab label={`Low Stock (${summary.reorder || 0})`} value="reorder" />
             <Tab label={`Overdue POD (${summary.overduePod || 0})`} value="overdue_pod" />
             <Tab label={`PO Shortfall (${summary.shortfall || 0})`} value="shortfall" />
@@ -281,21 +258,74 @@ const NotificationLogs = () => {
             <Tab label={`Overdue Receivables (${summary.receivables || 0})`} value="receivables" />
             <Tab label={`Overdue Payables (${summary.payables || 0})`} value="payables" />
           </Tabs>
+        </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: { xs: '100%', sm: 'auto' } }}>
+        {/* Status Filter & Search Toolbar */}
+        <Box sx={{ px: { xs: 1.5, sm: 3 }, py: 1.5, bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+          {/* Status Toggle Buttons (Open / Closed / All) */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Status Filter:
+            </Typography>
+            <ToggleButtonGroup
+              size="small"
+              value={statusFilter}
+              exclusive
+              onChange={(e, newStatus) => {
+                if (newStatus !== null) setStatusFilter(newStatus);
+              }}
+              sx={{
+                bgcolor: '#ffffff',
+                '& .MuiToggleButton-root': {
+                  px: 1.8,
+                  py: 0.5,
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  color: '#64748b',
+                  borderColor: '#cbd5e1',
+                  '&.Mui-selected': {
+                    bgcolor: '#0F3B66',
+                    color: '#ffffff',
+                    '&:hover': { bgcolor: '#0d3257' }
+                  }
+                }
+              }}
+            >
+              <ToggleButton value="open">
+                Open ({summary.open || 0})
+              </ToggleButton>
+              <ToggleButton value="closed">
+                Closed ({summary.closed || 0})
+              </ToggleButton>
+              <ToggleButton value="all">
+                All ({summary.total || 0})
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          {/* Search Box */}
+          <Box sx={{ width: { xs: '100%', sm: 260 } }}>
             <TextField
               size="small"
-              placeholder="Search in logs..."
+              fullWidth
+              placeholder="Search notifications..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" fontSize="small" /></InputAdornment> }}
-              sx={{ width: { xs: '100%', sm: 220 } }}
+              InputProps={{ 
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" fontSize="small" />
+                  </InputAdornment>
+                ) 
+              }}
+              sx={{ bgcolor: '#ffffff', borderRadius: 1.5 }}
             />
           </Box>
         </Box>
 
         {/* Notifications List */}
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
               <CircularProgress />
@@ -304,10 +334,14 @@ const NotificationLogs = () => {
             <Box sx={{ py: 8, textAlign: 'center' }}>
               <HealthyIcon sx={{ fontSize: 56, color: '#10b981', mb: 1.5 }} />
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                All Systems Operational
+                {statusFilter === 'closed' ? 'No Closed Notifications' : 'All Clear / No Active Alerts'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                {searchTerm ? 'No notifications match your search query.' : 'There are no active alerts, low stock warnings, or overdue payments.'}
+                {searchTerm 
+                  ? 'No notifications match your search query.' 
+                  : (statusFilter === 'open' 
+                      ? 'There are currently no open notifications. All items, PODs, and payments are up to date!' 
+                      : 'No notifications in this view.')}
               </Typography>
             </Box>
           ) : (
@@ -315,19 +349,19 @@ const NotificationLogs = () => {
               {filteredNotifications.map((item) => {
                 const isCritical = item.severity === 'critical';
                 const isReorder = item.type === 'reorder';
+                const isClosed = (item.status || '').toLowerCase() === 'closed';
                 
                 return (
                   <Paper 
                     key={item.id}
-                    onClick={() => item.actionLink && navigate(item.actionLink)}
                     sx={{ 
                       p: 2.5, 
                       borderRadius: 2.5, 
                       border: '1px solid',
-                      borderColor: isCritical ? '#fecaca' : (isReorder ? '#fed7aa' : '#e2e8f0'),
-                      bgcolor: isCritical ? '#fffbfa' : (isReorder ? '#fffdfa' : '#ffffff'),
-                      cursor: item.actionLink ? 'pointer' : 'default',
+                      borderColor: isClosed ? '#cbd5e1' : (isCritical ? '#fecaca' : (isReorder ? '#fed7aa' : '#e2e8f0')),
+                      bgcolor: isClosed ? '#f8fafc' : (isCritical ? '#fffbfa' : (isReorder ? '#fffdfa' : '#ffffff')),
                       transition: 'all 0.2s ease',
+                      opacity: isClosed ? 0.85 : 1,
                       '&:hover': {
                         boxShadow: '0 4px 16px rgba(15, 59, 102, 0.08)',
                         transform: 'translateY(-2px)'
@@ -335,18 +369,20 @@ const NotificationLogs = () => {
                     }}
                   >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-                      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flex: 1, minWidth: 280 }}>
                         <Avatar 
                           sx={{ 
-                            bgcolor: isCritical ? '#fee2e2' : (isReorder ? '#ffedd5' : '#eff6ff'), 
-                            color: isCritical ? '#ef4444' : (isReorder ? '#ea580c' : '#2563eb'), 
+                            bgcolor: isClosed ? '#e2e8f0' : (isCritical ? '#fee2e2' : (isReorder ? '#ffedd5' : '#eff6ff')), 
+                            color: isClosed ? '#64748b' : (isCritical ? '#ef4444' : (isReorder ? '#ea580c' : '#2563eb')), 
                             width: 44, 
                             height: 44, 
                             borderRadius: 2,
                             flexShrink: 0
                           }}
                         >
-                          {isReorder ? (
+                          {isClosed ? (
+                            <ClosedIcon />
+                          ) : isReorder ? (
                             <InventoryIcon />
                           ) : item.type === 'overdue_pod' ? (
                             <ShippingIcon />
@@ -357,8 +393,9 @@ const NotificationLogs = () => {
                           )}
                         </Avatar>
 
-                        <Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                        <Box sx={{ flex: 1 }}>
+                          {/* Badges: Category, Severity, Status (OPEN / CLOSED), and Generated DateTime */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.8, flexWrap: 'wrap' }}>
                             <Chip 
                               label={item.category} 
                               size="small" 
@@ -366,35 +403,85 @@ const NotificationLogs = () => {
                                 height: 22, 
                                 fontSize: '0.72rem', 
                                 fontWeight: 700,
-                                bgcolor: isCritical ? '#fee2e2' : (isReorder ? '#ffedd5' : '#eff6ff'),
-                                color: isCritical ? '#dc2626' : (isReorder ? '#c2410c' : '#1d4ed8')
+                                bgcolor: isClosed ? '#e2e8f0' : (isCritical ? '#fee2e2' : (isReorder ? '#ffedd5' : '#eff6ff')),
+                                color: isClosed ? '#475569' : (isCritical ? '#dc2626' : (isReorder ? '#c2410c' : '#1d4ed8'))
                               }} 
                             />
-                            <Chip 
-                              label={isCritical ? 'CRITICAL' : 'WARNING'} 
-                              size="small" 
-                              sx={{ 
-                                height: 20, 
-                                fontSize: '0.65rem', 
-                                fontWeight: 800,
-                                bgcolor: isCritical ? '#dc2626' : '#f59e0b',
-                                color: '#ffffff'
-                              }} 
-                            />
-                            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                              {new Date(item.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                            </Typography>
+                            
+                            {!isClosed && (
+                              <Chip 
+                                label={isCritical ? 'CRITICAL' : 'WARNING'} 
+                                size="small" 
+                                sx={{ 
+                                  height: 20, 
+                                  fontSize: '0.65rem', 
+                                  fontWeight: 800,
+                                  bgcolor: isCritical ? '#dc2626' : '#f59e0b',
+                                  color: '#ffffff'
+                                }} 
+                              />
+                            )}
+
+                            {/* Status Chip: OPEN (Green) or CLOSED (Gray) */}
+                            {isClosed ? (
+                              <Chip 
+                                label="CLOSED" 
+                                size="small" 
+                                sx={{ 
+                                  height: 22, 
+                                  fontSize: '0.72rem', 
+                                  fontWeight: 800, 
+                                  bgcolor: '#f1f5f9', 
+                                  color: '#475569',
+                                  border: '1px solid #cbd5e1'
+                                }} 
+                              />
+                            ) : (
+                              <Chip 
+                                label="OPEN" 
+                                size="small" 
+                                sx={{ 
+                                  height: 22, 
+                                  fontSize: '0.72rem', 
+                                  fontWeight: 800, 
+                                  bgcolor: '#dcfce7', 
+                                  color: '#15803d',
+                                  border: '1px solid #86efac'
+                                }} 
+                              />
+                            )}
+
+                            {/* Date & Time Generated */}
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, ml: { xs: 0, sm: 0.5 } }}>
+                              <AccessTimeIcon sx={{ fontSize: 14, color: '#64748b' }} />
+                              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                                <strong>Generated:</strong> {formatDateTime(item.generatedAt || item.timestamp)}
+                              </Typography>
+                            </Box>
                           </Box>
 
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
+                          {/* Title */}
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: isClosed ? '#64748b' : '#1e293b', mb: 0.5 }}>
                             {item.title}
                           </Typography>
 
-                          <Typography variant="body2" sx={{ color: '#475569', lineHeight: 1.5 }}>
+                          {/* Message */}
+                          <Typography variant="body2" sx={{ color: isClosed ? '#64748b' : '#475569', lineHeight: 1.5 }}>
                             {item.message}
                           </Typography>
 
-                          {isReorder && (
+                          {/* Closed Details Banner */}
+                          {isClosed && (
+                            <Box sx={{ mt: 1, p: 0.8, bgcolor: '#f1f5f9', borderRadius: 1.5, display: 'inline-block' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b', fontStyle: 'italic' }}>
+                                ✓ Closed on {formatDateTime(item.closedAt)}{item.closedBy ? ` by ${item.closedBy}` : ''}
+                                {item.closedReason ? ` (${item.closedReason})` : ''}
+                              </Typography>
+                            </Box>
+                          )}
+
+                          {/* Reorder Details */}
+                          {isReorder && !isClosed && (
                             <Box sx={{ display: 'flex', gap: 2, mt: 1.5, pt: 1, borderTop: '1px dashed #e2e8f0', flexWrap: 'wrap' }}>
                               <Typography variant="caption" sx={{ color: '#64748b' }}>
                                 Current Stock: <strong style={{ color: item.currentStock <= 0 ? '#dc2626' : '#ea580c' }}>{item.currentStock} {item.unit}</strong>
@@ -408,7 +495,8 @@ const NotificationLogs = () => {
                             </Box>
                           )}
 
-                          {item.type === 'overdue_pod' && (
+                          {/* Overdue POD Details */}
+                          {item.type === 'overdue_pod' && !isClosed && (
                             <Box sx={{ display: 'flex', gap: 2, mt: 1.5, pt: 1, borderTop: '1px dashed #e2e8f0', flexWrap: 'wrap', alignItems: 'center' }}>
                               <Typography variant="caption" sx={{ color: '#64748b' }}>
                                 Invoice Amount: <strong style={{ color: '#0F3B66' }}>₹{(item.amount || 0).toLocaleString('en-IN')}</strong>
@@ -434,26 +522,60 @@ const NotificationLogs = () => {
                         </Box>
                       </Box>
 
-                      {item.actionLink && (
-                        <Button 
-                          variant="contained" 
-                          size="small"
-                          endIcon={<ArrowForwardIcon fontSize="small" />}
-                          onClick={() => navigate(item.actionLink)}
-                          sx={{ 
-                            bgcolor: '#0F3B66', 
-                            color: '#ffffff', 
-                            textTransform: 'none', 
-                            fontWeight: 600,
-                            borderRadius: 2,
-                            px: 2,
-                            width: { xs: '100%', sm: 'auto' },
-                            '&:hover': { bgcolor: '#F88A01' }
-                          }}
-                        >
-                          {isReorder ? 'Manage Item' : (item.type === 'overdue_pod' ? 'Enter POD' : 'View Invoices')}
-                        </Button>
-                      )}
+                      {/* Right Action Buttons: View Link + Close Notification */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', alignSelf: { xs: 'stretch', sm: 'center' } }}>
+                        {item.actionLink && (
+                          <Button 
+                            variant="contained" 
+                            size="small"
+                            endIcon={<ArrowForwardIcon fontSize="small" />}
+                            onClick={() => navigate(item.actionLink)}
+                            sx={{ 
+                              bgcolor: '#0F3B66', 
+                              color: '#ffffff', 
+                              textTransform: 'none', 
+                              fontWeight: 600,
+                              borderRadius: 2,
+                              px: 2,
+                              '&:hover': { bgcolor: '#F88A01' }
+                            }}
+                          >
+                            {isReorder ? 'Manage Item' : (item.type === 'overdue_pod' ? 'Enter POD' : 'View Invoices')}
+                          </Button>
+                        )}
+
+                        {!isClosed ? (
+                          <Button 
+                            variant="outlined" 
+                            size="small"
+                            color="error"
+                            startIcon={<CloseIcon fontSize="small" />}
+                            onClick={(e) => handleOpenCloseDialog(item, e)}
+                            sx={{ 
+                              borderColor: '#fca5a5',
+                              color: '#dc2626', 
+                              textTransform: 'none', 
+                              fontWeight: 700,
+                              borderRadius: 2,
+                              px: 1.8,
+                              '&:hover': { 
+                                borderColor: '#dc2626',
+                                bgcolor: '#fef2f2' 
+                              }
+                            }}
+                          >
+                            Close
+                          </Button>
+                        ) : (
+                          <Chip 
+                            icon={<ClosedIcon fontSize="small" />}
+                            label="Closed"
+                            size="small"
+                            variant="outlined"
+                            sx={{ borderColor: '#cbd5e1', color: '#64748b', fontWeight: 600 }}
+                          />
+                        )}
+                      </Box>
                     </Box>
                   </Paper>
                 );
@@ -462,6 +584,97 @@ const NotificationLogs = () => {
           )}
         </Box>
       </Paper>
+
+      {/* Confirmation Dialog to Close Notification */}
+      <Dialog
+        open={closeDialogOpen}
+        onClose={() => !closingInProgress && setCloseDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon sx={{ color: '#dc2626' }} /> Close Notification
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
+            Are you sure you want to close this notification?
+          </Typography>
+
+          <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              {selectedNotif?.title}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
+              Category: <strong>{selectedNotif?.category}</strong>
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+              Generated: <strong>{formatDateTime(selectedNotif?.generatedAt || selectedNotif?.timestamp)}</strong>
+            </Typography>
+          </Box>
+
+          <Typography variant="body2" sx={{ color: '#1e293b', fontWeight: 600, mb: 1 }}>
+            To confirm closing, please type <strong style={{ color: '#dc2626', textDecoration: 'underline' }}>close</strong> in the box below:
+          </Typography>
+
+          <TextField
+            autoFocus
+            fullWidth
+            size="small"
+            placeholder='Type "close" to confirm'
+            value={confirmInput}
+            onChange={(e) => setConfirmInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && confirmInput.trim().toLowerCase() === 'close' && !closingInProgress) {
+                handleConfirmClose();
+              }
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, bgcolor: '#f8fafc' }}>
+          <Button 
+            onClick={() => setCloseDialogOpen(false)}
+            disabled={closingInProgress}
+            sx={{ color: '#64748b', textTransform: 'none', fontWeight: 600 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmClose}
+            disabled={confirmInput.trim().toLowerCase() !== 'close' || closingInProgress}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              borderRadius: 2,
+              px: 2.5
+            }}
+          >
+            {closingInProgress ? <CircularProgress size={20} color="inherit" /> : 'Confirm Close'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar notification */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          sx={{ width: '100%', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
