@@ -245,20 +245,21 @@ const Assembly = ({ user }) => {
                 {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
                 <Grid container spacing={2} alignItems="center">
-                    {/* Row 1: Document details */}
-                    <Grid item xs={6} sm={3} md={2}>
+                    {/* Assembly No (Reduced size) */}
+                    <Grid item xs={6} sm="auto">
                         <TextField
-                            fullWidth
                             label="Assembly No"
                             size="small"
                             value={assemblyNo}
                             InputProps={{ readOnly: true }}
                             disabled
+                            sx={{ width: { xs: '100%', sm: 125, md: 130 } }}
                         />
                     </Grid>
-                    <Grid item xs={6} sm={3} md={2}>
+
+                    {/* Assembly Date */}
+                    <Grid item xs={6} sm="auto">
                         <TextField
-                            fullWidth
                             label="Assembly Date"
                             type="date"
                             size="small"
@@ -266,19 +267,11 @@ const Assembly = ({ user }) => {
                             onChange={(e) => setAssemblyDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
                             required
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={8}>
-                        <TextField
-                            fullWidth
-                            label="Remark (Optional)"
-                            size="small"
-                            value={remark}
-                            onChange={(e) => setRemark(e.target.value)}
+                            sx={{ width: { xs: '100%', sm: 140, md: 145 } }}
                         />
                     </Grid>
 
-                    {/* Row 2: Select Parent Item (Normal dropdown, 60% of previous width = ~420px) & Quantity */}
+                    {/* Select Parent Item (Normal dropdown, ~420px width) */}
                     <Grid item xs={12} sm="auto">
                         <Autocomplete
                             options={items.filter(item => {
@@ -336,6 +329,8 @@ const Assembly = ({ user }) => {
                             autoHighlight
                         />
                     </Grid>
+
+                    {/* Quantity (Adjusted in the same row) */}
                     <Grid item xs={6} sm="auto">
                         <TextField
                             label="Quantity"
@@ -346,9 +341,20 @@ const Assembly = ({ user }) => {
                             required
                             inputProps={{ min: 1, step: 'any', style: { textAlign: 'right' } }}
                             sx={{
-                                width: { xs: 120, sm: 110, md: 100 },
+                                width: { xs: 110, sm: 100, md: 95 },
                                 '& input': { fontWeight: 600 }
                             }}
+                        />
+                    </Grid>
+
+                    {/* Remark (Fills the remaining space in the row) */}
+                    <Grid item xs={12} sm sx={{ minWidth: { sm: 160 } }}>
+                        <TextField
+                            fullWidth
+                            label="Remark (Optional)"
+                            size="small"
+                            value={remark}
+                            onChange={(e) => setRemark(e.target.value)}
                         />
                     </Grid>
                 </Grid>
