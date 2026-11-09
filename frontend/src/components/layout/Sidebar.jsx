@@ -305,7 +305,7 @@ const Sidebar = ({
         <List sx={{ py: 0.5, px: 2, pt: 1 }}>
           {(() => {
             const hasMenuAccess = (path) => {
-              if (!path || path === '/dashboard') return true;
+              if (!path || path === '/dashboard' || path === '/dashboard/tasks') return true;
 
               const cleanPath = path.split('?')[0];
 

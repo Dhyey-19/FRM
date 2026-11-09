@@ -57,6 +57,7 @@ import PendingPOReport from './pages/reports/PendingPOReport';
 import NotificationLogs from './pages/NotificationLogs';
 import AttendanceManager from './pages/AttendanceManager';
 import SystemMaintenance from './pages/SystemMaintenance';
+import TaskManager from './pages/TaskManager';
 import ErrorBoundary from './components/common/ErrorBoundary';
 function AuthApp() {
   const [currentPage, setCurrentPage] = useState('login');
@@ -140,6 +141,7 @@ function App() {
           {/* Dashboard Routes wrapped in the new Layout */}
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
+            <Route path="tasks" element={<TaskManager />} />
             <Route path="logs" element={<NotificationLogs />} />
             <Route path="notifications" element={<NotificationLogs />} />
             <Route path="company-profile" element={<CompanyProfile />} />

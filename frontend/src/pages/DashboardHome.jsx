@@ -46,7 +46,8 @@ import {
   Launch as LaunchIcon,
   AccountTree as BOMIcon,
   SystemUpdateAlt as UpdateIcon,
-  Backup as BackupIcon
+  Backup as BackupIcon,
+  TaskAlt as TaskAltIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import BOMShortfallModal from '../components/common/BOMShortfallModal';
@@ -84,8 +85,32 @@ const DashboardHome = () => {
     }
   };
 
+  const [taskKpis, setTaskKpis] = useState({
+    totalTasks: 0,
+    activeCount: 0,
+    assignedToMeCount: 0,
+    createdByMeCount: 0,
+    completedCount: 0,
+    overdueCount: 0
+  });
+
+  const fetchTaskKpis = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/tasks/kpis`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.kpis) {
+          setTaskKpis(data.kpis);
+        }
+      }
+    } catch (error) {
+      console.warn('Error fetching task KPIs:', error);
+    }
+  };
+
   const fetchKPIs = async () => {
     try {
+      fetchTaskKpis();
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/dashboard/kpis`);
       const data = await response.json();
       if (response.ok) {
@@ -100,6 +125,7 @@ const DashboardHome = () => {
 
   useEffect(() => {
     fetchKPIs();
+    fetchTaskKpis();
   }, []);
 
   const formatCurrency = (value) => {
@@ -272,6 +298,42 @@ const DashboardHome = () => {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Classification:</Typography>
             <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, fontSize: '0.72rem' }}>Fixed Plant & Machinery</Typography>
+          </Box>
+        </Box>
+      )
+    },
+    {
+      title: 'My Tasks',
+      subtitle: 'Active & Assigned Tasks',
+      value: `${taskKpis?.activeCount || 0} Tasks`,
+      valueColor: (taskKpis?.overdueCount || 0) > 0 ? '#ea580c' : '#0F3B66',
+      icon: <TaskAltIcon sx={{ fontSize: 26 }} />,
+      color: '#3b82f6', // Vibrant Blue
+      bgColor: '#eff6ff',
+      link: '/dashboard/tasks',
+      customFooter: (
+        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Assigned to Me:</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>{taskKpis?.assignedToMeCount || 0} active</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Overdue Tasks:</Typography>
+            <Chip 
+              label={(taskKpis?.overdueCount || 0) > 0 ? `${taskKpis.overdueCount} Overdue` : 'On Track'}
+              size="small"
+              sx={{ 
+                height: 18, 
+                fontSize: '0.65rem', 
+                fontWeight: 700, 
+                bgcolor: (taskKpis?.overdueCount || 0) > 0 ? '#fee2e2' : '#dcfce7',
+                color: (taskKpis?.overdueCount || 0) > 0 ? '#ef4444' : '#15803d'
+              }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Created by Me:</Typography>
+            <Typography variant="caption" sx={{ color: '#2563eb', fontWeight: 700 }}>{taskKpis?.createdByMeCount || 0} tasks</Typography>
           </Box>
         </Box>
       )

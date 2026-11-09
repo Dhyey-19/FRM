@@ -25,7 +25,8 @@ import {
   CalendarMonth as CalendarMonthIcon,
   LocalShipping as ShippingIcon,
   SystemUpdateAlt as SystemUpdateAltIcon,
-  Backup as BackupIcon
+  Backup as BackupIcon,
+  TaskAlt as TaskAltIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -33,6 +34,11 @@ export const MENU_STRUCTURE = [
     title: 'Dashboard',
     path: '/dashboard',
     icon: <DashboardIcon />,
+  },
+  {
+    title: 'Task Manager',
+    path: '/dashboard/tasks',
+    icon: <TaskAltIcon />,
   },
   {
     title: 'Administration',

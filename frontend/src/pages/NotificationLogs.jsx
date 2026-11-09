@@ -35,6 +35,7 @@ import {
   LocalShipping as ShippingIcon,
   Close as CloseIcon,
   TaskAlt as ClosedIcon,
+  Assignment as TaskIcon,
   AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -146,6 +147,7 @@ const NotificationLogs = () => {
 
   const categoryCounts = {
     all: statusFilteredList.length,
+    tasks: statusFilteredList.filter(n => n.type === 'task_notification').length,
     reorder: statusFilteredList.filter(n => n.type === 'reorder').length,
     overdue_pod: statusFilteredList.filter(n => n.type === 'overdue_pod').length,
     shortfall: statusFilteredList.filter(n => n.type === 'shortfall').length,
@@ -163,6 +165,7 @@ const NotificationLogs = () => {
 
   const filteredNotifications = statusFilteredList.filter(item => {
     // Type tab filter
+    if (currentTab === 'task_notification' && item.type !== 'task_notification') return false;
     if (currentTab === 'reorder' && item.type !== 'reorder') return false;
     if (currentTab === 'overdue_pod' && item.type !== 'overdue_pod') return false;
     if (currentTab === 'shortfall' && item.type !== 'shortfall') return false;
@@ -271,6 +274,9 @@ const NotificationLogs = () => {
             }}
           >
             <Tab label={`All (${categoryCounts.all || 0})`} value="all" />
+            {categoryCounts.tasks > 0 && (
+              <Tab label={`Task Alerts (${categoryCounts.tasks})`} value="task_notification" />
+            )}
             {categoryCounts.reorder > 0 && (
               <Tab label={`Low Stock (${categoryCounts.reorder})`} value="reorder" />
             )}
@@ -414,6 +420,8 @@ const NotificationLogs = () => {
                         >
                           {isClosed ? (
                             <ClosedIcon />
+                          ) : item.type === 'task_notification' ? (
+                            <TaskIcon />
                           ) : isReorder ? (
                             <InventoryIcon />
                           ) : item.type === 'overdue_pod' ? (
@@ -572,7 +580,7 @@ const NotificationLogs = () => {
                               '&:hover': { bgcolor: '#F88A01' }
                             }}
                           >
-                            {isReorder ? 'Manage Item' : (item.type === 'overdue_pod' ? 'Enter POD' : 'View Invoices')}
+                            {isReorder ? 'Manage Item' : (item.type === 'overdue_pod' ? 'Enter POD' : (item.type === 'task_notification' ? 'View Task' : 'View Invoices'))}
                           </Button>
                         )}
 

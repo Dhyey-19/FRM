@@ -1107,6 +1107,46 @@ exports.getDashboardNotifications = async (req, res) => {
       console.error('Error fetching overdue POD notifications:', podErr);
     }
 
+    // 1f. Fetch Task Notifications for current user
+    try {
+      const currentUserId = req.headers['x-user-id'] ? parseInt(req.headers['x-user-id'], 10) : null;
+      const currentUsername = (req.headers['x-username'] || '').trim();
+
+      if (currentUserId || currentUsername) {
+        let taskNotifQuery = `
+          SELECT tn.NotificationId, tn.TaskId, tn.FromUsername, tn.Type, tn.Title, tn.Message, tn.Status, tn.CreatedAt, tn.ClosedAt, tn.ClosedBy
+          FROM TaskNotifications tn
+          WHERE 1=1
+        `;
+        if (currentUserId) {
+          taskNotifQuery += ` AND tn.UserId = ${currentUserId}`;
+        } else if (currentUsername) {
+          taskNotifQuery += ` AND tn.UserId IN (SELECT UserId FROM Users WHERE LOWER(Username) = '${currentUsername.toLowerCase().replace(/'/g, "''")}')`;
+        }
+        taskNotifQuery += ` ORDER BY tn.CreatedAt DESC`;
+
+        const taskNotifRes = await pool.request().query(taskNotifQuery);
+        (taskNotifRes.recordset || []).forEach(tn => {
+          notifications.push({
+            id: `task_notif_${tn.NotificationId}`,
+            type: 'task_notification',
+            category: 'Task Alert',
+            severity: tn.Type === 'TASK_COMPLETED' ? 'success' : 'info',
+            title: tn.Title,
+            message: tn.Message,
+            status: tn.Status || 'Open',
+            generatedAt: tn.CreatedAt ? new Date(tn.CreatedAt).toISOString() : new Date().toISOString(),
+            closedAt: tn.ClosedAt ? new Date(tn.ClosedAt).toISOString() : null,
+            closedBy: tn.ClosedBy || null,
+            timestamp: tn.CreatedAt ? new Date(tn.CreatedAt).toISOString() : new Date().toISOString(),
+            actionLink: `/dashboard/tasks?taskId=${tn.TaskId}`
+          });
+        });
+      }
+    } catch (tnErr) {
+      console.warn('Error fetching TaskNotifications:', tnErr.message);
+    }
+
     // Map status and lock generated timestamp for all notifications
     for (const n of notifications) {
       const existing = statusMap.get(n.id);
@@ -1196,6 +1236,20 @@ exports.closeNotification = async (req, res) => {
     const { closedBy, closedReason, type, title, message } = req.body || {};
     const currentUser = req.headers['x-username'] || closedBy || 'User';
     const pool = await connectDB();
+
+    if (id && id.startsWith('task_notif_')) {
+      const realNotifId = parseInt(id.replace('task_notif_', ''), 10);
+      if (!isNaN(realNotifId)) {
+        await pool.request()
+          .input('NotifId', realNotifId)
+          .input('ClosedBy', currentUser)
+          .query(`
+            UPDATE TaskNotifications 
+            SET Status = 'Closed', ClosedAt = GETDATE(), ClosedBy = @ClosedBy 
+            WHERE NotificationId = @NotifId
+          `);
+      }
+    }
 
     await pool.request()
       .input('NotificationId', id)
