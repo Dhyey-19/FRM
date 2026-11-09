@@ -34,6 +34,7 @@ const purchaseOrderRoutes = require('./routes/purchaseOrderRoutes');
 const performaInvoiceRoutes = require('./routes/performaInvoiceRoutes');
 const einvoiceRoutes = require('./routes/einvoiceRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
+const systemRoutes = require('./routes/systemRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -74,6 +75,7 @@ app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/performa-invoices', performaInvoiceRoutes);
 app.use('/api/einvoice', einvoiceRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/system', systemRoutes);
 
 // Test Route
 app.get('/api/health', (req, res) => {

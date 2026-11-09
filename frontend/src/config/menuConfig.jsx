@@ -23,7 +23,8 @@ import {
   ReceiptLong as PIIcon,
   Badge as BadgeIcon,
   CalendarMonth as CalendarMonthIcon,
-  LocalShipping as ShippingIcon
+  LocalShipping as ShippingIcon,
+  SystemUpdateAlt as SystemUpdateAltIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -44,6 +45,7 @@ export const MENU_STRUCTURE = [
       { title: 'User Master', path: '/dashboard/users', icon: <PeopleIcon /> },
       { title: 'User Access', path: '/dashboard/user-access', icon: <UserAccessIcon /> },
       { title: 'Assets', path: '/dashboard/assets', icon: <InventoryIcon /> },
+      { title: 'Backup & Updates', path: '/dashboard/system-maintenance', icon: <SystemUpdateAltIcon /> },
     ]
   },
   {
