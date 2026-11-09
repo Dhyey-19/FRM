@@ -58,3 +58,4 @@ BEGIN
     CREATE INDEX [IX_TaskNotifications_User_Status] ON [dbo].[TaskNotifications]([UserId], [Status]);
 END
 GO
+

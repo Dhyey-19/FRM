@@ -476,7 +476,7 @@ const TaskManager = () => {
               )}
             </Box>
           ) : (
-            <Grid container spacing={2.5}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {tasks.map((task) => {
                 const priorityStyle = PRIORITY_COLORS[task.Priority] || PRIORITY_COLORS.Medium;
                 const statusStyle = STATUS_CONFIG[task.Status] || STATUS_CONFIG.Pending;
@@ -485,40 +485,29 @@ const TaskManager = () => {
                 const isHighlighted = highlightedTaskId && String(highlightedTaskId) === String(task.TaskId);
 
                 return (
-                  <Grid item xs={12} md={6} lg={4} key={task.TaskId}>
-                    <Card
-                      sx={{
-                        borderRadius: 3,
-                        border: '1px solid',
-                        borderColor: isHighlighted ? '#3b82f6' : (task.isOverdue ? '#fca5a5' : '#e2e8f0'),
-                        bgcolor: isHighlighted ? '#f8fafc' : (isCompleted ? '#fafbfc' : '#ffffff'),
-                        boxShadow: isHighlighted ? '0 0 0 2px #3b82f6, 0 4px 12px rgba(59, 130, 246, 0.15)' : '0 2px 8px rgba(15, 59, 102, 0.04)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: '100%',
-                        transition: 'all 0.2s ease',
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: '0 6px 16px rgba(15, 59, 102, 0.08)'
-                        }
-                      }}
-                    >
-                      <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                        {/* Top Badges: Priority, Status, and Options Menu */}
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                  <Paper
+                    key={task.TaskId}
+                    sx={{
+                      p: { xs: 2, sm: 2.2 },
+                      borderRadius: 2.5,
+                      border: '1px solid',
+                      borderColor: isHighlighted ? '#3b82f6' : (task.isOverdue ? '#fca5a5' : '#e2e8f0'),
+                      borderLeft: `5px solid ${priorityStyle.text}`,
+                      bgcolor: isHighlighted ? '#f8fafc' : (isCompleted ? '#fafbfc' : '#ffffff'),
+                      boxShadow: isHighlighted ? '0 0 0 2px #3b82f6, 0 4px 12px rgba(59, 130, 246, 0.12)' : '0 2px 6px rgba(15, 59, 102, 0.03)',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        boxShadow: '0 4px 16px rgba(15, 59, 102, 0.08)',
+                        transform: 'translateY(-1px)'
+                      }
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'stretch', md: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+                      {/* Left: Status, Priority, Title, Description, Created By */}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        {/* Status, Priority & Created By metadata */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.8 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Chip
-                              label={task.Priority}
-                              size="small"
-                              sx={{
-                                height: 22,
-                                fontSize: '0.72rem',
-                                fontWeight: 800,
-                                bgcolor: priorityStyle.bg,
-                                color: priorityStyle.text,
-                                border: `1px solid ${priorityStyle.border}`
-                              }}
-                            />
                             <Chip
                               icon={statusStyle.icon}
                               label={statusStyle.label}
@@ -532,17 +521,38 @@ const TaskManager = () => {
                                 border: `1px solid ${statusStyle.border}`
                               }}
                             />
+                            <Chip
+                              label={task.Priority}
+                              size="small"
+                              sx={{
+                                height: 22,
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                bgcolor: priorityStyle.bg,
+                                color: priorityStyle.text,
+                                border: `1px solid ${priorityStyle.border}`
+                              }}
+                            />
+                            <Typography variant="caption" sx={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <span>Created by:</span>
+                              <strong>{task.CreatedByUsername}</strong>
+                              {task.isCreatedByMe && <span style={{ color: '#2563eb', fontWeight: 700 }}> (You)</span>}
+                              <span>• {new Date(task.CreatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                            </Typography>
                           </Box>
 
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              setMenuAnchor(e.currentTarget);
-                              setActionTask(task);
-                            }}
-                          >
-                            <MoreVertIcon fontSize="small" />
-                          </IconButton>
+                          {/* Mobile options button */}
+                          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                setMenuAnchor(e.currentTarget);
+                                setActionTask(task);
+                              }}
+                            >
+                              <MoreVertIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
                         </Box>
 
                         {/* Title */}
@@ -552,8 +562,8 @@ const TaskManager = () => {
                             fontWeight: 700,
                             color: isCompleted ? '#64748b' : '#0F3B66',
                             textDecoration: isCompleted ? 'line-through' : 'none',
-                            lineHeight: 1.3,
-                            mb: 0.8
+                            lineHeight: 1.35,
+                            mb: task.Description ? 0.4 : 0
                           }}
                         >
                           {task.Title}
@@ -565,29 +575,69 @@ const TaskManager = () => {
                             variant="body2"
                             sx={{
                               color: isCompleted ? '#94a3b8' : '#475569',
-                              lineHeight: 1.5,
-                              mb: 2,
-                              display: '-webkit-box',
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden'
+                              lineHeight: 1.45,
+                              fontSize: '0.85rem'
                             }}
                           >
                             {task.Description}
                           </Typography>
                         )}
+                      </Box>
 
-                        <Box sx={{ mt: 'auto', pt: 1.5, borderTop: '1px dashed #e2e8f0' }}>
-                          {/* Deadline info */}
-                          {deadlineInfo && (
-                            <Box sx={{ mb: 1.2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                                <CalendarIcon sx={{ fontSize: 16, color: task.isOverdue ? '#dc2626' : '#64748b' }} />
-                                <Typography variant="caption" sx={{ color: task.isOverdue ? '#dc2626' : '#64748b', fontWeight: 600 }}>
-                                  {deadlineInfo.formatted}
-                                </Typography>
-                              </Box>
-                              {deadlineInfo.badgeText && (
+                      {/* Middle 1: Tagged Users / Assignees */}
+                      <Box sx={{ minWidth: { md: 180, lg: 220 }, maxWidth: { md: 260 } }}>
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                          Tagged Team ({task.assignees.length}):
+                        </Typography>
+                        {task.assignees.length === 0 ? (
+                          <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                            No members tagged
+                          </Typography>
+                        ) : (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {task.assignees.map((a) => {
+                              const isMe = currentUser && (a.UserId === currentUser.UserId || (a.Username || '').toLowerCase() === (currentUser.Username || '').toLowerCase());
+
+                              return (
+                                <Chip
+                                  key={a.AssigneeId || a.UserId}
+                                  avatar={
+                                    <Avatar sx={{ width: 18, height: 18, fontSize: '0.62rem', bgcolor: isMe ? '#2563eb' : '#64748b' }}>
+                                      {(a.Username || 'U').charAt(0).toUpperCase()}
+                                    </Avatar>
+                                  }
+                                  label={`${a.Username}${isMe ? ' (You)' : ''} • ${a.Status}`}
+                                  size="small"
+                                  sx={{
+                                    height: 22,
+                                    fontSize: '0.68rem',
+                                    fontWeight: 600,
+                                    bgcolor: isMe ? '#eff6ff' : '#f1f5f9',
+                                    color: isMe ? '#1d4ed8' : '#334155',
+                                    border: `1px solid ${isMe ? '#bfdbfe' : '#e2e8f0'}`
+                                  }}
+                                />
+                              );
+                            })}
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* Middle 2: Deadline */}
+                      <Box sx={{ minWidth: { md: 160, lg: 180 } }}>
+                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                          Deadline:
+                        </Typography>
+                        {deadlineInfo ? (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                              <CalendarIcon sx={{ fontSize: 16, color: task.isOverdue ? '#dc2626' : '#64748b' }} />
+                              <Typography variant="caption" sx={{ color: task.isOverdue ? '#dc2626' : '#334155', fontWeight: 600 }}>
+                                {deadlineInfo.formatted}
+                              </Typography>
+                            </Box>
+                            {deadlineInfo.badgeText && (
+                              <Box>
                                 <Chip
                                   label={deadlineInfo.badgeText}
                                   size="small"
@@ -600,114 +650,88 @@ const TaskManager = () => {
                                     border: `1px solid ${task.isOverdue ? '#fca5a5' : '#fde68a'}`
                                   }}
                                 />
-                              )}
-                            </Box>
-                          )}
-
-                          {/* Created by */}
-                          <Box sx={{ mb: 1.2, display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                            <Avatar sx={{ width: 22, height: 22, fontSize: '0.65rem', bgcolor: '#0F3B66' }}>
-                              {(task.CreatedByUsername || 'U').charAt(0).toUpperCase()}
-                            </Avatar>
-                            <Typography variant="caption" sx={{ color: '#64748b' }}>
-                              By <strong>{task.CreatedByUsername}</strong>
-                              {task.isCreatedByMe && <span style={{ color: '#2563eb', fontWeight: 700 }}> (You)</span>}
-                            </Typography>
-                          </Box>
-
-                          {/* Tagged assignees */}
-                          <Box sx={{ mb: 1.5 }}>
-                            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, display: 'block', mb: 0.5 }}>
-                              Tagged Members ({task.assignees.length}):
-                            </Typography>
-                            {task.assignees.length === 0 ? (
-                              <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
-                                No members tagged
-                              </Typography>
-                            ) : (
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                {task.assignees.map((a) => {
-                                  const isMe = currentUser && (a.UserId === currentUser.UserId || (a.Username || '').toLowerCase() === (currentUser.Username || '').toLowerCase());
-                                  const aStatusStyle = STATUS_CONFIG[a.Status] || STATUS_CONFIG.Pending;
-
-                                  return (
-                                    <Chip
-                                      key={a.AssigneeId || a.UserId}
-                                      avatar={
-                                        <Avatar sx={{ width: 18, height: 18, fontSize: '0.62rem', bgcolor: isMe ? '#2563eb' : '#64748b' }}>
-                                          {(a.Username || 'U').charAt(0).toUpperCase()}
-                                        </Avatar>
-                                      }
-                                      label={`${a.Username}${isMe ? ' (You)' : ''} • ${a.Status}`}
-                                      size="small"
-                                      sx={{
-                                        height: 22,
-                                        fontSize: '0.68rem',
-                                        fontWeight: 600,
-                                        bgcolor: isMe ? '#eff6ff' : '#f1f5f9',
-                                        color: isMe ? '#1d4ed8' : '#334155',
-                                        border: `1px solid ${isMe ? '#bfdbfe' : '#e2e8f0'}`
-                                      }}
-                                    />
-                                  );
-                                })}
                               </Box>
                             )}
                           </Box>
+                        ) : (
+                          <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                            No deadline set
+                          </Typography>
+                        )}
+                      </Box>
 
-                          {/* Interactive Action Button for Tagged Users */}
-                          {!isCompleted && (
-                            <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                              {task.isAssignedToMe && task.myStatus === 'Pending' && (
-                                <Button
-                                  fullWidth
-                                  size="small"
-                                  variant="contained"
-                                  color="info"
-                                  startIcon={<TaskAltIcon />}
-                                  onClick={() => handleStatusChange(task, 'Accepted')}
-                                  sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
-                                >
-                                  Accept Task
-                                </Button>
-                              )}
+                      {/* Right: Actions & Options */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, alignSelf: { xs: 'stretch', md: 'center' }, justifyContent: { xs: 'flex-start', md: 'flex-end' }, minWidth: { md: 150 } }}>
+                        {!isCompleted ? (
+                          <>
+                            {task.isAssignedToMe && task.myStatus === 'Pending' && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="info"
+                                startIcon={<TaskAltIcon />}
+                                onClick={() => handleStatusChange(task, 'Accepted')}
+                                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, whiteSpace: 'nowrap' }}
+                              >
+                                Accept
+                              </Button>
+                            )}
 
-                              {task.isAssignedToMe && task.myStatus === 'Accepted' && (
-                                <Button
-                                  fullWidth
-                                  size="small"
-                                  variant="contained"
-                                  color="primary"
-                                  startIcon={<InProgressIcon />}
-                                  onClick={() => handleStatusChange(task, 'In Progress')}
-                                  sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
-                                >
-                                  Start Working
-                                </Button>
-                              )}
+                            {task.isAssignedToMe && task.myStatus === 'Accepted' && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="primary"
+                                startIcon={<InProgressIcon />}
+                                onClick={() => handleStatusChange(task, 'In Progress')}
+                                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, whiteSpace: 'nowrap' }}
+                              >
+                                Start
+                              </Button>
+                            )}
 
-                              {(task.isAssignedToMe || task.isCreatedByMe) && (
-                                <Button
-                                  fullWidth
-                                  size="small"
-                                  variant="contained"
-                                  color="success"
-                                  startIcon={<CompleteIcon />}
-                                  onClick={() => handleStatusChange(task, 'Completed')}
-                                  sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
-                                >
-                                  Complete Task
-                                </Button>
-                              )}
-                            </Box>
-                          )}
+                            {(task.isAssignedToMe || task.isCreatedByMe) && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="success"
+                                startIcon={<CompleteIcon />}
+                                onClick={() => handleStatusChange(task, 'Completed')}
+                                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, whiteSpace: 'nowrap' }}
+                              >
+                                Complete
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <Chip
+                            icon={<CompleteIcon sx={{ fontSize: 16 }} />}
+                            label="Completed"
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                            sx={{ fontWeight: 700 }}
+                          />
+                        )}
+
+                        {/* Desktop options menu button */}
+                        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              setMenuAnchor(e.currentTarget);
+                              setActionTask(task);
+                            }}
+                          >
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
                         </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
+                      </Box>
+                    </Box>
+                  </Paper>
                 );
               })}
-            </Grid>
+            </Box>
           )}
         </Box>
       </Paper>
@@ -895,3 +919,4 @@ const TaskManager = () => {
 };
 
 export default TaskManager;
+
