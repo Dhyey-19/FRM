@@ -45,7 +45,7 @@ createRoot(document.getElementById('root')).render(
 
 // Register PWA Service Worker
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+  const registerSW = () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
         console.log('[PWA] Service Worker registered successfully with scope:', registration.scope);
@@ -53,5 +53,11 @@ if ('serviceWorker' in navigator) {
       .catch((error) => {
         console.log('[PWA] Service Worker registration skipped or failed:', error.message);
       });
-  });
+  };
+
+  if (document.readyState === 'complete') {
+    registerSW();
+  } else {
+    window.addEventListener('load', registerSW);
+  }
 }

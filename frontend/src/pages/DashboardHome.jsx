@@ -335,38 +335,6 @@ const DashboardHome = () => {
             }}
           />
 
-          {/* Application & Database Update */}
-          <Tooltip title="Application & Database Update">
-            <IconButton
-              onClick={() => navigate('/dashboard/system-maintenance?tab=updates')}
-              sx={{
-                bgcolor: '#ffffff',
-                color: '#ea580c',
-                border: '1px solid #cbd5e1',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                '&:hover': { bgcolor: '#fff7ed', color: '#c2410c', borderColor: '#ea580c' }
-              }}
-            >
-              <UpdateIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
-          {/* SQL Database Backup */}
-          <Tooltip title="SQL Database Backup">
-            <IconButton
-              onClick={() => navigate('/dashboard/system-maintenance?tab=backup')}
-              sx={{
-                bgcolor: '#ffffff',
-                color: '#10b981',
-                border: '1px solid #cbd5e1',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                '&:hover': { bgcolor: '#ecfdf5', color: '#059669', borderColor: '#10b981' }
-              }}
-            >
-              <BackupIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
           <Tooltip title="Notification & Alert Logs">
             <IconButton
               onClick={() => navigate('/dashboard/logs')}

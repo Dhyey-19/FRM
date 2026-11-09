@@ -46,7 +46,8 @@ import {
   MenuOpen as MenuOpenIcon,
   AccountCircle as AccountCircleIcon,
   OpenInNew as OpenInNewIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  GetApp as InstallIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MENU_STRUCTURE } from '../../config/menuConfig';
@@ -58,7 +59,9 @@ const Sidebar = ({
   drawerWidth = 300,
   isMobile = false,
   mobileOpen = false,
-  onMobileClose 
+  onMobileClose,
+  onInstallClick,
+  isStandalone = false
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -300,6 +303,37 @@ const Sidebar = ({
           </IconButton>
         )}
       </Box>
+
+      {/* Install Mobile App Button in Drawer */}
+      {!isStandalone && onInstallClick && (
+        <Box sx={{ px: isCollapsed && !isMobile ? 1 : 2, pt: 1.5, pb: 0.5 }}>
+          <Button
+            fullWidth
+            size="small"
+            variant="contained"
+            startIcon={<InstallIcon fontSize="small" />}
+            onClick={() => {
+              if (isMobile && onMobileClose) onMobileClose();
+              onInstallClick();
+            }}
+            sx={{
+              bgcolor: '#F88A01',
+              color: '#ffffff',
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '0.78rem',
+              borderRadius: 1.5,
+              py: 0.6,
+              boxShadow: '0 2px 4px rgba(248, 138, 1, 0.3)',
+              '&:hover': {
+                bgcolor: '#ea580c'
+              }
+            }}
+          >
+            {isCollapsed && !isMobile ? '' : 'Install Mobile App'}
+          </Button>
+        </Box>
+      )}
 
         {/* Navigation Menu */}
         <List sx={{ py: 0.5, px: 2, pt: 1 }}>

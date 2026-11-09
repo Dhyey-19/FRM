@@ -5,7 +5,8 @@ import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
-  MenuItem, Select, FormControl, InputLabel, Autocomplete, Grid, Divider, Chip, Stack
+  MenuItem, Select, FormControl, InputLabel, Autocomplete, Grid, Divider, Chip, Stack,
+  Checkbox, FormControlLabel
 } from '@mui/material';
 import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Receipt as ReceiptIcon, Print as PrintIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon, AccountBalance as BankIcon } from '@mui/icons-material';
 import { jsPDF } from 'jspdf';
@@ -827,16 +828,47 @@ const VoucherEntry = ({ user }) => {
                   <MenuItem value="Journal">Journal</MenuItem>
                 </Select>
               </FormControl>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>Bill:</Typography>
-              <FormControl size="small" sx={{ backgroundColor: 'white', borderRadius: 1, minWidth: 120 }}>
-                <Select 
-                  value={globalBill ? 'true' : 'false'} 
-                  onChange={(e) => setGlobalBill(e.target.value === 'true')}
-                >
-                  <MenuItem value="true">With Bill</MenuItem>
-                  <MenuItem value="false">Without Bill</MenuItem>
-                </Select>
-              </FormControl>
+              <FormControlLabel
+                control={
+                  <Checkbox 
+                    checked={Boolean(globalBill)}
+                    onChange={(e) => setGlobalBill(e.target.checked)}
+                    color="primary"
+                    size="small"
+                    sx={{ 
+                      p: 0.5,
+                      color: globalBill ? '#0F3B66' : '#94a3b8',
+                      '&.Mui-checked': { color: '#0F3B66' }
+                    }}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, pr: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: globalBill ? '#0F3B66' : '#64748b', fontSize: '0.85rem' }}>
+                      {globalBill ? 'With Bill' : 'Without Bill'}
+                    </Typography>
+                    <Chip 
+                      label={globalBill ? 'Bill' : 'Without Bill'} 
+                      size="small" 
+                      color={globalBill ? 'primary' : 'default'} 
+                      variant={globalBill ? 'filled' : 'outlined'}
+                      sx={{ fontWeight: 700, fontSize: '0.68rem', height: 18, cursor: 'pointer' }}
+                    />
+                  </Box>
+                }
+                sx={{ 
+                  m: 0, 
+                  pl: 0.5,
+                  pr: 1, 
+                  py: 0.2, 
+                  bgcolor: globalBill ? '#eff6ff' : '#f1f5f9', 
+                  border: '1px solid',
+                  borderColor: globalBill ? '#bfdbfe' : '#cbd5e1',
+                  borderRadius: 1.5,
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+              />
               <Typography variant="body2" sx={{ fontWeight: 600 }}>Date:</Typography>
               <TextField 
                 type="date"

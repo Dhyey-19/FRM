@@ -1,11 +1,11 @@
-const CACHE_NAME = 'frm-pwa-v1';
+const CACHE_NAME = 'frm-pwa-v2';
 const PRECACHE_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  './favicon.svg'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/favicon.svg'
 ];
 
 // Install event: cache core app shell
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (event) => {
   // Network-first with cache fallback for HTML pages / navigation
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('./index.html'))
+      fetch(request).catch(() => caches.match('/index.html'))
     );
     return;
   }
@@ -70,4 +70,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-

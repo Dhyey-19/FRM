@@ -11,7 +11,11 @@ import {
   Breadcrumbs, 
   Typography, 
   Button,
-  useMediaQuery 
+  useMediaQuery,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -22,7 +26,10 @@ import {
   Menu as MenuIcon,
   Notifications as NotificationsIcon,
   SystemUpdateAlt as UpdateIcon,
-  Backup as BackupIcon
+  Backup as BackupIcon,
+  PhoneIphone,
+  PhoneAndroid,
+  Laptop
 } from '@mui/icons-material';
 import Sidebar from './Sidebar';
 import ErrorBoundary from '../common/ErrorBoundary';
@@ -308,6 +315,16 @@ const DashboardLayout = () => {
   // PWA Installation prompt listener
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
+
+  const isStandalone = typeof window !== 'undefined' && (
+    window.matchMedia('(display-mode: standalone)').matches || 
+    window.navigator.standalone === true ||
+    (typeof document !== 'undefined' && document.referrer && document.referrer.includes('android-app://'))
+  );
+
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window && window.MSStream);
+  const isAndroid = typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent);
 
   useEffect(() => {
     const handleBeforeInstall = (e) => {
@@ -330,12 +347,19 @@ const DashboardLayout = () => {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsInstallable(false);
-      setDeferredPrompt(null);
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          setIsInstallable(false);
+          setDeferredPrompt(null);
+        }
+      } catch (err) {
+        setInstallGuideOpen(true);
+      }
+    } else {
+      setInstallGuideOpen(true);
     }
   };
 
@@ -374,6 +398,8 @@ const DashboardLayout = () => {
           isMobile={isMobile}
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
+          onInstallClick={handleInstallClick}
+          isStandalone={isStandalone}
         />
         
         {/* Main Content */}
@@ -578,31 +604,51 @@ const DashboardLayout = () => {
                 </IconButton>
               </Tooltip>
 
-              {isInstallable && (
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<InstallIcon fontSize="small" />}
-                  onClick={handleInstallClick}
-                  sx={{
-                    bgcolor: '#0F3B66',
-                    color: '#ffffff',
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    fontSize: '0.78rem',
-                    borderRadius: 1.5,
-                    px: { xs: 1.2, sm: 1.8 },
-                    py: 0.6,
-                    boxShadow: '0 2px 4px rgba(15, 59, 102, 0.2)',
-                    '&:hover': {
-                      bgcolor: '#F88A01',
-                      boxShadow: '0 3px 6px rgba(248, 138, 1, 0.3)'
-                    }
-                  }}
-                >
-                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Install App</Box>
-                  <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Install</Box>
-                </Button>
+              {!isStandalone && (
+                <>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<InstallIcon fontSize="small" />}
+                    onClick={handleInstallClick}
+                    sx={{
+                      display: { xs: 'none', sm: 'inline-flex' },
+                      bgcolor: '#0F3B66',
+                      color: '#ffffff',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.78rem',
+                      borderRadius: 1.5,
+                      px: 1.8,
+                      py: 0.6,
+                      boxShadow: '0 2px 4px rgba(15, 59, 102, 0.2)',
+                      '&:hover': {
+                        bgcolor: '#F88A01',
+                        boxShadow: '0 3px 6px rgba(248, 138, 1, 0.3)'
+                      }
+                    }}
+                  >
+                    Install App
+                  </Button>
+
+                  <Tooltip title="Install FRM App">
+                    <IconButton
+                      size="small"
+                      onClick={handleInstallClick}
+                      sx={{
+                        display: { xs: 'inline-flex', sm: 'none' },
+                        color: '#ffffff',
+                        bgcolor: '#F88A01',
+                        border: '1px solid #ea580c',
+                        borderRadius: 1.5,
+                        p: 0.7,
+                        '&:hover': { bgcolor: '#ea580c' }
+                      }}
+                    >
+                      <InstallIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </>
               )}
             </Box>
           </Paper>
@@ -612,6 +658,71 @@ const DashboardLayout = () => {
           </ErrorBoundary>
         </Box>
       </Box>
+
+      {/* Install Mobile / PWA App Guide Dialog */}
+      <Dialog 
+        open={installGuideOpen} 
+        onClose={() => setInstallGuideOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <InstallIcon sx={{ color: '#F88A01' }} /> Install FRM App
+        </DialogTitle>
+        <DialogContent dividers>
+          {isIOS ? (
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                <PhoneIphone sx={{ fontSize: 18, color: '#2563eb' }} /> iPhone / iPad (Safari) Instructions:
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
+                Follow these simple steps to install FRM on your home screen:
+              </Typography>
+              <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
+                <li>Open this page in <strong>Safari</strong> browser.</li>
+                <li>Tap the <strong>Share</strong> button (<strong>⎋</strong> box with arrow pointing up) at the bottom.</li>
+                <li>Scroll down and tap <strong>"Add to Home Screen"</strong> (<strong>➕</strong>).</li>
+                <li>Tap <strong>Add</strong> in the top right. The FRM icon will appear on your home screen!</li>
+              </Box>
+            </Box>
+          ) : isAndroid ? (
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                <PhoneAndroid sx={{ fontSize: 18, color: '#10b981' }} /> Android (Chrome) Instructions:
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
+                Install FRM as a fast, native mobile app:
+              </Typography>
+              <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
+                <li>Tap the <strong>three dots menu (⋮)</strong> in the top-right corner of Chrome.</li>
+                <li>Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
+                <li>Confirm by tapping <strong>Install</strong>.</li>
+                <li>FRM will now open like a standalone app with full screen view!</li>
+              </Box>
+            </Box>
+          ) : (
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                <Laptop sx={{ fontSize: 18, color: '#0F3B66' }} /> Desktop / Browser Instructions:
+              </Typography>
+              <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
+                <li>Click the <strong>Install icon</strong> in your browser's address bar (right side of URL).</li>
+                <li>Or click browser menu (<strong>⋮</strong>) → <strong>"Install FRM - Factory Resource Manager"</strong>.</li>
+                <li>Click <strong>Install</strong> to launch FRM in its own dedicated window!</li>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, bgcolor: '#f8fafc' }}>
+          <Button 
+            onClick={() => setInstallGuideOpen(false)} 
+            variant="contained"
+            sx={{ bgcolor: '#0F3B66', fontWeight: 600 }}
+          >
+            Got It!
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 };
