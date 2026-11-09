@@ -307,53 +307,211 @@ body {
    RESPONSIVE ENHANCEMENTS FOR MOBILE PWA, TABLET & DESKTOP
    ========================================================= */
 
+/* Prevent horizontal viewport spillover globally */
+html, body, #root {
+  max-width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
 /* Mobile & Touch Scroller Smoothness */
 * {
   -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
 }
 
 .MuiTableContainer-root {
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 /* Prevent tables and data grids from squashing into illegible slivers on mobile */
 .MuiDataGrid-root {
   border-radius: 8px !important;
   font-size: 0.85rem !important;
+  max-width: 100% !important;
 }
 
 @media (max-width: 900px) {
   .MuiTable-root {
-    min-width: 650px;
+    min-width: 600px;
   }
   .MuiDataGrid-root {
-    min-width: 650px !important;
+    min-width: 600px !important;
   }
 }
 
-/* Responsive Modal Dialogs across the entire application */
+/* =========================================================
+   CARDS FIT SCREEN SIZE (MOBILE RESPONSIVE CARD STYLES)
+   ========================================================= */
+.MuiCard-root {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  word-break: break-word !important;
+}
+
 @media (max-width: 600px) {
-  .MuiDialog-paper {
-    margin: 12px !important;
-    width: calc(100% - 24px) !important;
-    max-width: 100% !important;
-    max-height: calc(100% - 32px) !important;
+  .MuiCard-root {
+    width: 100% !important;
     border-radius: 12px !important;
   }
-  
-  .MuiDialogContent-root {
+
+  .MuiCardContent-root {
     padding: 14px 12px !important;
+    box-sizing: border-box !important;
   }
-  
+
+  .MuiCardContent-root:last-child {
+    padding-bottom: 14px !important;
+  }
+
+  /* Prevent negative margin overflow from Grid containers on mobile */
+  .MuiGrid-root.MuiGrid-container {
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .MuiGrid-root.MuiGrid-container > .MuiGrid-item {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .MuiGrid-root.MuiGrid-container > .MuiGrid-grid-xs-6 {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+
+  /* Cards flex contents wrapping */
+  .MuiCard-root .MuiBox-root {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* =========================================================
+   FORMS FIT SCREEN AREA (MOBILE RESPONSIVE FORMS & DIALOGS)
+   ========================================================= */
+@media (max-width: 600px) {
+  /* Standalone full-page forms */
+  form {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Form controls fit 100% screen area */
+  .MuiFormControl-root,
+  .MuiTextField-root,
+  .MuiAutocomplete-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .MuiOutlinedInput-root {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Modal Dialog Paper: strictly constrained inside screen area */
+  .MuiDialog-container {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .MuiDialog-paper {
+    margin: 8px !important;
+    width: calc(100% - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+    height: auto !important;
+    border-radius: 12px !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .MuiDialogTitle-root {
+    padding: 12px 14px !important;
+    font-size: 1rem !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    word-break: break-word !important;
+  }
+
+  .MuiDialogContent-root {
+    padding: 12px 10px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    flex: 1 1 auto !important;
+  }
+
+  .MuiDialogContent-root form,
+  .MuiDialogContent-root .MuiBox-root[component="form"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Internal Tables inside Dialogs stay within container and scroll horizontally without breaking dialog */
+  .MuiDialogContent-root .MuiTableContainer-root,
+  .MuiDialog-paper .MuiTableContainer-root {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    display: block !important;
+    margin-bottom: 12px !important;
+  }
+
+  .MuiDialogContent-root .MuiPaper-root {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .MuiDialogContent-root .MuiTable-root {
+    min-width: 520px !important;
+  }
+
+  /* Sticky Actions Bar at bottom of screen */
   .MuiDialogActions-root {
-    padding: 12px !important;
-    flex-wrap: wrap;
-    gap: 8px;
+    position: sticky !important;
+    bottom: 0 !important;
+    background-color: #ffffff !important;
+    border-top: 1px solid #e2e8f0 !important;
+    z-index: 10 !important;
+    padding: 10px 12px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    box-sizing: border-box !important;
+    max-width: 100% !important;
   }
-  
-  .MuiDialogActions-root > button {
-    flex: 1 1 auto;
+
+  .MuiDialogActions-root > button,
+  .MuiDialogActions-root > .MuiButton-root {
+    flex: 1 1 auto !important;
+    min-width: 100px !important;
+    margin: 0 !important;
   }
 
   .auth-container {
@@ -377,6 +535,24 @@ body {
     font-size: 20px !important;
     margin-bottom: 20px !important;
   }
+}
+
+/* Autocomplete popper and popover max-width on mobile */
+.MuiAutocomplete-popper {
+  max-width: calc(100vw - 16px) !important;
+  box-sizing: border-box !important;
+}
+
+.MuiAutocomplete-paper {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  word-break: break-word !important;
+}
+
+.MuiMenu-paper,
+.MuiPopover-paper {
+  max-width: calc(100vw - 16px) !important;
+  box-sizing: border-box !important;
 }
 
 /* Clean Custom Scrollbar for Desktop & PWA */

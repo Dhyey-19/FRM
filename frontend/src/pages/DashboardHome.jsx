@@ -472,7 +472,7 @@ const DashboardHome = () => {
                 onClick={() => card.onClick ? card.onClick() : navigate(card.link)} 
                 sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: 0 }}
               >
-                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 }, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                       {card.title}
@@ -495,7 +495,7 @@ const DashboardHome = () => {
                     </Box>
                   ) : (
                     <Box sx={{ mt: 'auto' }}>
-                      <Typography variant="h5" sx={{ fontWeight: 800, color: card.valueColor || '#1e293b' }}>
+                      <Typography variant="h5" sx={{ fontWeight: 800, color: card.valueColor || '#1e293b', fontSize: { xs: '1.25rem', sm: '1.5rem' }, wordBreak: 'break-word' }}>
                         {card.value}
                       </Typography>
                       {card.subtitle && (
@@ -1237,7 +1237,7 @@ const DashboardHome = () => {
         maxWidth="md" 
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 800, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ fontWeight: 800, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ShoppingCart sx={{ color: '#ea580c' }} />
             <span>Purchase Authority: Shortfall Items ({kpis?.purchaseAuthority?.shortfallItemsCount || 0})</span>
@@ -1359,7 +1359,7 @@ const DashboardHome = () => {
         maxWidth="md" 
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 800, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ fontWeight: 800, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <LocalShipping sx={{ color: '#0F3B66' }} />
             <span>Sales Authority: Pending Orders & Dispatch Readiness ({kpis?.salesAuthority?.pendingOrderItemsCount || 0})</span>

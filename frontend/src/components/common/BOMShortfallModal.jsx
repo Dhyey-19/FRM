@@ -41,11 +41,12 @@ const BOMShortfallModal = ({
         sx={{
           bgcolor: '#0F3B66',
           color: '#ffffff',
-          py: 1.8,
-          px: 2.5,
+          py: { xs: 1.2, sm: 1.8 },
+          px: { xs: 1.5, sm: 2.5 },
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          gap: 1
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>

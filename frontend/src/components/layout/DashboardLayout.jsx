@@ -158,6 +158,81 @@ const theme = createTheme({
         },
       },
     },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        },
+      },
+    },
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          '&:last-child': {
+            paddingBottom: 16,
+          },
+          '@media (max-width: 600px)': {
+            padding: '14px 12px !important',
+          },
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          '@media (max-width: 600px)': {
+            margin: '8px !important',
+            width: 'calc(100% - 16px) !important',
+            maxWidth: 'calc(100vw - 16px) !important',
+            maxHeight: 'calc(100dvh - 16px) !important',
+            borderRadius: '12px !important',
+            overflowX: 'hidden !important',
+          },
+        },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          '@media (max-width: 600px)': {
+            padding: '12px 14px !important',
+            fontSize: '1rem !important',
+          },
+        },
+      },
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          '@media (max-width: 600px)': {
+            padding: '12px 10px !important',
+            overflowX: 'hidden',
+          },
+        },
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: {
+          '@media (max-width: 600px)': {
+            padding: '10px 12px !important',
+            flexWrap: 'wrap',
+            gap: 8,
+          },
+        },
+      },
+    },
+    MuiTableContainer: {
+      styleOverrides: {
+        root: {
+          maxWidth: '100%',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          boxSizing: 'border-box',
+        },
+      },
+    },
   },
 });
 
@@ -304,10 +379,11 @@ const DashboardLayout = () => {
           component="main" 
           sx={{ 
             flexGrow: 1, 
-            p: { xs: 1.5, sm: 2, md: 3 }, 
+            p: { xs: 1, sm: 2, md: 3 }, 
             width: { xs: '100%', md: isCollapsed ? 'calc(100% - 68px)' : `calc(100% - ${drawerWidth}px)` }, 
             maxWidth: '100vw',
             overflowX: 'hidden',
+            boxSizing: 'border-box',
             transition: 'width 0.3s ease, margin 0.3s ease' 
           }}
         >

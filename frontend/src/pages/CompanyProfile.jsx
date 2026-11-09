@@ -226,7 +226,7 @@ const CompanyProfile = () => {
           {/* General Information Section */}
           <Grid item xs={12}>
             <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
-              <CardContent sx={{ p: 3 }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66', mb: 2 }}>
                   General Company Details
                 </Typography>
@@ -270,7 +270,7 @@ const CompanyProfile = () => {
           {/* Address Section */}
           <Grid item xs={12} md={6}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
-              <CardContent sx={{ p: 3 }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66', mb: 2 }}>
                   Registered Office Address
                 </Typography>
@@ -343,7 +343,7 @@ const CompanyProfile = () => {
           {/* Contact Details Section */}
           <Grid item xs={12} md={6}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
-              <CardContent sx={{ p: 3 }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66', mb: 2 }}>
                   Contact Information
                 </Typography>
@@ -407,7 +407,7 @@ const CompanyProfile = () => {
           {/* Bank Details Section */}
           <Grid item xs={12}>
             <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
-              <CardContent sx={{ p: 3 }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66', mb: 2 }}>
                   Bank Details & UPI
                 </Typography>
@@ -470,7 +470,7 @@ const CompanyProfile = () => {
           {/* Government NIC e-Invoice & IRP Gateway Credentials Section */}
           <Grid item xs={12}>
             <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.02)', borderColor: '#93c5fd' }}>
-              <CardContent sx={{ p: 3, bgcolor: '#f0f7ff' }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 }, bgcolor: '#f0f7ff' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <QrCodeIcon sx={{ fontSize: 26, color: '#0F3B66' }} />
@@ -592,7 +592,7 @@ const CompanyProfile = () => {
           </Grid>
 
           {/* Submit Actions */}
-          <Grid item xs={12} sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+          <Grid item xs={12} sx={{ mt: 1, display: 'flex', justifyContent: { xs: 'stretch', sm: 'flex-end' }, gap: 2 }}>
             <Button 
               type="submit" 
               variant="contained" 
@@ -600,7 +600,7 @@ const CompanyProfile = () => {
               size="large"
               startIcon={profileExists ? <EditIcon /> : <SaveIcon />}
               disabled={saving}
-              sx={{ px: 4, py: 1, borderRadius: 2 }}
+              sx={{ width: { xs: '100%', sm: 'auto' }, px: 4, py: 1.2, borderRadius: 2 }}
             >
               {saving ? 'Saving...' : profileExists ? 'Update Profile' : 'Save Profile'}
             </Button>

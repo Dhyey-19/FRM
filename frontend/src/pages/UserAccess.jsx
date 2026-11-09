@@ -572,8 +572,8 @@ const UserAccess = () => {
                   {/* Section Header */}
                   <Box
                     sx={{
-                      p: 2,
-                      px: 2.5,
+                      p: { xs: 1.5, sm: 2 },
+                      px: { xs: 1.5, sm: 2.5 },
                       bgcolor: '#f8fafc',
                       borderBottom: '1px solid #e2e8f0',
                       display: 'flex',
@@ -632,8 +632,8 @@ const UserAccess = () => {
                         <Box
                           key={form.path}
                           sx={{
-                            p: 1.8,
-                            px: 2.5,
+                            p: { xs: 1.2, sm: 1.8 },
+                            px: { xs: 1.5, sm: 2.5 },
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
