@@ -503,17 +503,17 @@ const TaskManager = () => {
           </Box>
         ) : (
           <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 800 }}>
+            <Table size="small" sx={{ minWidth: 920 }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#0F3B66', '& th': { color: '#ffffff', fontWeight: 700, fontSize: '0.82rem', py: 1.2 } }}>
-                  <TableCell sx={{ width: 60 }}>#</TableCell>
+                  <TableCell sx={{ width: 50 }}>#</TableCell>
                   <TableCell>Task Title</TableCell>
-                  <TableCell align="center" sx={{ width: 100 }}>Priority</TableCell>
+                  <TableCell align="center" sx={{ width: 95 }}>Priority</TableCell>
                   <TableCell align="center" sx={{ width: 110 }}>Status</TableCell>
-                  <TableCell sx={{ width: 140 }}>Assigned By</TableCell>
-                  <TableCell sx={{ width: 180 }}>Tagged To</TableCell>
-                  <TableCell sx={{ width: 150 }}>Deadline</TableCell>
-                  <TableCell align="right" sx={{ width: 150 }}>Actions</TableCell>
+                  <TableCell sx={{ width: 130 }}>Assigned By</TableCell>
+                  <TableCell sx={{ width: 170 }}>Tagged To</TableCell>
+                  <TableCell sx={{ width: 140 }}>Deadline</TableCell>
+                  <TableCell align="right" sx={{ minWidth: 240, width: 260 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -674,6 +674,31 @@ const TaskManager = () => {
                               sx={{ textTransform: 'none', fontWeight: 700, py: 0.2, px: 0.9, minWidth: 54, fontSize: '0.72rem', borderRadius: 1.5 }}
                             >
                               Accept
+                            </Button>
+                          )}
+
+                          {!isCompleted && (task.isAssignedToMe || task.isCreatedByMe) && task.Status !== 'In Progress' && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              startIcon={<InProgressIcon sx={{ fontSize: 13 }} />}
+                              onClick={() => handleStatusChange(task, 'In Progress')}
+                              sx={{
+                                textTransform: 'none',
+                                fontWeight: 700,
+                                py: 0.2,
+                                px: 0.9,
+                                minWidth: 84,
+                                fontSize: '0.72rem',
+                                borderRadius: 1.5,
+                                borderColor: '#93c5fd',
+                                color: '#2563eb',
+                                bgcolor: '#eff6ff',
+                                '&:hover': { bgcolor: '#dbeafe', borderColor: '#2563eb' }
+                              }}
+                            >
+                              In Progress
                             </Button>
                           )}
 
@@ -901,7 +926,7 @@ const TaskManager = () => {
                   </Button>
                 )}
 
-                {selectedTask.Status !== 'Completed' && selectedTask.isAssignedToMe && selectedTask.myStatus === 'Accepted' && (
+                {selectedTask.Status !== 'Completed' && (selectedTask.isAssignedToMe || selectedTask.isCreatedByMe) && selectedTask.Status !== 'In Progress' && (
                   <Button
                     variant="contained"
                     color="primary"
@@ -910,7 +935,7 @@ const TaskManager = () => {
                     onClick={() => handleStatusChange(selectedTask, 'In Progress')}
                     sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
                   >
-                    Start Working
+                    In Progress
                   </Button>
                 )}
 
