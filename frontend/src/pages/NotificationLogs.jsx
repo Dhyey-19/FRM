@@ -136,12 +136,32 @@ const NotificationLogs = () => {
     }
   };
 
-  const filteredNotifications = notifications.filter(item => {
-    // Status filter
+  // Filter by status first to compute category counts for visible tabs
+  const statusFilteredList = notifications.filter(item => {
     const itemStatus = (item.status || 'Open').toLowerCase();
     if (statusFilter === 'open' && itemStatus === 'closed') return false;
     if (statusFilter === 'closed' && itemStatus !== 'closed') return false;
+    return true;
+  });
 
+  const categoryCounts = {
+    all: statusFilteredList.length,
+    reorder: statusFilteredList.filter(n => n.type === 'reorder').length,
+    overdue_pod: statusFilteredList.filter(n => n.type === 'overdue_pod').length,
+    shortfall: statusFilteredList.filter(n => n.type === 'shortfall').length,
+    dispatch_ready: statusFilteredList.filter(n => n.type === 'dispatch_ready').length,
+    receivables: statusFilteredList.filter(n => n.type === 'receivable_overdue').length,
+    payables: statusFilteredList.filter(n => n.type === 'payable_overdue').length,
+  };
+
+  // If currently selected tab no longer has any alerts (> 0), auto switch back to 'all'
+  useEffect(() => {
+    if (currentTab !== 'all' && (!categoryCounts[currentTab] || categoryCounts[currentTab] === 0)) {
+      setCurrentTab('all');
+    }
+  }, [categoryCounts, currentTab]);
+
+  const filteredNotifications = statusFilteredList.filter(item => {
     // Type tab filter
     if (currentTab === 'reorder' && item.type !== 'reorder') return false;
     if (currentTab === 'overdue_pod' && item.type !== 'overdue_pod') return false;
@@ -250,13 +270,25 @@ const NotificationLogs = () => {
               }
             }}
           >
-            <Tab label={`All (${summary.total || 0})`} value="all" />
-            <Tab label={`Low Stock (${summary.reorder || 0})`} value="reorder" />
-            <Tab label={`Overdue POD (${summary.overduePod || 0})`} value="overdue_pod" />
-            <Tab label={`PO Shortfall (${summary.shortfall || 0})`} value="shortfall" />
-            <Tab label={`Ready to Dispatch (${summary.dispatchReady || 0})`} value="dispatch_ready" />
-            <Tab label={`Overdue Receivables (${summary.receivables || 0})`} value="receivables" />
-            <Tab label={`Overdue Payables (${summary.payables || 0})`} value="payables" />
+            <Tab label={`All (${categoryCounts.all || 0})`} value="all" />
+            {categoryCounts.reorder > 0 && (
+              <Tab label={`Low Stock (${categoryCounts.reorder})`} value="reorder" />
+            )}
+            {categoryCounts.overdue_pod > 0 && (
+              <Tab label={`Overdue POD (${categoryCounts.overdue_pod})`} value="overdue_pod" />
+            )}
+            {categoryCounts.shortfall > 0 && (
+              <Tab label={`PO Shortfall (${categoryCounts.shortfall})`} value="shortfall" />
+            )}
+            {categoryCounts.dispatch_ready > 0 && (
+              <Tab label={`Ready to Dispatch (${categoryCounts.dispatch_ready})`} value="dispatch_ready" />
+            )}
+            {categoryCounts.receivables > 0 && (
+              <Tab label={`Overdue Receivables (${categoryCounts.receivables})`} value="receivables" />
+            )}
+            {categoryCounts.payables > 0 && (
+              <Tab label={`Overdue Payables (${categoryCounts.payables})`} value="payables" />
+            )}
           </Tabs>
         </Box>
 
