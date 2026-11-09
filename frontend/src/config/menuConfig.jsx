@@ -24,7 +24,8 @@ import {
   Badge as BadgeIcon,
   CalendarMonth as CalendarMonthIcon,
   LocalShipping as ShippingIcon,
-  SystemUpdateAlt as SystemUpdateAltIcon
+  SystemUpdateAlt as SystemUpdateAltIcon,
+  Backup as BackupIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -45,7 +46,8 @@ export const MENU_STRUCTURE = [
       { title: 'User Master', path: '/dashboard/users', icon: <PeopleIcon /> },
       { title: 'User Access', path: '/dashboard/user-access', icon: <UserAccessIcon /> },
       { title: 'Assets', path: '/dashboard/assets', icon: <InventoryIcon /> },
-      { title: 'Backup & Updates', path: '/dashboard/system-maintenance', icon: <SystemUpdateAltIcon /> },
+      { title: 'Application Update', path: '/dashboard/system-maintenance?tab=updates', icon: <SystemUpdateAltIcon /> },
+      { title: 'Database Backup', path: '/dashboard/system-maintenance?tab=backup', icon: <BackupIcon /> },
     ]
   },
   {

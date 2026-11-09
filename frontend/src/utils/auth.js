@@ -33,6 +33,7 @@ export const hasMenuAccess = (path) => {
   if (role === 'ADMIN' || role === 'ADMINISTRATOR') return true;
   if (!path || path === '/dashboard') return true;
   
+  const cleanPath = path.split('?')[0];
   const menus = user.AllowedMenus;
   if (!menus) return false;
   
@@ -40,16 +41,16 @@ export const hasMenuAccess = (path) => {
     ? menus
     : String(menus).split(',').map(p => p.trim());
     
-  if (path === '/dashboard/subcontract') {
+  if (cleanPath === '/dashboard/subcontract') {
     return allowed.includes('/dashboard/subcontract') || 
            allowed.includes('/dashboard/jobwork-ins') || 
            allowed.includes('/dashboard/jobwork-outs');
   }
 
-  if (path === '/dashboard/jobwork-ins' || path === '/dashboard/jobwork-outs') {
-    return allowed.includes(path) || allowed.includes('/dashboard/subcontract');
+  if (cleanPath === '/dashboard/jobwork-ins' || cleanPath === '/dashboard/jobwork-outs') {
+    return allowed.includes(cleanPath) || allowed.includes('/dashboard/subcontract');
   }
 
-  return allowed.includes(path);
+  return allowed.includes(path) || allowed.includes(cleanPath);
 };
 

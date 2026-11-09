@@ -46,7 +46,8 @@ import {
   MenuOpen as MenuOpenIcon,
   AccountCircle as AccountCircleIcon,
   OpenInNew as OpenInNewIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  SystemUpdateAlt as UpdateIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MENU_STRUCTURE } from '../../config/menuConfig';
@@ -399,9 +400,13 @@ const Sidebar = ({
                       
                       {section.id === 'admin' && isAdmin && (
                         <>
-                          <ListItemButton onClick={handleBackup} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' } }}>
-                            <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#4caf50' }}><BackupIcon /></ListItemIcon>
-                            <ListItemText primary="Backup Database" primaryTypographyProps={{ color: '#4caf50', fontWeight: 500 }} />
+                          <ListItemButton onClick={() => navigate('/dashboard/system-maintenance?tab=updates')} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(248,138,1,0.15)' } }}>
+                            <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#F88A01' }}><UpdateIcon /></ListItemIcon>
+                            <ListItemText primary="Application Update" primaryTypographyProps={{ color: '#F88A01', fontWeight: 600 }} />
+                          </ListItemButton>
+                          <ListItemButton onClick={() => navigate('/dashboard/system-maintenance?tab=backup')} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(16,185,129,0.15)' } }}>
+                            <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#10b981' }}><BackupIcon /></ListItemIcon>
+                            <ListItemText primary="Backup Database" primaryTypographyProps={{ color: '#10b981', fontWeight: 600 }} />
                           </ListItemButton>
                           <ListItemButton onClick={() => setOpenSurrenderDialog(true)} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(255,138,138,0.15)', color: '#ff8a8a' } }}>
                             <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#ff8a8a' }}><KeyOffIcon /></ListItemIcon>

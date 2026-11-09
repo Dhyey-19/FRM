@@ -20,7 +20,8 @@ import {
   Home, 
   GetApp as InstallIcon,
   Menu as MenuIcon,
-  Notifications as NotificationsIcon
+  Notifications as NotificationsIcon,
+  SystemUpdateAlt as UpdateIcon
 } from '@mui/icons-material';
 import Sidebar from './Sidebar';
 import ErrorBoundary from '../common/ErrorBoundary';
@@ -449,6 +450,23 @@ const DashboardLayout = () => {
 
             {/* Top Bar Right Actions: Global Alerts Bell & PWA Install Button */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Tooltip title="Application Update & Backup">
+                <IconButton 
+                  size="small" 
+                  onClick={() => navigate('/dashboard/system-maintenance')}
+                  sx={{ 
+                    color: '#0F3B66', 
+                    bgcolor: '#f1f5f9', 
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 1.5,
+                    p: 0.7,
+                    '&:hover': { bgcolor: '#e2e8f0', color: '#F88A01' } 
+                  }}
+                >
+                  <UpdateIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="Notifications & Alert Logs">
                 <IconButton 
                   size="small" 

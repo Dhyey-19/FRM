@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -42,7 +43,19 @@ import {
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const SystemMaintenance = () => {
-  const [tabIndex, setTabIndex] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramTab = searchParams.get('tab');
+  const [tabIndex, setTabIndex] = useState(paramTab === 'updates' ? 1 : 0);
+
+  useEffect(() => {
+    const currentTab = searchParams.get('tab');
+    if (currentTab === 'updates') {
+      setTabIndex(1);
+    } else if (currentTab === 'backup') {
+      setTabIndex(0);
+    }
+  }, [searchParams]);
+
   const [status, setStatus] = useState(null);
   const [backups, setBackups] = useState([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -315,7 +328,10 @@ const SystemMaintenance = () => {
       <Paper sx={{ borderRadius: 2, boxShadow: '0 2px 4px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
         <Tabs
           value={tabIndex}
-          onChange={(e, val) => setTabIndex(val)}
+          onChange={(e, val) => {
+            setTabIndex(val);
+            setSearchParams({ tab: val === 1 ? 'updates' : 'backup' });
+          }}
           sx={{
             borderBottom: '1px solid #e2e8f0',
             backgroundColor: '#f8fafc',
