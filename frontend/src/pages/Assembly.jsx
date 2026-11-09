@@ -278,7 +278,7 @@ const Assembly = ({ user }) => {
                         />
                     </Grid>
 
-                    {/* Row 2: Select Parent Item (Normal dropdown, DOUBLE width = 650px) & Quantity */}
+                    {/* Row 2: Select Parent Item (Normal dropdown, 60% of previous width = ~420px) & Quantity */}
                     <Grid item xs={12} sm="auto">
                         <Autocomplete
                             options={items.filter(item => {
@@ -330,8 +330,8 @@ const Assembly = ({ user }) => {
                                 }
                             }}
                             sx={{ 
-                                width: { xs: '100%', sm: 600, md: 700 },
-                                minWidth: { sm: 500 }
+                                width: { xs: '100%', sm: 360, md: 420 },
+                                minWidth: { sm: 320 }
                             }}
                             autoHighlight
                         />
