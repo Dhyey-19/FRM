@@ -230,7 +230,7 @@ const Assembly = ({ user }) => {
 
 
 
-    const maxItemLength = items.length > 0 ? Math.max(...items.map(i => (`${i.ItemCode} - ${i.ItemName}`).length)) : 15;
+
 
     return (
         <Box>
@@ -244,8 +244,8 @@ const Assembly = ({ user }) => {
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
                 {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-                <Grid container spacing={2}>
-                    <Grid item xs={12} sm={2}>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={6} sm={2.5} md={1.5}>
                         <TextField
                             fullWidth
                             label="Assembly No"
@@ -255,7 +255,7 @@ const Assembly = ({ user }) => {
                             disabled
                         />
                     </Grid>
-                    <Grid item xs={12} sm={2}>
+                    <Grid item xs={6} sm={2.5} md={1.5}>
                         <TextField
                             fullWidth
                             label="Assembly Date"
@@ -267,7 +267,77 @@ const Assembly = ({ user }) => {
                             required
                         />
                     </Grid>
-                    <Grid item xs={12} sm={1}>
+                    <Grid item xs={12} sm={7} md={6}>
+                        <Autocomplete
+                            fullWidth
+                            options={items.filter(item => {
+                                const t = (item.ItemType || '').trim().toLowerCase();
+                                return ['fg', 'sf', 'finished', 'finished good', 'semi-finished'].includes(t) || item.Category === 'Inhouse';
+                            })}
+                            getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                            isOptionEqualToValue={(option, value) => 
+                                option?.ItemCode === value?.ItemCode && 
+                                String(option?.SubCode || '').trim() === String(value?.SubCode || '').trim()
+                            }
+                            value={selectedItem}
+                            onChange={(e, newValue) => setSelectedItem(newValue)}
+                            renderInput={(params) => (
+                                <TextField 
+                                    {...params} 
+                                    label="Select Parent Item" 
+                                    size="small" 
+                                    required 
+                                    title={selectedItem ? `${selectedItem.ItemCode}${selectedItem.SubCode ? ` / ${selectedItem.SubCode}` : ''} - ${selectedItem.ItemName}` : ''}
+                                />
+                            )}
+                            renderOption={(props, option) => (
+                                <Box 
+                                    component="li" 
+                                    {...props} 
+                                    key={`${option.ItemCode}-${option.SubCode || ''}`} 
+                                    sx={{ 
+                                        whiteSpace: 'nowrap', 
+                                        py: 0.8, 
+                                        px: 1.5, 
+                                        fontSize: '0.85rem' 
+                                    }}
+                                >
+                                    <Typography component="span" sx={{ fontWeight: 700, color: '#0F3B66', mr: 1 }}>
+                                        {option.ItemCode}{option.SubCode ? ` / ${option.SubCode}` : ''}
+                                    </Typography>
+                                    <Typography component="span" sx={{ color: '#1e293b' }}>
+                                        - {option.ItemName}
+                                    </Typography>
+                                    {option.ItemType && (
+                                        <Typography component="span" sx={{ ml: 1, color: '#475569', fontSize: '0.72rem', fontWeight: 600, bgcolor: '#f1f5f9', px: 0.8, py: 0.2, borderRadius: 1 }}>
+                                            {option.ItemType}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            )}
+                            slotProps={{ 
+                                paper: { 
+                                    sx: { 
+                                        width: 'max-content', 
+                                        minWidth: '100%', 
+                                        maxWidth: '90vw',
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.12)' 
+                                    } 
+                                } 
+                            }}
+                            componentsProps={{ 
+                                paper: { 
+                                    sx: { 
+                                        width: 'max-content', 
+                                        minWidth: '100%', 
+                                        maxWidth: '90vw',
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.12)' 
+                                    } 
+                                } 
+                            }}
+                        />
+                    </Grid>
+                    <Grid item xs={4} sm={2} md={1}>
                         <TextField
                             fullWidth
                             label="Quantity"
@@ -276,23 +346,15 @@ const Assembly = ({ user }) => {
                             value={quantity}
                             onChange={(e) => setQuantity(e.target.value)}
                             required
+                            inputProps={{ min: 1, step: 'any', style: { textAlign: 'right' } }}
+                            sx={{
+                                minWidth: 75,
+                                maxWidth: { xs: 120, sm: 110, md: 100 },
+                                '& input': { fontWeight: 600 }
+                            }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Autocomplete
-                            fullWidth
-                            options={items.filter(item => {
-                                const t = (item.ItemType || '').trim().toLowerCase();
-                                return ['fg', 'sf', 'finished', 'finished good', 'semi-finished'].includes(t) || item.Category === 'Inhouse';
-                            })}
-                            getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
-                            value={selectedItem}
-                            onChange={(e, newValue) => setSelectedItem(newValue)}
-                            renderInput={(params) => <TextField {...params} label="Select Parent Item" size="small" required />}
-                            slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
+                    <Grid item xs={8} sm={10} md={2}>
                         <TextField
                             fullWidth
                             label="Remark (Optional)"
