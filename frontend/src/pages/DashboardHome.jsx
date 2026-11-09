@@ -343,25 +343,6 @@ const DashboardHome = () => {
               </Badge>
             </IconButton>
           </Tooltip>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<NotificationsIcon fontSize="small" />}
-            onClick={() => navigate('/dashboard/logs')}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '0.8rem',
-              borderRadius: 2,
-              color: '#0F3B66',
-              borderColor: '#cbd5e1',
-              bgcolor: '#ffffff',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-              '&:hover': { borderColor: '#0F3B66', bgcolor: '#f8fafc' }
-            }}
-          >
-            Alert Logs {totalAlerts > 0 && `(${totalAlerts})`}
-          </Button>
           <Tooltip title="Refresh Dashboard Data">
             <IconButton 
               onClick={() => { setLoading(true); fetchKPIs(); }}
