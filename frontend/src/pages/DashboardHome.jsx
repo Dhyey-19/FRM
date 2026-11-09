@@ -436,14 +436,14 @@ const DashboardHome = () => {
         </Alert>
       )}
 
-      {/* Row 1: Core KPI Metrics (4 Cards) - Auto-stretch & fit row */}
+      {/* Row 1: Core KPI Metrics - Dynamic auto-adjust based on card count */}
       <Box 
         sx={{ 
           display: 'grid', 
           gridTemplateColumns: { 
             xs: '1fr', 
             sm: 'repeat(2, 1fr)', 
-            md: 'repeat(4, 1fr)' 
+            md: `repeat(${topKpis.length}, 1fr)` 
           }, 
           gap: { xs: 2, sm: 2.5, md: 3 }, 
           width: '100%', 
@@ -524,7 +524,12 @@ const DashboardHome = () => {
                         sx={{ 
                           fontWeight: 800, 
                           color: card.valueColor || '#1e293b', 
-                          fontSize: { xs: '1.25rem', sm: '1.35rem', md: '1.4rem', lg: '1.5rem' }, 
+                          fontSize: { 
+                            xs: '1.25rem', 
+                            sm: '1.35rem', 
+                            md: topKpis.length >= 5 ? '1.2rem' : '1.4rem', 
+                            lg: topKpis.length >= 5 ? '1.3rem' : '1.5rem' 
+                          }, 
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
