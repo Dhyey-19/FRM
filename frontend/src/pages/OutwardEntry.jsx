@@ -1643,94 +1643,23 @@ const OutwardEntry = () => {
             + Add Row
           </Button>
 
-          {/* Dispatch & Proof of Delivery (POD) Details */}
-          <Paper sx={{ p: 2, mb: 2, border: '1px solid #cbd5e1', bgcolor: '#ffffff', borderRadius: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, pb: 1, borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ShippingIcon fontSize="small" color="primary" /> Dispatch & Proof of Delivery (POD) Details
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Optional: Enter now or update later via Sales list or Pending POD Report
-              </Typography>
-            </Box>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Courier / Transport Company"
-                  placeholder="e.g. DTDC, Blue Dart, VRL"
-                  value={courierCompany}
-                  onChange={(e) => setCourierCompany(e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={2.5}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="AWB / Docket / LR No."
-                  placeholder="e.g. D12345678"
-                  value={awbNo}
-                  onChange={(e) => setAwbNo(e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={2}>
-                <TextField
-                  fullWidth
-                  select
-                  size="small"
-                  label="Transport Mode"
-                  value={transportMode || 'Road'}
-                  onChange={(e) => setTransportMode(e.target.value)}
-                  SelectProps={{ native: true }}
-                >
-                  <option value="Road">Road</option>
-                  <option value="Courier">Courier</option>
-                  <option value="Air">Air</option>
-                  <option value="Rail">Rail</option>
-                  <option value="Self / Hand Delivery">Self / Hand Delivery</option>
-                  <option value="Other">Other</option>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={6} md={2}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  size="small"
-                  label="Date of POD"
-                  value={dateOfPod}
-                  onChange={(e) => setDateOfPod(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  helperText={dateOfPod ? "Delivered" : "Leave blank if pending"}
-                />
-              </Grid>
-              <Grid item xs={12} sm={12} md={2.5}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="POD / Dispatch Remarks"
-                  placeholder="e.g. Received by Mr. X, Signed copy"
-                  value={podRemarks}
-                  onChange={(e) => setPodRemarks(e.target.value)}
-                />
-              </Grid>
-            </Grid>
-          </Paper>
+          {/* Footer Section: GST Details (Left) and Dispatch & POD Details (Right) */}
+          <Paper sx={{ p: 2.5, border: '1px solid #cbd5e1', bgcolor: '#ffffff', borderRadius: 2 }}>
+            <Grid container spacing={3}>
+              {/* Left Side: GST & Tax Calculation Details + Remarks */}
+              <Grid item xs={12} md={5.5}>
+                <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', pb: 1, borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Receipt fontSize="small" color="primary" /> GST & Calculation Details
+                  </Typography>
 
-          {/* Footer Section */}
-          <Paper sx={{ p: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={8}>
-                <TextField fullWidth label="Remarks" size="small" value={remark} onChange={(e) => setRemark(e.target.value)} multiline rows={3} />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2">Sub Total:</Typography>
+                    <Typography variant="body2" color="text.secondary">Sub Total:</Typography>
                     <Typography variant="body2" fontWeight={600}>{gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0).toFixed(2)}</Typography>
                   </Box>
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2">Cash Disc (CD):</Typography>
+                    <Typography variant="body2" color="text.secondary">Cash Disc (CD):</Typography>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                       <TextField 
                         size="small" 
@@ -1752,41 +1681,173 @@ const OutwardEntry = () => {
                       />
                     </Box>
                   </Box>
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2">Expense:</Typography>
+                    <Typography variant="body2" color="text.secondary">Expense:</Typography>
                     <TextField size="small" type="number" value={expense} onChange={(e) => setExpense(e.target.value)} sx={{ width: '100px' }} inputProps={{ style: { textAlign: 'right' } }} />
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#ffffff', p: 0.8, borderRadius: 1, border: '1px solid #e2e8f0' }}>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>Taxable Value:</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66' }}>
                       {Math.max(0, gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0) - (parseFloat(cdAmount) || 0) + (parseFloat(expense) || 0)).toFixed(2)}
                     </Typography>
                   </Box>
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2">GST %:</Typography>
+                    <Typography variant="body2" color="text.secondary">GST %:</Typography>
                     <TextField size="small" type="number" value={gstPer} onChange={(e) => setGstPer(e.target.value)} sx={{ width: '100px' }} inputProps={{ style: { textAlign: 'right' } }} />
                   </Box>
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2">SGST:</Typography>
+                    <Typography variant="body2" color="text.secondary">SGST:</Typography>
                     <Typography variant="body2">{sgst || '0.00'}</Typography>
                   </Box>
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2">CGST:</Typography>
+                    <Typography variant="body2" color="text.secondary">CGST:</Typography>
                     <Typography variant="body2">{cgst || '0.00'}</Typography>
                   </Box>
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2">IGST:</Typography>
+                    <Typography variant="body2" color="text.secondary">IGST:</Typography>
                     <Typography variant="body2">{igst || '0.00'}</Typography>
                   </Box>
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2">Round Off:</Typography>
+                    <Typography variant="body2" color="text.secondary">Round Off:</Typography>
                     <Typography variant="body2">{roundOff || '0.00'}</Typography>
                   </Box>
+
                   <Divider sx={{ my: 0.5 }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="subtitle1" fontWeight={700}>Total Amount:</Typography>
-                    <Typography variant="subtitle1" fontWeight={700} color="primary.main">{totalAmount || '0.00'}</Typography>
+
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f0fdf4', p: 1, borderRadius: 1, border: '1px solid #bbf7d0' }}>
+                    <Typography variant="subtitle1" fontWeight={700} color="#166534">Total Amount:</Typography>
+                    <Typography variant="subtitle1" fontWeight={700} color="#166534">₹{totalAmount || '0.00'}</Typography>
                   </Box>
+                </Box>
+
+                <Box sx={{ mt: 2 }}>
+                  <TextField 
+                    fullWidth 
+                    label="Remarks / Invoice Notes" 
+                    size="small" 
+                    value={remark} 
+                    onChange={(e) => setRemark(e.target.value)} 
+                    multiline 
+                    rows={2} 
+                    placeholder="Enter invoice terms, notes, or instructions..."
+                  />
+                </Box>
+              </Grid>
+
+              {/* Right Side: Dispatch & Proof of Delivery (POD) Details */}
+              <Grid item xs={12} md={6.5}>
+                <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, pb: 1, borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ShippingIcon fontSize="small" color="primary" /> Dispatch & Proof of Delivery (POD) Details
+                    </Typography>
+                    <Chip 
+                      label="Optional • Can update later" 
+                      size="small" 
+                      variant="outlined" 
+                      sx={{ fontSize: '0.7rem', height: 20, color: 'text.secondary', borderColor: '#cbd5e1' }} 
+                    />
+                  </Box>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Courier / Transport Company"
+                        placeholder="e.g. DTDC, Blue Dart, VRL"
+                        value={courierCompany}
+                        onChange={(e) => setCourierCompany(e.target.value)}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="AWB / Docket / LR No."
+                        placeholder="e.g. D12345678"
+                        value={awbNo}
+                        onChange={(e) => setAwbNo(e.target.value)}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        select
+                        size="small"
+                        label="Transport Mode"
+                        value={transportMode || 'Road'}
+                        onChange={(e) => setTransportMode(e.target.value)}
+                        SelectProps={{ native: true }}
+                      >
+                        <option value="Road">Road</option>
+                        <option value="Courier">Courier</option>
+                        <option value="Air">Air</option>
+                        <option value="Rail">Rail</option>
+                        <option value="Self / Hand Delivery">Self / Hand Delivery</option>
+                        <option value="Other">Other</option>
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        type="date"
+                        size="small"
+                        label="Date of POD"
+                        value={dateOfPod}
+                        onChange={(e) => setDateOfPod(e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        helperText={dateOfPod ? "Delivered" : "Leave blank if in transit / pending"}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="POD / Dispatch Remarks"
+                        placeholder="e.g. Received by Mr. X, Signed POD copy attached"
+                        value={podRemarks}
+                        onChange={(e) => setPodRemarks(e.target.value)}
+                        multiline
+                        rows={3}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  {/* Party Expected Delivery Summary Box */}
+                  {ledgerId && (() => {
+                    const selectedParty = ledgers.find(l => l.Id === ledgerId);
+                    if (!selectedParty) return null;
+                    const deliveryDays = parseInt(selectedParty.DeliveryDays, 10) || 0;
+                    const expDate = addDaysToDateStr(outwardDate, deliveryDays);
+                    return (
+                      <Box sx={{ mt: 'auto', pt: 2 }}>
+                        <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: 1.5, border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ShippingIcon fontSize="small" sx={{ color: '#0F3B66' }} />
+                            <Typography variant="caption" sx={{ color: '#0F3B66', fontWeight: 600 }}>
+                              Party Master Schedule: <strong>{deliveryDays} Days</strong>
+                            </Typography>
+                          </Box>
+                          <Typography variant="caption" sx={{ color: '#1e3a8a', fontWeight: 700 }}>
+                            Expected Delivery Date: <strong>{formatDateDisplay(expDate)}</strong>
+                          </Typography>
+                          {selectedParty.City && (
+                            <Typography variant="caption" color="text.secondary">
+                              Destination: <strong>{selectedParty.City}</strong>
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    );
+                  })()}
                 </Box>
               </Grid>
             </Grid>
