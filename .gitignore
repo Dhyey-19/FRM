@@ -27,6 +27,8 @@ publish/
 *.sqlite3
 *.db-wal
 *.db-shm
+*.bak
+backend/database/backups/
 
 # SSL Certificates, Keys, and Secrets
 backend/certs/

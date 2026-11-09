@@ -50,6 +50,14 @@ async function connectMSSQL() {
         mssqlPool = null;
       });
       console.log(`[Database] Connected to Microsoft SQL Server (${mssqlConfig.server}:${mssqlConfig.port}/${mssqlConfig.database})`);
+
+      // Automatically execute any pending database migrations safely without affecting live data
+      try {
+        const { runMssqlMigrations } = require('../database/migrator');
+        await runMssqlMigrations(mssqlPool, nativeMssql);
+      } catch (migErr) {
+        console.warn('[Database] MSSQL migration check warning:', migErr.message);
+      }
     } catch (err) {
       console.error('[MSSQL Connection Error]:', err.message);
       throw err;
