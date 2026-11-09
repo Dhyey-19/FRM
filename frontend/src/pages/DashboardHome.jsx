@@ -3,7 +3,6 @@ import {
   Typography, 
   Paper, 
   Box, 
-  Grid, 
   Skeleton,
   Card,
   CardContent,
@@ -281,8 +280,14 @@ const DashboardHome = () => {
   const maxMonthlyAmount = monthlyData.length > 0 ? Math.max(...monthlyData.map(d => d.totalAmount)) : 1;
   const topParties = kpis?.topParties || [];
 
+  const poQty = kpis?.purchaseAuthority?.totalPOQty || 0;
+  const shortfallQty = kpis?.purchaseAuthority?.totalShortfallQty || 0;
+  const demandCoverageRate = poQty > 0 
+    ? Math.max(0, Math.min(100, Math.round(((poQty - shortfallQty) / poQty) * 100))) 
+    : 100;
+
   return (
-    <Box>
+    <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* Operations Header Bar */}
       <Box sx={{ 
         mb: 3.5, 
@@ -545,7 +550,7 @@ const DashboardHome = () => {
       </Box>
 
       {/* Row 2: Authority Operations Center - Purchase Authority (Shortfall) & Sales Authority (Pending Orders & Dispatch) */}
-      <Box sx={{ mb: 3.5 }}>
+      <Box sx={{ mb: 3.5, width: '100%' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.3 }}>
@@ -562,644 +567,834 @@ const DashboardHome = () => {
           </Typography>
         </Box>
 
-        <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+          gap: { xs: 2, sm: 2.5, md: 3 },
+          width: '100%',
+          alignItems: 'stretch'
+        }}>
           {/* Card 1: Purchase Authority - Shortfall Items */}
-          <Grid item xs={12} lg={6}>
-            <Card sx={{ 
-              borderRadius: 3, 
-              boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
-              border: '1px solid #fed7aa',
-              borderTop: '4px solid #ea580c',
-              bgcolor: '#ffffff',
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              '&:hover': { 
-                transform: 'translateY(-3px)',
-                boxShadow: '0 8px 24px rgba(234, 88, 12, 0.12)' 
-              }
+          <Card sx={{ 
+            borderRadius: 3, 
+            boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+            border: '1px solid #fed7aa',
+            borderTop: '4px solid #ea580c',
+            bgcolor: '#ffffff',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            boxSizing: 'border-box',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            '&:hover': { 
+              transform: 'translateY(-3px)',
+              boxShadow: '0 8px 24px rgba(234, 88, 12, 0.12)' 
+            }
+          }}>
+            <CardContent sx={{ 
+              p: { xs: 2, sm: 2.5 }, 
+              '&:last-child': { pb: { xs: 2, sm: 2.5 } }, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: 'space-between',
+              height: '100%', 
+              flexGrow: 1,
+              boxSizing: 'border-box' 
             }}>
-              <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                {/* Header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                      <Chip 
-                        icon={<ShoppingCart sx={{ fontSize: '15px !important', color: '#c2410c !important' }} />}
-                        label="Purchase Authority" 
-                        size="small" 
-                        sx={{ bgcolor: '#fff7ed', color: '#c2410c', fontWeight: 800, fontSize: '0.74rem', height: 24, border: '1px solid #ffedd5' }} 
-                      />
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
-                        Procurement & PO Fulfillment
-                      </Typography>
-                    </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: (kpis?.purchaseAuthority?.shortfallItemsCount || 0) > 0 ? '#c2410c' : '#0F3B66', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
-                      {loading ? <Skeleton width={140} /> : (
-                        <>
-                          {kpis?.purchaseAuthority?.shortfallItemsCount || 0}{' '}
-                          <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#64748b' }}>
-                            {kpis?.purchaseAuthority?.shortfallItemsCount === 1 ? 'Shortfall Item' : 'Shortfall Items'}
-                          </span>
-                        </>
-                      )}
+              {/* Header */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                    <Chip 
+                      icon={<ShoppingCart sx={{ fontSize: '15px !important', color: '#c2410c !important' }} />}
+                      label="Purchase Authority" 
+                      size="small" 
+                      sx={{ bgcolor: '#fff7ed', color: '#c2410c', fontWeight: 800, fontSize: '0.74rem', height: 24, border: '1px solid #ffedd5' }} 
+                    />
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                      Procurement & PO Fulfillment
                     </Typography>
                   </Box>
-                  <Avatar sx={{ bgcolor: '#fff7ed', color: '#ea580c', width: 46, height: 46, borderRadius: 2 }}>
-                    <ShoppingCart sx={{ fontSize: 24 }} />
-                  </Avatar>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: (kpis?.purchaseAuthority?.shortfallItemsCount || 0) > 0 ? '#c2410c' : '#0F3B66', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+                    {loading ? <Skeleton width={140} /> : (
+                      <>
+                        {kpis?.purchaseAuthority?.shortfallItemsCount || 0}{' '}
+                        <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#64748b' }}>
+                          {kpis?.purchaseAuthority?.shortfallItemsCount === 1 ? 'Shortfall Item' : 'Shortfall Items'}
+                        </span>
+                      </>
+                    )}
+                  </Typography>
                 </Box>
+                <Avatar sx={{ bgcolor: '#fff7ed', color: '#ea580c', width: 46, height: 46, borderRadius: 2 }}>
+                  <ShoppingCart sx={{ fontSize: 24 }} />
+                </Avatar>
+              </Box>
 
-                {/* 2x2 Metrics Box */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, my: 1, flexGrow: 1 }}>
-                  {/* Metric 1: PO Qty */}
-                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
-                      Total PO Qty (Demand)
-                    </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66' }}>
-                      {loading ? <Skeleton width={70} /> : `${(kpis?.purchaseAuthority?.totalPOQty || 0).toLocaleString()} PCS`}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-                      Required for active customer POs
-                    </Typography>
-                  </Box>
-
-                  {/* Metric 2: Shortfall Qty */}
-                  <Box sx={{ 
-                    p: 1.5, 
-                    borderRadius: 2, 
-                    bgcolor: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#fff1f2' : '#f0fdf4', 
-                    border: '1px solid',
-                    borderColor: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#fecaca' : '#bbf7d0'
+              {/* Demand Stock Coverage Progress Bar */}
+              <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #fed7aa' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155' }}>
+                    Demand Stock Coverage Rate
+                  </Typography>
+                  <Typography variant="caption" sx={{ 
+                    fontWeight: 800, 
+                    color: demandCoverageRate === 100 ? '#15803d' : demandCoverageRate >= 50 ? '#c2410c' : '#dc2626' 
                   }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.3 }}>
-                      <Typography variant="caption" sx={{ 
-                        fontWeight: 700, 
-                        color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#991b1b' : '#166534', 
-                        textTransform: 'uppercase', 
-                        letterSpacing: 0.4 
-                      }}>
-                        Shortfall Qty
-                      </Typography>
-                      {(kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? (
-                        <Chip label="Procure Needed" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#fee2e2', color: '#dc2626' }} />
-                      ) : (
-                        <Chip label="Healthy" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#dcfce7', color: '#15803d' }} />
-                      )}
-                    </Box>
-                    <Typography variant="h6" sx={{ 
-                      fontWeight: 900, 
-                      color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#dc2626' : '#16a34a' 
-                    }}>
-                      {loading ? <Skeleton width={70} /> : `${(kpis?.purchaseAuthority?.totalShortfallQty || 0).toLocaleString()} PCS`}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#ef4444' : '#15803d', fontSize: '0.7rem' }}>
-                      {(kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? 'Missing qty after stock & pipeline' : 'All order demand fully covered'}
-                    </Typography>
-                  </Box>
+                    {demandCoverageRate}% Covered / In-Hand
+                  </Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={demandCoverageRate} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    bgcolor: '#ffedd5',
+                    '& .MuiLinearProgress-bar': {
+                      bgcolor: demandCoverageRate >= 80 ? '#10b981' : demandCoverageRate >= 40 ? '#ea580c' : '#dc2626'
+                    }
+                  }} 
+                />
+              </Box>
 
-                  {/* Metric 3: Pipeline Proforma Invoice Qty */}
-                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
-                      In Procurement (PI)
-                    </Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0284c7' }}>
-                      {loading ? <Skeleton width={60} /> : `${(kpis?.purchaseAuthority?.pipelinePIQty || 0).toLocaleString()} PCS`}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-                      Ordered on Proforma Invoices
-                    </Typography>
-                  </Box>
-
-                  {/* Metric 4: Est. Shortfall Capital */}
-                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
-                      Est. Shortfall Valuation
-                    </Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#b45309' }}>
-                      {loading ? <Skeleton width={70} /> : formatCurrency(kpis?.purchaseAuthority?.totalMissingValue || 0)}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-                      Purchase capital needed @ Costing
-                    </Typography>
-                  </Box>
+              {/* 2x2 Metrics Box */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, my: 1, flexGrow: 1 }}>
+                {/* Metric 1: PO Qty */}
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                    Total PO Qty (Demand)
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                    {loading ? <Skeleton width={70} /> : `${(kpis?.purchaseAuthority?.totalPOQty || 0).toLocaleString()} PCS`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                    Required for active customer POs
+                  </Typography>
                 </Box>
 
-                {/* Footer Actions */}
-                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setPurchaseShortfallModalOpen(true)}
-                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', color: '#c2410c', borderColor: '#fed7aa', '&:hover': { bgcolor: '#fff7ed', borderColor: '#ea580c' } }}
-                  >
-                    Inspect Shortfall Items ({kpis?.purchaseAuthority?.shortfallItemsCount || 0})
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => navigate('/dashboard/reports/pending-po?tab=2')}
-                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', bgcolor: '#ea580c', '&:hover': { bgcolor: '#c2410c' } }}
-                  >
-                    Fulfillment Report & Order PI
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Card 2: Sales Authority - Pending Orders & Ready to Dispatch */}
-          <Grid item xs={12} lg={6}>
-            <Card sx={{ 
-              borderRadius: 3, 
-              boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
-              border: '1px solid #bfdbfe',
-              borderTop: '4px solid #0F3B66',
-              bgcolor: '#ffffff',
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              '&:hover': { 
-                transform: 'translateY(-3px)',
-                boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
-              }
-            }}>
-              <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } }, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                {/* Header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                      <Chip 
-                        icon={<LocalShipping sx={{ fontSize: '15px !important', color: '#0F3B66 !important' }} />}
-                        label="Sales Authority" 
-                        size="small" 
-                        sx={{ bgcolor: '#eff6ff', color: '#0F3B66', fontWeight: 800, fontSize: '0.74rem', height: 24, border: '1px solid #dbeafe' }} 
-                      />
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
-                        Order Dispatch & Stock Fulfillment
-                      </Typography>
-                    </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
-                      {loading ? <Skeleton width={140} /> : (
-                        <>
-                          {kpis?.salesAuthority?.pendingOrderItemsCount || 0}{' '}
-                          <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#64748b' }}>
-                            Pending Order Items
-                          </span>
-                        </>
-                      )}
-                    </Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: '#eff6ff', color: '#0F3B66', width: 46, height: 46, borderRadius: 2 }}>
-                    <LocalShipping sx={{ fontSize: 24 }} />
-                  </Avatar>
-                </Box>
-
-                {/* Readiness Progress Bar */}
-                <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155' }}>
-                      Dispatch Readiness Rate
-                    </Typography>
-                    <Typography variant="caption" sx={{ fontWeight: 800, color: (kpis?.salesAuthority?.readinessPercentage || 0) === 100 ? '#15803d' : '#0F3B66' }}>
-                      {kpis?.salesAuthority?.readinessPercentage || 0}% Ready to Ship
-                    </Typography>
-                  </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={kpis?.salesAuthority?.readinessPercentage || 0} 
-                    sx={{ 
-                      height: 8, 
-                      borderRadius: 4, 
-                      bgcolor: '#e2e8f0',
-                      '& .MuiLinearProgress-bar': {
-                        bgcolor: (kpis?.salesAuthority?.readinessPercentage || 0) >= 80 ? '#10b981' : (kpis?.salesAuthority?.readinessPercentage || 0) >= 40 ? '#f59e0b' : '#ef4444'
-                      }
-                    }} 
-                  />
-                </Box>
-
-                {/* 2x2 Metrics Box */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, my: 1, flexGrow: 1 }}>
-                  {/* Metric 1: Ready to Dispatch Qty */}
-                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.3 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                        Ready to Dispatch
-                      </Typography>
-                      <CheckCircle sx={{ fontSize: 16, color: '#16a34a' }} />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 900, color: '#15803d' }}>
-                      {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.readyToDispatchQty || 0).toLocaleString()} PCS`}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#166534', fontSize: '0.7rem' }}>
-                      In-hand stock ready for immediate delivery
-                    </Typography>
-                  </Box>
-
-                  {/* Metric 2: Sales Shortfall Qty */}
-                  <Box sx={{ 
-                    p: 1.5, 
-                    borderRadius: 2, 
-                    bgcolor: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#fff7ed' : '#f8fafc', 
-                    border: '1px solid',
-                    borderColor: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#fed7aa' : '#e2e8f0'
-                  }}>
+                {/* Metric 2: Shortfall Qty */}
+                <Box sx={{ 
+                  p: 1.5, 
+                  borderRadius: 2, 
+                  bgcolor: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#fff1f2' : '#f0fdf4', 
+                  border: '1px solid',
+                  borderColor: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#fecaca' : '#bbf7d0'
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.3 }}>
                     <Typography variant="caption" sx={{ 
                       fontWeight: 700, 
-                      color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#c2410c' : '#475569', 
+                      color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#991b1b' : '#166534', 
                       textTransform: 'uppercase', 
-                      letterSpacing: 0.4, 
-                      display: 'block', 
-                      mb: 0.3 
+                      letterSpacing: 0.4 
                     }}>
                       Shortfall Qty
                     </Typography>
-                    <Typography variant="h6" sx={{ 
-                      fontWeight: 900, 
-                      color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#ea580c' : '#64748b' 
-                    }}>
-                      {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.shortfallQty || 0).toLocaleString()} PCS`}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#c2410c' : '#64748b', fontSize: '0.7rem' }}>
-                      {(kpis?.salesAuthority?.shortfallQty || 0) > 0 ? 'Awaiting stock replenishment' : 'Zero order backlog'}
-                    </Typography>
+                    {(kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? (
+                      <Chip label="Procure Needed" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#fee2e2', color: '#dc2626' }} />
+                    ) : (
+                      <Chip label="Healthy" size="small" sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, bgcolor: '#dcfce7', color: '#15803d' }} />
+                    )}
                   </Box>
-
-                  {/* Metric 3: Total Pending Order Qty */}
-                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
-                      Total Order Demand
-                    </Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66' }}>
-                      {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.totalOrderQty || 0).toLocaleString()} PCS`}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-                      Across {kpis?.salesAuthority?.totalPendingOrdersCount || 0} active Customer POs
-                    </Typography>
-                  </Box>
-
-                  {/* Metric 4: Item Coverage State */}
-                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
-                      Item Fulfillment Status
-                    </Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
-                      {loading ? <Skeleton width={70} /> : `${kpis?.salesAuthority?.fullyReadyItemsCount || 0} Ready / ${kpis?.salesAuthority?.partialOrShortfallCount || 0} Partial`}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-                      Line-item dispatch readiness
-                    </Typography>
-                  </Box>
+                  <Typography variant="h6" sx={{ 
+                    fontWeight: 900, 
+                    color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#dc2626' : '#16a34a' 
+                  }}>
+                    {loading ? <Skeleton width={70} /> : `${(kpis?.purchaseAuthority?.totalShortfallQty || 0).toLocaleString()} PCS`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: (kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? '#ef4444' : '#15803d', fontSize: '0.7rem' }}>
+                    {(kpis?.purchaseAuthority?.totalShortfallQty || 0) > 0 ? 'Missing qty after stock & pipeline' : 'All order demand fully covered'}
+                  </Typography>
                 </Box>
 
-                {/* Footer Actions */}
-                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setSalesOrdersModalOpen(true)}
-                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', color: '#0F3B66', borderColor: '#bfdbfe', '&:hover': { bgcolor: '#eff6ff', borderColor: '#0F3B66' } }}
-                  >
-                    Inspect Pending Orders ({kpis?.salesAuthority?.pendingOrderItemsCount || 0})
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => navigate('/dashboard/outward')}
-                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.76rem', bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' } }}
-                  >
-                    Sales Outward Dispatch
-                  </Button>
+                {/* Metric 3: Pipeline Proforma Invoice Qty */}
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                    In Procurement (PI)
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0284c7' }}>
+                    {loading ? <Skeleton width={60} /> : `${(kpis?.purchaseAuthority?.pipelinePIQty || 0).toLocaleString()} PCS`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                    Ordered on Proforma Invoices
+                  </Typography>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+
+                {/* Metric 4: Est. Shortfall Capital */}
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                    Est. Shortfall Valuation
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#b45309' }}>
+                    {loading ? <Skeleton width={70} /> : formatCurrency(kpis?.purchaseAuthority?.totalMissingValue || 0)}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                    Purchase capital needed @ Costing
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Footer Actions */}
+              <Box sx={{ 
+                mt: 'auto', 
+                pt: 1.5, 
+                borderTop: '1px dashed #fed7aa', 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                flexWrap: 'wrap', 
+                gap: 1.5 
+              }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setPurchaseShortfallModalOpen(true)}
+                  sx={{ 
+                    textTransform: 'none', 
+                    fontWeight: 700, 
+                    fontSize: '0.76rem', 
+                    color: '#c2410c', 
+                    borderColor: '#fed7aa', 
+                    width: { xs: '100%', sm: 'auto' },
+                    '&:hover': { bgcolor: '#fff7ed', borderColor: '#ea580c' } 
+                  }}
+                >
+                  Inspect Shortfall Items ({kpis?.purchaseAuthority?.shortfallItemsCount || 0})
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+                  onClick={() => navigate('/dashboard/reports/pending-po?tab=2')}
+                  sx={{ 
+                    textTransform: 'none', 
+                    fontWeight: 700, 
+                    fontSize: '0.76rem', 
+                    bgcolor: '#ea580c', 
+                    width: { xs: '100%', sm: 'auto' },
+                    '&:hover': { bgcolor: '#c2410c' } 
+                  }}
+                >
+                  Fulfillment Report & Order PI
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Sales Authority - Pending Orders & Ready to Dispatch */}
+          <Card sx={{ 
+            borderRadius: 3, 
+            boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+            border: '1px solid #bfdbfe',
+            borderTop: '4px solid #0F3B66',
+            bgcolor: '#ffffff',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            boxSizing: 'border-box',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            '&:hover': { 
+              transform: 'translateY(-3px)',
+              boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
+            }
+          }}>
+            <CardContent sx={{ 
+              p: { xs: 2, sm: 2.5 }, 
+              '&:last-child': { pb: { xs: 2, sm: 2.5 } }, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: 'space-between',
+              height: '100%', 
+              flexGrow: 1,
+              boxSizing: 'border-box' 
+            }}>
+              {/* Header */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                    <Chip 
+                      icon={<LocalShipping sx={{ fontSize: '15px !important', color: '#0F3B66 !important' }} />}
+                      label="Sales Authority" 
+                      size="small" 
+                      sx={{ bgcolor: '#eff6ff', color: '#0F3B66', fontWeight: 800, fontSize: '0.74rem', height: 24, border: '1px solid #dbeafe' }} 
+                    />
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                      Order Dispatch & Stock Fulfillment
+                    </Typography>
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+                    {loading ? <Skeleton width={140} /> : (
+                      <>
+                        {kpis?.salesAuthority?.pendingOrderItemsCount || 0}{' '}
+                        <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#64748b' }}>
+                          Pending Order Items
+                        </span>
+                      </>
+                    )}
+                  </Typography>
+                </Box>
+                <Avatar sx={{ bgcolor: '#eff6ff', color: '#0F3B66', width: 46, height: 46, borderRadius: 2 }}>
+                  <LocalShipping sx={{ fontSize: 24 }} />
+                </Avatar>
+              </Box>
+
+              {/* Readiness Progress Bar */}
+              <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #bfdbfe' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155' }}>
+                    Dispatch Readiness Rate
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 800, color: (kpis?.salesAuthority?.readinessPercentage || 0) === 100 ? '#15803d' : '#0F3B66' }}>
+                    {kpis?.salesAuthority?.readinessPercentage || 0}% Ready to Ship
+                  </Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={kpis?.salesAuthority?.readinessPercentage || 0} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4, 
+                    bgcolor: '#dbeafe',
+                    '& .MuiLinearProgress-bar': {
+                      bgcolor: (kpis?.salesAuthority?.readinessPercentage || 0) >= 80 ? '#10b981' : (kpis?.salesAuthority?.readinessPercentage || 0) >= 40 ? '#f59e0b' : '#ef4444'
+                    }
+                  }} 
+                />
+              </Box>
+
+              {/* 2x2 Metrics Box */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, my: 1, flexGrow: 1 }}>
+                {/* Metric 1: Ready to Dispatch Qty */}
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.3 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                      Ready to Dispatch
+                    </Typography>
+                    <CheckCircle sx={{ fontSize: 16, color: '#16a34a' }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 900, color: '#15803d' }}>
+                    {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.readyToDispatchQty || 0).toLocaleString()} PCS`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#166534', fontSize: '0.7rem' }}>
+                    In-hand stock ready for immediate delivery
+                  </Typography>
+                </Box>
+
+                {/* Metric 2: Sales Shortfall Qty */}
+                <Box sx={{ 
+                  p: 1.5, 
+                  borderRadius: 2, 
+                  bgcolor: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#fff7ed' : '#f8fafc', 
+                  border: '1px solid',
+                  borderColor: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#fed7aa' : '#e2e8f0'
+                }}>
+                  <Typography variant="caption" sx={{ 
+                    fontWeight: 700, 
+                    color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#c2410c' : '#475569', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: 0.4, 
+                    display: 'block', 
+                    mb: 0.3 
+                  }}>
+                    Shortfall Qty
+                  </Typography>
+                  <Typography variant="h6" sx={{ 
+                    fontWeight: 900, 
+                    color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#ea580c' : '#64748b' 
+                  }}>
+                    {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.shortfallQty || 0).toLocaleString()} PCS`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: (kpis?.salesAuthority?.shortfallQty || 0) > 0 ? '#c2410c' : '#64748b', fontSize: '0.7rem' }}>
+                    {(kpis?.salesAuthority?.shortfallQty || 0) > 0 ? 'Awaiting stock replenishment' : 'Zero order backlog'}
+                  </Typography>
+                </Box>
+
+                {/* Metric 3: Total Pending Order Qty */}
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                    Total Order Demand
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66' }}>
+                    {loading ? <Skeleton width={70} /> : `${(kpis?.salesAuthority?.totalOrderQty || 0).toLocaleString()} PCS`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                    Across {kpis?.salesAuthority?.totalPendingOrdersCount || 0} active Customer POs
+                  </Typography>
+                </Box>
+
+                {/* Metric 4: Item Coverage State */}
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.3 }}>
+                    Item Fulfillment Status
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#1e293b' }}>
+                    {loading ? <Skeleton width={70} /> : `${kpis?.salesAuthority?.fullyReadyItemsCount || 0} Ready / ${kpis?.salesAuthority?.partialOrShortfallCount || 0} Partial`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                    Line-item dispatch readiness
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Footer Actions */}
+              <Box sx={{ 
+                mt: 'auto', 
+                pt: 1.5, 
+                borderTop: '1px dashed #bfdbfe', 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                flexWrap: 'wrap', 
+                gap: 1.5 
+              }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setSalesOrdersModalOpen(true)}
+                  sx={{ 
+                    textTransform: 'none', 
+                    fontWeight: 700, 
+                    fontSize: '0.76rem', 
+                    color: '#0F3B66', 
+                    borderColor: '#bfdbfe', 
+                    width: { xs: '100%', sm: 'auto' },
+                    '&:hover': { bgcolor: '#eff6ff', borderColor: '#0F3B66' } 
+                  }}
+                >
+                  Inspect Pending Orders ({kpis?.salesAuthority?.pendingOrderItemsCount || 0})
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+                  onClick={() => navigate('/dashboard/outward')}
+                  sx={{ 
+                    textTransform: 'none', 
+                    fontWeight: 700, 
+                    fontSize: '0.76rem', 
+                    bgcolor: '#0F3B66', 
+                    width: { xs: '100%', sm: 'auto' },
+                    '&:hover': { bgcolor: '#F88A01' } 
+                  }}
+                >
+                  Sales Outward Dispatch
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
       </Box>
 
       {/* Row 3: Financial Analysis - Receivables & Payables with Bill / Without Bill & Overdue */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
+      <Box sx={{ 
+        display: 'grid', 
+        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, 
+        gap: { xs: 2, sm: 2.5, md: 3 }, 
+        width: '100%', 
+        mb: 3.5, 
+        alignItems: 'stretch' 
+      }}>
         {/* Receivables Card */}
-        <Grid item xs={12} lg={6}>
-          <Card sx={{ 
-            borderRadius: 3, 
-            boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
-            border: '1px solid #e2e8f0',
-            borderTop: '4px solid #3b82f6',
-            height: '100%',
-            transition: 'transform 0.2s, box-shadow 0.2s',
-            '&:hover': { 
-              transform: 'translateY(-3px)',
-              boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
-            }
-          }}>
-            <CardActionArea onClick={() => navigate('/dashboard/reports/receivable')} sx={{ height: '100%', p: 0 }}>
-              <CardContent sx={{ p: { xs: 2, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Chip label="Receivables" size="small" sx={{ bgcolor: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
-                      <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Debtors</Typography>
-                    </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
-                      {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalReceivable || 0)}
-                    </Typography>
+        <Card sx={{ 
+          borderRadius: 3, 
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+          border: '1px solid #e2e8f0',
+          borderTop: '4px solid #3b82f6',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box',
+          transition: 'transform 0.2s, box-shadow 0.2s',
+          '&:hover': { 
+            transform: 'translateY(-3px)',
+            boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
+          }
+        }}>
+          <CardActionArea 
+            onClick={() => navigate('/dashboard/reports/receivable')} 
+            sx={{ 
+              height: '100%', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'stretch', 
+              justifyContent: 'space-between', 
+              flexGrow: 1, 
+              p: 0 
+            }}
+          >
+            <CardContent sx={{ 
+              p: { xs: 2, sm: 2.5, md: 3 }, 
+              '&:last-child': { pb: { xs: 2, sm: 2.5, md: 3 } }, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: 'space-between', 
+              flexGrow: 1, 
+              height: '100%', 
+              boxSizing: 'border-box' 
+            }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Chip label="Receivables" size="small" sx={{ bgcolor: '#eff6ff', color: '#2563eb', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Debtors</Typography>
                   </Box>
-                  <Avatar sx={{ bgcolor: '#eff6ff', color: '#3b82f6', width: 48, height: 48, borderRadius: 2 }}>
-                    <ReceivableIcon sx={{ fontSize: 28 }} />
-                  </Avatar>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
+                    {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalReceivable || 0)}
+                  </Typography>
                 </Box>
+                <Avatar sx={{ bgcolor: '#eff6ff', color: '#3b82f6', width: 48, height: 48, borderRadius: 2 }}>
+                  <ReceivableIcon sx={{ fontSize: 28 }} />
+                </Avatar>
+              </Box>
 
-                {/* Split Box: Outstanding vs Overdue */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 1 }}>
-                  {/* Current Outstanding */}
-                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.5 }}>
+              {/* Split Box: Outstanding vs Overdue */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 'auto' }}>
+                {/* Current Outstanding */}
+                <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Box sx={{ minHeight: 22, display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4 }}>
                       Outstanding Net
                     </Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66', mb: 1 }}>
-                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalReceivable || 0)}
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #e2e8f0' }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithBill || 0)}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithoutBill || 0)}
-                      </Typography>
-                    </Box>
                   </Box>
-
-                  {/* Overdue */}
-                  <Box sx={{ 
-                    p: 1.75, 
-                    borderRadius: 2, 
-                    bgcolor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fff7ed' : '#f8fafc', 
-                    border: '1px solid',
-                    borderColor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fed7aa' : '#e2e8f0'
-                  }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ 
-                        fontWeight: 700, 
-                        color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#c2410c' : '#475569', 
-                        textTransform: 'uppercase', 
-                        letterSpacing: 0.4 
-                      }}>
-                        Total Overdue
-                      </Typography>
-                      <Chip 
-                        label={(kpis?.totalReceivableOverdue || 0) > 0 ? 'Due Past Terms' : 'No Overdue'} 
-                        size="small" 
-                        sx={{ 
-                          height: 18, 
-                          fontSize: '0.65rem', 
-                          fontWeight: 700, 
-                          bgcolor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fee2e2' : '#f1f5f9', 
-                          color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#ef4444' : '#64748b' 
-                        }} 
-                      />
-                    </Box>
-                    <Typography variant="subtitle1" sx={{ 
-                      fontWeight: 800, 
-                      color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#ef4444' : '#1e293b', 
-                      mb: 1 
-                    }}>
-                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalReceivableOverdue || 0)}
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66', mb: 1 }}>
+                    {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalReceivable || 0)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35, borderTop: '1px dashed #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithBill || 0)}
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #fed7aa' }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill Overdue:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalReceivableOverdueWithBill || 0) > 0 ? '#ef4444' : '#64748b' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableOverdueWithBill || 0)}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill Overdue:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalReceivableOverdueWithoutBill || 0) > 0 ? '#ea580c' : '#64748b' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithoutBill || 0)}
-                      </Typography>
-                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35 }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithoutBill || 0)}
+                    </Typography>
                   </Box>
                 </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        </Grid>
+
+                {/* Overdue */}
+                <Box sx={{ 
+                  p: 1.75, 
+                  borderRadius: 2, 
+                  bgcolor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fff7ed' : '#f8fafc', 
+                  border: '1px solid',
+                  borderColor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fed7aa' : '#e2e8f0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 22, mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ 
+                      fontWeight: 700, 
+                      color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#c2410c' : '#475569', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: 0.4 
+                    }}>
+                      Total Overdue
+                    </Typography>
+                    <Chip 
+                      label={(kpis?.totalReceivableOverdue || 0) > 0 ? 'Due Past Terms' : 'No Overdue'} 
+                      size="small" 
+                      sx={{ 
+                        height: 18, 
+                        fontSize: '0.65rem', 
+                        fontWeight: 700, 
+                        bgcolor: (kpis?.totalReceivableOverdue || 0) > 0 ? '#fee2e2' : '#f1f5f9', 
+                        color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#ef4444' : '#64748b' 
+                      }} 
+                    />
+                  </Box>
+                  <Typography variant="subtitle1" sx={{ 
+                    fontWeight: 800, 
+                    color: (kpis?.totalReceivableOverdue || 0) > 0 ? '#ef4444' : '#1e293b', 
+                    mb: 1 
+                  }}>
+                    {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalReceivableOverdue || 0)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35, borderTop: '1px dashed #fed7aa' }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill Overdue:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalReceivableOverdueWithBill || 0) > 0 ? '#ef4444' : '#64748b' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableOverdueWithBill || 0)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35 }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill Overdue:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalReceivableOverdueWithoutBill || 0) > 0 ? '#ea580c' : '#64748b' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalReceivableWithoutBill || 0)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </CardContent>
+          </CardActionArea>
+        </Card>
 
         {/* Payables Card */}
-        <Grid item xs={12} lg={6}>
-          <Card sx={{ 
-            borderRadius: 3, 
-            boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
-            border: '1px solid #e2e8f0',
-            borderTop: '4px solid #ef4444',
-            height: '100%',
-            transition: 'transform 0.2s, box-shadow 0.2s',
-            '&:hover': { 
-              transform: 'translateY(-3px)',
-              boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
-            }
-          }}>
-            <CardActionArea onClick={() => navigate('/dashboard/reports/payable')} sx={{ height: '100%', p: 0 }}>
-              <CardContent sx={{ p: { xs: 2, sm: 3 }, '&:last-child': { pb: { xs: 2, sm: 3 } } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Chip label="Payables" size="small" sx={{ bgcolor: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
-                      <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Creditors & Vendors</Typography>
-                    </Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
-                      {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalPayable || 0)}
-                    </Typography>
+        <Card sx={{ 
+          borderRadius: 3, 
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)',
+          border: '1px solid #e2e8f0',
+          borderTop: '4px solid #ef4444',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box',
+          transition: 'transform 0.2s, box-shadow 0.2s',
+          '&:hover': { 
+            transform: 'translateY(-3px)',
+            boxShadow: '0 8px 24px rgba(15, 59, 102, 0.12)' 
+          }
+        }}>
+          <CardActionArea 
+            onClick={() => navigate('/dashboard/reports/payable')} 
+            sx={{ 
+              height: '100%', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'stretch', 
+              justifyContent: 'space-between', 
+              flexGrow: 1, 
+              p: 0 
+            }}
+          >
+            <CardContent sx={{ 
+              p: { xs: 2, sm: 2.5, md: 3 }, 
+              '&:last-child': { pb: { xs: 2, sm: 2.5, md: 3 } }, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: 'space-between', 
+              flexGrow: 1, 
+              height: '100%', 
+              boxSizing: 'border-box' 
+            }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Chip label="Payables" size="small" sx={{ bgcolor: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>Sundry Creditors & Vendors</Typography>
                   </Box>
-                  <Avatar sx={{ bgcolor: '#fef2f2', color: '#ef4444', width: 48, height: 48, borderRadius: 2 }}>
-                    <PayableIcon sx={{ fontSize: 28 }} />
-                  </Avatar>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
+                    {loading ? <Skeleton width={140} /> : formatCurrency(kpis?.totalPayable || 0)}
+                  </Typography>
                 </Box>
+                <Avatar sx={{ bgcolor: '#fef2f2', color: '#ef4444', width: 48, height: 48, borderRadius: 2 }}>
+                  <PayableIcon sx={{ fontSize: 28 }} />
+                </Avatar>
+              </Box>
 
-                {/* Split Box: Outstanding vs Overdue */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 1 }}>
-                  {/* Current Outstanding */}
-                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, display: 'block', mb: 0.5 }}>
+              {/* Split Box: Outstanding vs Overdue */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 'auto' }}>
+                {/* Current Outstanding */}
+                <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Box sx={{ minHeight: 22, display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4 }}>
                       Outstanding Net
                     </Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66', mb: 1 }}>
-                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalPayable || 0)}
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #e2e8f0' }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithBill || 0)}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithoutBill || 0)}
-                      </Typography>
-                    </Box>
                   </Box>
-
-                  {/* Overdue */}
-                  <Box sx={{ 
-                    p: 1.75, 
-                    borderRadius: 2, 
-                    bgcolor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fff7ed' : '#f8fafc', 
-                    border: '1px solid',
-                    borderColor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fed7aa' : '#e2e8f0'
-                  }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ 
-                        fontWeight: 700, 
-                        color: (kpis?.totalPayableOverdue || 0) > 0 ? '#c2410c' : '#475569', 
-                        textTransform: 'uppercase', 
-                        letterSpacing: 0.4 
-                      }}>
-                        Total Overdue
-                      </Typography>
-                      <Chip 
-                        label={(kpis?.totalPayableOverdue || 0) > 0 ? 'Due Past Terms' : 'No Overdue'} 
-                        size="small" 
-                        sx={{ 
-                          height: 18, 
-                          fontSize: '0.65rem', 
-                          fontWeight: 700, 
-                          bgcolor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fee2e2' : '#f1f5f9', 
-                          color: (kpis?.totalPayableOverdue || 0) > 0 ? '#ef4444' : '#64748b' 
-                        }} 
-                      />
-                    </Box>
-                    <Typography variant="subtitle1" sx={{ 
-                      fontWeight: 800, 
-                      color: (kpis?.totalPayableOverdue || 0) > 0 ? '#ef4444' : '#1e293b', 
-                      mb: 1 
-                    }}>
-                      {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalPayableOverdue || 0)}
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66', mb: 1 }}>
+                    {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalPayable || 0)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35, borderTop: '1px dashed #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithBill || 0)}
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25, borderTop: '1px dashed #fed7aa' }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill Overdue:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalPayableOverdueWithBill || 0) > 0 ? '#ef4444' : '#64748b' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableOverdueWithBill || 0)}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.25 }}>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill Overdue:</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalPayableOverdueWithoutBill || 0) > 0 ? '#ea580c' : '#64748b' }}>
-                        {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithoutBill || 0)}
-                      </Typography>
-                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35 }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#d97706' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithoutBill || 0)}
+                    </Typography>
                   </Box>
                 </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        </Grid>
-      </Grid>
 
-      {/* Row 3: Analytics Section - Trends & Top Parties */}
-      <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }} sx={{ mb: 4 }}>
+                {/* Overdue */}
+                <Box sx={{ 
+                  p: 1.75, 
+                  borderRadius: 2, 
+                  bgcolor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fff7ed' : '#f8fafc', 
+                  border: '1px solid',
+                  borderColor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fed7aa' : '#e2e8f0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 22, mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ 
+                      fontWeight: 700, 
+                      color: (kpis?.totalPayableOverdue || 0) > 0 ? '#c2410c' : '#475569', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: 0.4 
+                    }}>
+                      Total Overdue
+                    </Typography>
+                    <Chip 
+                      label={(kpis?.totalPayableOverdue || 0) > 0 ? 'Due Past Terms' : 'No Overdue'} 
+                      size="small" 
+                      sx={{ 
+                        height: 18, 
+                        fontSize: '0.65rem', 
+                        fontWeight: 700, 
+                        bgcolor: (kpis?.totalPayableOverdue || 0) > 0 ? '#fee2e2' : '#f1f5f9', 
+                        color: (kpis?.totalPayableOverdue || 0) > 0 ? '#ef4444' : '#64748b' 
+                      }} 
+                    />
+                  </Box>
+                  <Typography variant="subtitle1" sx={{ 
+                    fontWeight: 800, 
+                    color: (kpis?.totalPayableOverdue || 0) > 0 ? '#ef4444' : '#1e293b', 
+                    mb: 1 
+                  }}>
+                    {loading ? <Skeleton width={80} /> : formatCurrency(kpis?.totalPayableOverdue || 0)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35, borderTop: '1px dashed #fed7aa' }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>🧾 With Bill Overdue:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalPayableOverdueWithBill || 0) > 0 ? '#ef4444' : '#64748b' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableOverdueWithBill || 0)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.35 }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>📋 Without Bill Overdue:</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: (kpis?.totalPayableOverdueWithoutBill || 0) > 0 ? '#ea580c' : '#64748b' }}>
+                      {loading ? <Skeleton width={50} /> : formatCurrency(kpis?.totalPayableWithoutBill || 0)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </CardContent>
+          </CardActionArea>
+        </Card>
+      </Box>
+
+      {/* Row 4: Analytics Section - Trends & Top Parties */}
+      <Box sx={{ 
+        display: 'grid', 
+        gridTemplateColumns: { xs: '1fr', lg: '1.8fr 1.2fr' }, 
+        gap: { xs: 2, sm: 2.5, md: 3 }, 
+        width: '100%', 
+        mb: 4, 
+        alignItems: 'stretch' 
+      }}>
         {/* Monthly Sales Chart Area */}
-        <Grid item xs={12} lg={8}>
-          <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', mb: 3 }}>
+        <Paper sx={{ 
+          p: { xs: 2, sm: 2.5, md: 3 }, 
+          borderRadius: 3, 
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)', 
+          border: '1px solid #e2e8f0', 
+          width: '100%', 
+          height: '100%', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          boxSizing: 'border-box' 
+        }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1rem', sm: '1.15rem' } }}>
               Monthly Sales Trends (Last 6 Months)
             </Typography>
-            
-            {loading ? (
-              <Skeleton variant="rectangular" height={250} sx={{ borderRadius: 2 }} />
-            ) : monthlyData.length > 0 ? (
-              <Box sx={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: 250, pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0', minWidth: { xs: 460, sm: 'auto' } }}>
-                  {monthlyData.map((data, idx) => {
-                    const heightPercent = Math.max((data.totalAmount / maxMonthlyAmount) * 100, 2);
-                    return (
-                      <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '12%', height: '100%', justifyContent: 'flex-end' }}>
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: '#3b82f6', mb: 1, fontSize: '0.72rem' }}>
-                          {data.totalAmount > 0 ? formatCurrency(data.totalAmount).split('.')[0] : ''}
-                        </Typography>
-                        <Box 
-                          sx={{ 
-                            width: '100%', 
-                            height: `${heightPercent}%`, 
-                            bgcolor: '#3b82f6', 
-                            borderRadius: '4px 4px 0 0',
-                            transition: 'height 1s ease-out',
-                            opacity: 0.9,
-                            '&:hover': { opacity: 1, bgcolor: '#2563eb' }
-                          }} 
-                        />
-                        <Typography variant="caption" sx={{ mt: 1, fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                          {data.monthLabel}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
-                </Box>
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 8 }}>
-                No recent sales data available.
-              </Typography>
-            )}
-          </Paper>
-        </Grid>
-
-        {/* Top 5 Party Area - Sales Authority */}
-        <Grid item xs={12} lg={4}>
-          <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', height: '100%' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-                Top 5 Parties by Sales
-              </Typography>
-              <Chip
-                label="Sales Authority"
-                size="small"
-                sx={{ bgcolor: '#eff6ff', color: '#1e40af', fontWeight: 700, fontSize: '0.7rem', height: 22 }}
-              />
-            </Box>
-            
-            {loading ? (
-              <Box>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Skeleton key={n} variant="rectangular" height={40} sx={{ mb: 1, borderRadius: 1 }} />
-                ))}
-              </Box>
-            ) : topParties.length > 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {topParties.map((party, idx) => (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #f1f5f9' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, pr: 1 }}>
-                      <Avatar sx={{ width: 28, height: 28, bgcolor: '#10b981', fontSize: '0.8rem', fontWeight: 'bold', flexShrink: 0 }}>
-                        {idx + 1}
-                      </Avatar>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {party.partyName}
+            <Chip 
+              label="Turnover Analysis" 
+              size="small" 
+              sx={{ bgcolor: '#f0fdf4', color: '#16a34a', fontWeight: 700, fontSize: '0.68rem', height: 20 }} 
+            />
+          </Box>
+          
+          {loading ? (
+            <Skeleton variant="rectangular" height={250} sx={{ borderRadius: 2, flexGrow: 1 }} />
+          ) : monthlyData.length > 0 ? (
+            <Box sx={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 1, flexGrow: 1, display: 'flex', alignItems: 'flex-end' }}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: 250, width: '100%', pt: 2, pb: 1, borderBottom: '1px solid #e2e8f0', minWidth: { xs: 360, sm: 'auto' } }}>
+                {monthlyData.map((data, idx) => {
+                  const heightPercent = Math.max((data.totalAmount / maxMonthlyAmount) * 100, 2);
+                  return (
+                    <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '12%', height: '100%', justifyContent: 'flex-end' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: '#3b82f6', mb: 1, fontSize: '0.72rem' }}>
+                        {data.totalAmount > 0 ? formatCurrency(data.totalAmount).split('.')[0] : ''}
+                      </Typography>
+                      <Box 
+                        sx={{ 
+                          width: '100%', 
+                          height: `${heightPercent}%`, 
+                          bgcolor: '#3b82f6', 
+                          borderRadius: '4px 4px 0 0',
+                          transition: 'height 1s ease-out',
+                          opacity: 0.9,
+                          '&:hover': { opacity: 1, bgcolor: '#2563eb' }
+                        }} 
+                      />
+                      <Typography variant="caption" sx={{ mt: 1, fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                        {data.monthLabel}
                       </Typography>
                     </Box>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#10b981', flexShrink: 0 }}>
-                      {formatCurrency(party.totalAmount).split('.')[0]}
+                  );
+                })}
+              </Box>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 8 }}>
+              No recent sales data available.
+            </Typography>
+          )}
+        </Paper>
+
+        {/* Top 5 Party Area - Sales Authority */}
+        <Paper sx={{ 
+          p: { xs: 2, sm: 2.5, md: 3 }, 
+          borderRadius: 3, 
+          boxShadow: '0 2px 10px rgba(15, 59, 102, 0.06)', 
+          border: '1px solid #e2e8f0', 
+          width: '100%', 
+          height: '100%', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          boxSizing: 'border-box' 
+        }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: { xs: '1rem', sm: '1.15rem' } }}>
+              Top 5 Parties by Sales
+            </Typography>
+            <Chip
+              label="Sales Authority"
+              size="small"
+              sx={{ bgcolor: '#eff6ff', color: '#1e40af', fontWeight: 700, fontSize: '0.7rem', height: 22 }}
+            />
+          </Box>
+          
+          {loading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, flexGrow: 1, justifyContent: 'center' }}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Skeleton key={n} variant="rectangular" height={42} sx={{ borderRadius: 1.5 }} />
+              ))}
+            </Box>
+          ) : topParties.length > 0 ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, flexGrow: 1, justifyContent: 'space-between' }}>
+              {topParties.map((party, idx) => (
+                <Box key={idx} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.25, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #f1f5f9' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, pr: 1 }}>
+                    <Avatar sx={{ width: 28, height: 28, bgcolor: '#10b981', fontSize: '0.8rem', fontWeight: 'bold', flexShrink: 0 }}>
+                      {idx + 1}
+                    </Avatar>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {party.partyName}
                     </Typography>
                   </Box>
-                ))}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 8 }}>
-                No party data available.
-              </Typography>
-            )}
-          </Paper>
-        </Grid>
-      </Grid>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#10b981', flexShrink: 0 }}>
+                    {formatCurrency(party.totalAmount).split('.')[0]}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 8 }}>
+              No party data available.
+            </Typography>
+          )}
+        </Paper>
+      </Box>
 
       {/* Cash & Bank Balances Modal Dialog */}
       <Dialog open={cashBankDialogOpen} onClose={() => setCashBankDialogOpen(false)} maxWidth="sm" fullWidth>
