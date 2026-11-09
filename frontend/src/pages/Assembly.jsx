@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import {
-    Box, Typography, Paper, Toolbar, Button, TextField, Autocomplete,
+    Box, Typography, Paper, Toolbar, Button, TextField, Autocomplete, Popper,
     Grid, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Divider, Tabs, Tab
 } from '@mui/material';
@@ -9,6 +9,29 @@ import {
     BuildCircle as BuildIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+
+// Custom Popper that allows Autocomplete dropdown menu to expand horizontally to show full item names without clipping
+const CustomPopper = (props) => {
+    const { style, ...otherProps } = props;
+    return (
+        <Popper
+            {...otherProps}
+            placement="bottom-start"
+            style={{
+                ...style,
+                width: 'max-content',
+                minWidth: style?.width || '100%',
+                maxWidth: '95vw',
+                zIndex: 1400
+            }}
+            sx={{
+                width: 'max-content !important',
+                minWidth: '100% !important',
+                maxWidth: '95vw !important'
+            }}
+        />
+    );
+};
 
 const Assembly = ({ user }) => {
     const [items, setItems] = useState([]);
@@ -245,7 +268,8 @@ const Assembly = ({ user }) => {
                 {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={6} sm={2.5} md={1.5}>
+                    {/* Row 1: Document details */}
+                    <Grid item xs={6} sm={3} md={2}>
                         <TextField
                             fullWidth
                             label="Assembly No"
@@ -255,7 +279,7 @@ const Assembly = ({ user }) => {
                             disabled
                         />
                     </Grid>
-                    <Grid item xs={6} sm={2.5} md={1.5}>
+                    <Grid item xs={6} sm={3} md={2}>
                         <TextField
                             fullWidth
                             label="Assembly Date"
@@ -267,9 +291,42 @@ const Assembly = ({ user }) => {
                             required
                         />
                     </Grid>
-                    <Grid item xs={12} sm={7} md={6}>
+                    <Grid item xs={12} sm={6} md={8}>
+                        <TextField
+                            fullWidth
+                            label="Remark (Optional)"
+                            size="small"
+                            value={remark}
+                            onChange={(e) => setRemark(e.target.value)}
+                        />
+                    </Grid>
+
+                    {/* Row 2: Select Parent Item (83.3% width on desktop = ~900px-1100px) & Quantity */}
+                    <Grid item xs={12} sm={9} md={10}>
                         <Autocomplete
                             fullWidth
+                            PopperComponent={CustomPopper}
+                            PaperComponent={(paperProps) => (
+                                <Paper
+                                    {...paperProps}
+                                    elevation={8}
+                                    sx={{
+                                        width: 'max-content',
+                                        minWidth: '100%',
+                                        maxWidth: '95vw',
+                                        borderRadius: 2,
+                                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
+                                    }}
+                                />
+                            )}
+                            ListboxProps={{
+                                sx: {
+                                    maxHeight: '380px',
+                                    '& li': {
+                                        whiteSpace: 'nowrap'
+                                    }
+                                }
+                            }}
                             options={items.filter(item => {
                                 const t = (item.ItemType || '').trim().toLowerCase();
                                 return ['fg', 'sf', 'finished', 'finished good', 'semi-finished'].includes(t) || item.Category === 'Inhouse';
@@ -287,57 +344,47 @@ const Assembly = ({ user }) => {
                                     label="Select Parent Item" 
                                     size="small" 
                                     required 
+                                    placeholder="Search parent item by code or name..."
                                     title={selectedItem ? `${selectedItem.ItemCode}${selectedItem.SubCode ? ` / ${selectedItem.SubCode}` : ''} - ${selectedItem.ItemName}` : ''}
+                                    sx={{
+                                        '& .MuiInputBase-root': {
+                                            fontSize: '0.9rem'
+                                        }
+                                    }}
                                 />
                             )}
-                            renderOption={(props, option) => (
-                                <Box 
-                                    component="li" 
-                                    {...props} 
-                                    key={`${option.ItemCode}-${option.SubCode || ''}`} 
-                                    sx={{ 
-                                        whiteSpace: 'nowrap', 
-                                        py: 0.8, 
-                                        px: 1.5, 
-                                        fontSize: '0.85rem' 
-                                    }}
-                                >
-                                    <Typography component="span" sx={{ fontWeight: 700, color: '#0F3B66', mr: 1 }}>
-                                        {option.ItemCode}{option.SubCode ? ` / ${option.SubCode}` : ''}
-                                    </Typography>
-                                    <Typography component="span" sx={{ color: '#1e293b' }}>
-                                        - {option.ItemName}
-                                    </Typography>
-                                    {option.ItemType && (
-                                        <Typography component="span" sx={{ ml: 1, color: '#475569', fontSize: '0.72rem', fontWeight: 600, bgcolor: '#f1f5f9', px: 0.8, py: 0.2, borderRadius: 1 }}>
-                                            {option.ItemType}
+                            renderOption={(props, option) => {
+                                const { key, ...otherProps } = props;
+                                return (
+                                    <li 
+                                        key={key || `${option.ItemCode}-${option.SubCode || ''}`} 
+                                        {...otherProps} 
+                                        style={{ 
+                                            padding: '10px 16px', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '12px', 
+                                            borderBottom: '1px solid #f1f5f9',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        <Typography component="span" sx={{ fontWeight: 700, color: '#0F3B66', whiteSpace: 'nowrap' }}>
+                                            {option.ItemCode}{option.SubCode ? ` / ${option.SubCode}` : ''}
                                         </Typography>
-                                    )}
-                                </Box>
-                            )}
-                            slotProps={{ 
-                                paper: { 
-                                    sx: { 
-                                        width: 'max-content', 
-                                        minWidth: '100%', 
-                                        maxWidth: '90vw',
-                                        boxShadow: '0 8px 24px rgba(0,0,0,0.12)' 
-                                    } 
-                                } 
-                            }}
-                            componentsProps={{ 
-                                paper: { 
-                                    sx: { 
-                                        width: 'max-content', 
-                                        minWidth: '100%', 
-                                        maxWidth: '90vw',
-                                        boxShadow: '0 8px 24px rgba(0,0,0,0.12)' 
-                                    } 
-                                } 
+                                        <Typography component="span" sx={{ color: '#1e293b', whiteSpace: 'nowrap' }}>
+                                            - {option.ItemName}
+                                        </Typography>
+                                        {option.ItemType && (
+                                            <Typography component="span" sx={{ ml: 'auto', pl: 2, color: '#475569', fontSize: '0.75rem', fontWeight: 700, bgcolor: '#e2e8f0', px: 1, py: 0.3, borderRadius: 1, whiteSpace: 'nowrap' }}>
+                                                {option.ItemType}
+                                            </Typography>
+                                        )}
+                                    </li>
+                                );
                             }}
                         />
                     </Grid>
-                    <Grid item xs={4} sm={2} md={1}>
+                    <Grid item xs={6} sm={3} md={2}>
                         <TextField
                             fullWidth
                             label="Quantity"
@@ -348,19 +395,9 @@ const Assembly = ({ user }) => {
                             required
                             inputProps={{ min: 1, step: 'any', style: { textAlign: 'right' } }}
                             sx={{
-                                minWidth: 75,
-                                maxWidth: { xs: 120, sm: 110, md: 100 },
+                                maxWidth: 140,
                                 '& input': { fontWeight: 600 }
                             }}
-                        />
-                    </Grid>
-                    <Grid item xs={8} sm={10} md={2}>
-                        <TextField
-                            fullWidth
-                            label="Remark (Optional)"
-                            size="small"
-                            value={remark}
-                            onChange={(e) => setRemark(e.target.value)}
                         />
                     </Grid>
                 </Grid>
