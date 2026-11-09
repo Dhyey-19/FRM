@@ -398,8 +398,6 @@ const DashboardLayout = () => {
           isMobile={isMobile}
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
-          onInstallClick={handleInstallClick}
-          isStandalone={isStandalone}
         />
         
         {/* Main Content */}
