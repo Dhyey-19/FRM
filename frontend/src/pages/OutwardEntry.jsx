@@ -1756,70 +1756,71 @@ const OutwardEntry = () => {
                     />
                   </Box>
 
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="Courier / Transport Company"
-                        placeholder="e.g. DTDC, Blue Dart, VRL"
-                        value={courierCompany}
-                        onChange={(e) => setCourierCompany(e.target.value)}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="AWB / Docket / LR No."
-                        placeholder="e.g. D12345678"
-                        value={awbNo}
-                        onChange={(e) => setAwbNo(e.target.value)}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        select
-                        size="small"
-                        label="Transport Mode"
-                        value={transportMode || 'Road'}
-                        onChange={(e) => setTransportMode(e.target.value)}
-                        SelectProps={{ native: true }}
-                      >
-                        <option value="Road">Road</option>
-                        <option value="Courier">Courier</option>
-                        <option value="Air">Air</option>
-                        <option value="Rail">Rail</option>
-                        <option value="Self / Hand Delivery">Self / Hand Delivery</option>
-                        <option value="Other">Other</option>
-                      </TextField>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Courier / Transport Company"
+                      placeholder="e.g. DTDC, Blue Dart, VRL"
+                      value={courierCompany}
+                      onChange={(e) => setCourierCompany(e.target.value)}
+                    />
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="AWB / Docket / LR No."
+                      placeholder="e.g. D12345678"
+                      value={awbNo}
+                      onChange={(e) => setAwbNo(e.target.value)}
+                    />
+
+                    <TextField
+                      fullWidth
+                      select
+                      size="small"
+                      label="Transport Mode"
+                      value={transportMode || 'Road'}
+                      onChange={(e) => setTransportMode(e.target.value)}
+                      SelectProps={{ native: true }}
+                    >
+                      <option value="Road">Road</option>
+                      <option value="Courier">Courier</option>
+                      <option value="Air">Air</option>
+                      <option value="Rail">Rail</option>
+                      <option value="Self / Hand Delivery">Self / Hand Delivery</option>
+                      <option value="Other">Other</option>
+                    </TextField>
+
+                    {/* Date of POD - Dedicated Top Label avoids browser dd-mm-yyyy placeholder overlap */}
+                    <Box>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155', mb: 0.5, display: 'block', fontSize: '0.8rem' }}>
+                        Date of POD (Delivery Date)
+                      </Typography>
                       <TextField
                         fullWidth
                         type="date"
                         size="small"
-                        label="Date of POD"
                         value={dateOfPod}
                         onChange={(e) => setDateOfPod(e.target.value)}
-                        InputLabelProps={{ shrink: true }}
+                        InputProps={{
+                          sx: { bgcolor: '#ffffff' }
+                        }}
                         helperText={dateOfPod ? "Delivered" : "Leave blank if in transit / pending"}
                       />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="POD / Dispatch Remarks"
-                        placeholder="e.g. Received by Mr. X, Signed POD copy attached"
-                        value={podRemarks}
-                        onChange={(e) => setPodRemarks(e.target.value)}
-                        multiline
-                        rows={3}
-                      />
-                    </Grid>
-                  </Grid>
+                    </Box>
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="POD / Dispatch Remarks"
+                      placeholder="e.g. Received by Mr. X, Signed POD copy attached"
+                      value={podRemarks}
+                      onChange={(e) => setPodRemarks(e.target.value)}
+                      multiline
+                      rows={2.5}
+                    />
+                  </Box>
 
                   {/* Party Expected Delivery Summary Box */}
                   {ledgerId && (() => {
@@ -1939,16 +1940,20 @@ const OutwardEntry = () => {
               </TextField>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="date"
-                size="small"
-                label="Date of POD (Delivery Date)"
-                value={quickPodForm.DateOfPod}
-                onChange={(e) => setQuickPodForm({ ...quickPodForm, DateOfPod: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                helperText="Entering Date of POD marks shipment as Delivered"
-              />
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155', mb: 0.5, display: 'block', fontSize: '0.8rem' }}>
+                  Date of POD (Delivery Date)
+                </Typography>
+                <TextField
+                  fullWidth
+                  type="date"
+                  size="small"
+                  value={quickPodForm.DateOfPod}
+                  onChange={(e) => setQuickPodForm({ ...quickPodForm, DateOfPod: e.target.value })}
+                  InputProps={{ sx: { bgcolor: '#ffffff' } }}
+                  helperText="Entering Date of POD marks shipment as Delivered"
+                />
+              </Box>
             </Grid>
             <Grid item xs={12}>
               <TextField

@@ -112,7 +112,8 @@ const DashboardHome = () => {
 
   const totalAlerts = (kpis?.lowStockCount || 0) + 
     ((kpis?.totalReceivableOverdue || 0) > 0 ? 1 : 0) + 
-    ((kpis?.totalPayableOverdue || 0) > 0 ? 1 : 0);
+    ((kpis?.totalPayableOverdue || 0) > 0 ? 1 : 0) +
+    (kpis?.overduePodCount || 0);
 
   const tc = kpis?.turnoverComparison;
 

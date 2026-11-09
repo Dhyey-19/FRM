@@ -30,7 +30,8 @@ import {
   CallReceived as ReceivableIcon,
   CallMade as PayableIcon,
   ArrowForward as ArrowForwardIcon,
-  CheckCircle as HealthyIcon
+  CheckCircle as HealthyIcon,
+  LocalShipping as ShippingIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -42,6 +43,9 @@ const NotificationLogs = () => {
     reorder: 0,
     receivables: 0,
     payables: 0,
+    overduePod: 0,
+    shortfall: 0,
+    dispatchReady: 0,
     critical: 0,
     warning: 0
   });
@@ -75,6 +79,7 @@ const NotificationLogs = () => {
   const filteredNotifications = notifications.filter(item => {
     // Tab filter
     if (currentTab === 'reorder' && item.type !== 'reorder') return false;
+    if (currentTab === 'overdue_pod' && item.type !== 'overdue_pod') return false;
     if (currentTab === 'shortfall' && item.type !== 'shortfall') return false;
     if (currentTab === 'dispatch_ready' && item.type !== 'dispatch_ready') return false;
     if (currentTab === 'receivables' && item.type !== 'receivable_overdue') return false;
@@ -90,7 +95,8 @@ const NotificationLogs = () => {
       const matchMsg = (item.message || '').toLowerCase().includes(term);
       const matchItem = (item.itemName || '').toLowerCase().includes(term) || (item.itemCode || '').toLowerCase().includes(term);
       const matchParty = (item.partyName || item.vendorName || '').toLowerCase().includes(term);
-      return matchTitle || matchMsg || matchItem || matchParty;
+      const matchOutward = (item.outwardNo || '').toLowerCase().includes(term);
+      return matchTitle || matchMsg || matchItem || matchParty || matchOutward;
     }
 
     return true;
@@ -142,7 +148,7 @@ const NotificationLogs = () => {
 
       {/* Summary KPI Badges */}
       <Grid container spacing={{ xs: 2, sm: 2.5 }} sx={{ mb: 3.5 }}>
-        <Grid item xs={12} sm={6} md={6} lg={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2.4}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -162,7 +168,7 @@ const NotificationLogs = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={6} lg={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2.4}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -182,7 +188,27 @@ const NotificationLogs = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={6} lg={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2.4}>
+          <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
+            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Overdue POD
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: (summary.overduePod || 0) > 0 ? '#ea580c' : '#1e293b', mt: 0.5 }}>
+                    {summary.overduePod || 0}
+                  </Typography>
+                </Box>
+                <Avatar sx={{ bgcolor: (summary.overduePod || 0) > 0 ? '#fff7ed' : '#f1f5f9', color: (summary.overduePod || 0) > 0 ? '#ea580c' : '#64748b', width: 44, height: 44, borderRadius: 2 }}>
+                  <ShippingIcon />
+                </Avatar>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={4} lg={2.4}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -202,7 +228,7 @@ const NotificationLogs = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={6} lg={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2.4}>
           <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(15, 59, 102, 0.04)' }}>
             <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -249,6 +275,7 @@ const NotificationLogs = () => {
           >
             <Tab label={`All (${summary.total})`} value="all" />
             <Tab label={`Low Stock (${summary.reorder || 0})`} value="reorder" />
+            <Tab label={`Overdue POD (${summary.overduePod || 0})`} value="overdue_pod" />
             <Tab label={`PO Shortfall (${summary.shortfall || 0})`} value="shortfall" />
             <Tab label={`Ready to Dispatch (${summary.dispatchReady || 0})`} value="dispatch_ready" />
             <Tab label={`Overdue Receivables (${summary.receivables || 0})`} value="receivables" />
@@ -319,7 +346,15 @@ const NotificationLogs = () => {
                             flexShrink: 0
                           }}
                         >
-                          {isReorder ? <InventoryIcon /> : (item.type === 'receivable_overdue' ? <ReceivableIcon /> : <PayableIcon />)}
+                          {isReorder ? (
+                            <InventoryIcon />
+                          ) : item.type === 'overdue_pod' ? (
+                            <ShippingIcon />
+                          ) : item.type === 'receivable_overdue' ? (
+                            <ReceivableIcon />
+                          ) : (
+                            <PayableIcon />
+                          )}
                         </Avatar>
 
                         <Box>
@@ -372,6 +407,30 @@ const NotificationLogs = () => {
                               </Typography>
                             </Box>
                           )}
+
+                          {item.type === 'overdue_pod' && (
+                            <Box sx={{ display: 'flex', gap: 2, mt: 1.5, pt: 1, borderTop: '1px dashed #e2e8f0', flexWrap: 'wrap', alignItems: 'center' }}>
+                              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                Invoice Amount: <strong style={{ color: '#0F3B66' }}>₹{(item.amount || 0).toLocaleString('en-IN')}</strong>
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                Expected Delivery: <strong>{item.expectedDeliveryDate ? item.expectedDeliveryDate.split('-').reverse().join('/') : '—'}</strong>
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 700 }}>
+                                Overdue: {item.overdueDays} Days Late
+                              </Typography>
+                              {item.courierCompany && (
+                                <Typography variant="caption" sx={{ color: '#2563eb' }}>
+                                  Transporter: <strong>{item.courierCompany}</strong>
+                                </Typography>
+                              )}
+                              {item.awbNo && (
+                                <Typography variant="caption" sx={{ color: '#475569' }}>
+                                  AWB: <strong>{item.awbNo}</strong>
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
                         </Box>
                       </Box>
 
@@ -392,7 +451,7 @@ const NotificationLogs = () => {
                             '&:hover': { bgcolor: '#F88A01' }
                           }}
                         >
-                          {isReorder ? 'Manage Item' : 'View Invoices'}
+                          {isReorder ? 'Manage Item' : (item.type === 'overdue_pod' ? 'Enter POD' : 'View Invoices')}
                         </Button>
                       )}
                     </Box>

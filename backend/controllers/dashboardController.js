@@ -619,6 +619,34 @@ exports.getDashboardKPIs = async (req, res) => {
       items: salesPendingOrderItems
     };
 
+    // 14. Overdue Proof of Delivery (POD) Count
+    let overduePodCount = 0;
+    try {
+      const pendingPodResult = await pool.request().query(`
+        SELECT 
+          h.ID, h.OUTWARDDATE, ISNULL(l.DeliveryDays, 0) AS DeliveryDays
+        FROM OutwardHeader h
+        LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+        WHERE (h.DateOfPod IS NULL OR TRIM(h.DateOfPod) = '' OR h.DateOfPod = '-')
+      `);
+      const nowDt = new Date();
+      const todayDt = new Date(nowDt.getFullYear(), nowDt.getMonth(), nowDt.getDate());
+      (pendingPodResult.recordset || []).forEach(r => {
+        const invDateStr = String(r.OUTWARDDATE || '').split('T')[0];
+        const days = parseInt(r.DeliveryDays, 10) || 0;
+        const parts = invDateStr.split('-');
+        if (parts.length === 3) {
+          const expDt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          expDt.setDate(expDt.getDate() + days);
+          if (todayDt > expDt) {
+            overduePodCount++;
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Error counting overdue PODs for KPIs:', err);
+    }
+
     res.status(200).json({
       totalItems,
       totalValue,
@@ -646,7 +674,8 @@ exports.getDashboardKPIs = async (req, res) => {
       cashBankBalance,
       departmentStocks,
       purchaseAuthority,
-      salesAuthority
+      salesAuthority,
+      overduePodCount
     });
 
   } catch (error) {
@@ -956,6 +985,92 @@ exports.getDashboardNotifications = async (req, res) => {
       });
     }
 
+    // 4. Overdue Proof of Delivery (POD) Shipments
+    try {
+      const pendingPodResult = await pool.request().query(`
+        SELECT 
+          h.ID AS OutwardId,
+          h.OUTWARDNO AS OutwardNo,
+          h.OUTWARDDATE AS OutwardDate,
+          h.TOTALAMOUNT AS TotalAmount,
+          h.CourierCompany,
+          h.AwbNo,
+          h.TransportMode,
+          h.DateOfPod,
+          h.Bill,
+          l.Id AS LedgerId,
+          l.LedgerName,
+          l.City,
+          l.State,
+          ISNULL(l.DeliveryDays, 0) AS DeliveryDays
+        FROM OutwardHeader h
+        LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+        WHERE (h.DateOfPod IS NULL OR TRIM(h.DateOfPod) = '' OR h.DateOfPod = '-')
+        ORDER BY h.OUTWARDDATE ASC
+      `);
+
+      const addDaysToDateStr = (dateStr, days) => {
+        if (!dateStr) return '';
+        const parts = String(dateStr).split('T')[0].split('-');
+        if (parts.length < 3) return dateStr;
+        const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        dt.setDate(dt.getDate() + (parseInt(days, 10) || 0));
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      };
+
+      const parseLocalDate = (dateStr) => {
+        if (!dateStr) return null;
+        const parts = String(dateStr).split('T')[0].split('-');
+        if (parts.length < 3) return null;
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      };
+
+      const nowDt = new Date();
+      const todayDt = new Date(nowDt.getFullYear(), nowDt.getMonth(), nowDt.getDate());
+
+      (pendingPodResult.recordset || []).forEach(row => {
+        const invDateStr = String(row.OutwardDate || '').split('T')[0];
+        const deliveryDays = parseInt(row.DeliveryDays, 10) || 0;
+        const expectedDateStr = addDaysToDateStr(invDateStr, deliveryDays);
+        const expectedDeliveryDate = parseLocalDate(expectedDateStr);
+
+        if (expectedDeliveryDate && todayDt > expectedDeliveryDate) {
+          const diffDays = Math.floor((todayDt.getTime() - expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays > 0) {
+            const expParts = expectedDateStr.split('-');
+            const expDisplay = expParts.length === 3 ? `${expParts[2]}/${expParts[1]}/${expParts[0]}` : expectedDateStr;
+            const trackingInfo = row.CourierCompany 
+              ? `Dispatched via ${row.CourierCompany}${row.AwbNo ? ` (AWB: ${row.AwbNo})` : ''}` 
+              : 'Not yet dispatched';
+
+            notifications.push({
+              id: `pod_overdue_${row.OutwardId}`,
+              type: 'overdue_pod',
+              category: 'Delivery POD Overdue',
+              severity: diffDays > 7 ? 'critical' : 'warning',
+              title: `POD Overdue (${diffDays}d late): Sales #${row.OutwardNo} • ${row.LedgerName}`,
+              message: `Delivery confirmation (POD) for invoice #${row.OutwardNo} to ${row.LedgerName}${row.City ? ` (${row.City})` : ''} was expected on ${expDisplay} (${deliveryDays}d term), but Date of POD is not entered. ${trackingInfo}.`,
+              outwardNo: row.OutwardNo,
+              outwardId: row.OutwardId,
+              partyName: row.LedgerName,
+              city: row.City,
+              amount: parseFloat(row.TotalAmount) || 0,
+              deliveryDays: deliveryDays,
+              expectedDeliveryDate: expectedDateStr,
+              overdueDays: diffDays,
+              courierCompany: row.CourierCompany,
+              awbNo: row.AwbNo,
+              transportMode: row.TransportMode,
+              timestamp: new Date().toISOString(),
+              actionLink: `/dashboard/reports/pending-pod?search=${encodeURIComponent(row.OutwardNo)}`
+            });
+          }
+        }
+      });
+    } catch (podErr) {
+      console.error('Error fetching overdue POD notifications:', podErr);
+    }
+
     const summary = {
       total: notifications.length,
       reorder: notifications.filter(n => n.type === 'reorder').length,
@@ -963,6 +1078,7 @@ exports.getDashboardNotifications = async (req, res) => {
       dispatchReady: notifications.filter(n => n.type === 'dispatch_ready').length,
       receivables: notifications.filter(n => n.type === 'receivable_overdue').length,
       payables: notifications.filter(n => n.type === 'payable_overdue').length,
+      overduePod: notifications.filter(n => n.type === 'overdue_pod').length,
       critical: notifications.filter(n => n.severity === 'critical').length,
       warning: notifications.filter(n => n.severity === 'warning').length,
       success: notifications.filter(n => n.severity === 'success').length

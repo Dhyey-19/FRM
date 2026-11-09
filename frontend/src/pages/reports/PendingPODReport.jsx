@@ -964,17 +964,21 @@ const PendingPODReport = () => {
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Date of POD (Proof of Delivery)"
-                type="date"
-                value={podForm.DateOfPod}
-                onChange={(e) => setPodForm(prev => ({ ...prev, DateOfPod: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
-                helperText="Entering Date of POD confirms delivery and clears from report"
-                required
-              />
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155', mb: 0.5, display: 'block', fontSize: '0.8rem' }}>
+                  Date of POD (Proof of Delivery) *
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="date"
+                  value={podForm.DateOfPod}
+                  onChange={(e) => setPodForm(prev => ({ ...prev, DateOfPod: e.target.value }))}
+                  InputProps={{ sx: { bgcolor: '#ffffff' } }}
+                  helperText="Entering Date of POD confirms delivery and clears from report"
+                  required
+                />
+              </Box>
             </Grid>
 
             <Grid item xs={12}>
@@ -1021,3 +1025,4 @@ const PendingPODReport = () => {
 };
 
 export default PendingPODReport;
+
