@@ -719,7 +719,7 @@ exports.getPOFulfillmentReport = async (req, res) => {
           ISNULL(d.SUBCODE, '') AS SUBCODE,
           SUM(d.PENDINGQTY) AS TotalPOPendingQty,
           SUM(d.QUANTITY) AS TotalPOOrderedQty,
-          GROUP_CONCAT(h.PONO || ' (' || CAST(d.PENDINGQTY AS INT) || ' ' || ISNULL(d.UNIT, 'PCS') || ')', ', ') AS PODetailsList
+          STRING_AGG(CONCAT(h.PONO, ' (', CAST(d.PENDINGQTY AS INT), ' ', ISNULL(d.UNIT, 'PCS'), ')'), ', ') AS PODetailsList
         FROM PurchaseOrderDetail d
         INNER JOIN PurchaseOrderHeader h ON d.POID = h.ID
         WHERE UPPER(h.STATUS) IN ('PENDING', 'PARTIALLY FULFILLED') AND d.PENDINGQTY > 0
@@ -739,7 +739,7 @@ exports.getPOFulfillmentReport = async (req, res) => {
           ISNULL(pid.SUBCODE, '') AS SUBCODE,
           SUM(pid.PENDINGQTY) AS TotalPIPendingQty,
           SUM(pid.QUANTITY) AS TotalPIOrderedQty,
-          GROUP_CONCAT(pih.PINO || ' (' || CAST(pid.PENDINGQTY AS INT) || ' ' || ISNULL(pid.UNIT, 'PCS') || ')', ', ') AS PIDetailsList
+          STRING_AGG(CONCAT(pih.PINO, ' (', CAST(pid.PENDINGQTY AS INT), ' ', ISNULL(pid.UNIT, 'PCS'), ')'), ', ') AS PIDetailsList
         FROM PerformaInvoiceDetail pid
         INNER JOIN PerformaInvoiceHeader pih ON pid.PIID = pih.ID
         WHERE UPPER(pih.STATUS) IN ('ORDERED', 'PARTIALLY RECEIVED', 'DRAFT') AND pid.PENDINGQTY > 0

@@ -146,10 +146,13 @@ const AssetMaster = () => {
       const url = dialogMode === 'add' ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/assets` : `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/assets/${selectedAssetId}`;
       const method = dialogMode === 'add' ? 'POST' : 'PUT';
       
+      const qty = parseInt(formData.Quantity, 10) || 0;
+      const unitVal = parseFloat(formData.UnitValue) || 0;
       const payload = {
         AssetName: formData.AssetName,
-        Quantity: parseInt(formData.Quantity, 10) || 0,
-        UnitValue: parseFloat(formData.UnitValue) || 0
+        Quantity: qty,
+        UnitValue: unitVal,
+        TotalValue: qty * unitVal
       };
 
       const response = await fetch(url, {
@@ -198,13 +201,17 @@ const AssetMaster = () => {
   };
 
   const handleExport = () => {
-    const exportData = assets.map((asset, index) => ({
-      'Sr. No.': index + 1,
-      AssetName: asset.AssetName,
-      Quantity: asset.Quantity || 0,
-      UnitValue: asset.UnitValue || 0,
-      TotalValue: asset.TotalValue || 0
-    }));
+    const exportData = assets.map((asset, index) => {
+      const q = Number(asset.Quantity) || 0;
+      const u = Number(asset.UnitValue) || 0;
+      return {
+        'Sr. No.': index + 1,
+        AssetName: asset.AssetName,
+        Quantity: q,
+        UnitValue: u,
+        TotalValue: asset.TotalValue != null ? Number(asset.TotalValue) : (q * u)
+      };
+    });
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Assets");
@@ -379,7 +386,9 @@ const AssetMaster = () => {
                       <TableCell sx={{ fontWeight: 500 }}>{row.AssetName}</TableCell>
                       <TableCell>{row.Quantity}</TableCell>
                       <TableCell>{row.UnitValue}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>{row.TotalValue}</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                        {Number(row.TotalValue != null ? row.TotalValue : ((row.Quantity || 0) * (row.UnitValue || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
                       <TableCell align="center">
                         <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
                           <EditIcon fontSize="small" />
@@ -427,6 +436,14 @@ const AssetMaster = () => {
             <TextField label="Asset Name" name="AssetName" value={formData.AssetName} onChange={handleInputChange} fullWidth size="small" />
             <TextField label="Quantity" name="Quantity" type="number" value={formData.Quantity} onChange={handleInputChange} fullWidth size="small" />
             <TextField label="Unit Value" name="UnitValue" type="number" value={formData.UnitValue} onChange={handleInputChange} fullWidth size="small" />
+            <TextField 
+              label="Total Value (Calculated: Quantity × Unit Value)" 
+              value={((parseInt(formData.Quantity, 10) || 0) * (parseFloat(formData.UnitValue) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+              InputProps={{ readOnly: true }} 
+              fullWidth 
+              size="small" 
+              sx={{ backgroundColor: '#f8fafc' }} 
+            />
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>

@@ -362,11 +362,11 @@ exports.getDashboardKPIs = async (req, res) => {
       SELECT 
         ISNULL(SUM(TOTALAMOUNT), 0) AS totalTurnover,
         ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS currentMonthTurnover,
-        ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('month', -1, GETDATE()), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS previousMonthTurnover,
-        ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('year', -1, GETDATE()), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS lastYearSameMonthTurnover,
+        ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD(month, -1, GETDATE()), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS previousMonthTurnover,
+        ISNULL(SUM(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD(year, -1, GETDATE()), 'yyyy-MM') THEN TOTALAMOUNT ELSE 0 END), 0) AS lastYearSameMonthTurnover,
         COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM') THEN 1 END) AS currentMonthInvoices,
-        COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('month', -1, GETDATE()), 'yyyy-MM') THEN 1 END) AS previousMonthInvoices,
-        COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD('year', -1, GETDATE()), 'yyyy-MM') THEN 1 END) AS lastYearSameMonthInvoices
+        COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD(month, -1, GETDATE()), 'yyyy-MM') THEN 1 END) AS previousMonthInvoices,
+        COUNT(CASE WHEN FORMAT(OUTWARDDATE, 'yyyy-MM') = FORMAT(DATEADD(year, -1, GETDATE()), 'yyyy-MM') THEN 1 END) AS lastYearSameMonthInvoices
       FROM OutwardHeader
     `);
 
@@ -478,7 +478,7 @@ exports.getDashboardKPIs = async (req, res) => {
           SUM(d.PENDINGQTY) AS TotalPOPendingQty,
           SUM(d.QUANTITY) AS TotalPOOrderedQty,
           COUNT(DISTINCT h.ID) AS POCount,
-          GROUP_CONCAT(h.PONO || ' (' || CAST(d.PENDINGQTY AS INT) || ' ' || ISNULL(d.UNIT, 'PCS') || ')', ', ') AS PODetailsList
+          STRING_AGG(CONCAT(h.PONO, ' (', CAST(d.PENDINGQTY AS INT), ' ', ISNULL(d.UNIT, 'PCS'), ')'), ', ') AS PODetailsList
         FROM PurchaseOrderDetail d
         INNER JOIN PurchaseOrderHeader h ON d.POID = h.ID
         WHERE UPPER(h.STATUS) IN ('PENDING', 'PARTIALLY FULFILLED') AND d.PENDINGQTY > 0
@@ -490,7 +490,7 @@ exports.getDashboardKPIs = async (req, res) => {
           pid.ITEMCODE,
           ISNULL(pid.SUBCODE, '') AS SUBCODE,
           SUM(pid.PENDINGQTY) AS TotalPIPendingQty,
-          GROUP_CONCAT(pih.PINO || ' (' || CAST(pid.PENDINGQTY AS INT) || ' ' || ISNULL(pid.UNIT, 'PCS') || ')', ', ') AS PIDetailsList
+          STRING_AGG(CONCAT(pih.PINO, ' (', CAST(pid.PENDINGQTY AS INT), ' ', ISNULL(pid.UNIT, 'PCS'), ')'), ', ') AS PIDetailsList
         FROM PerformaInvoiceDetail pid
         INNER JOIN PerformaInvoiceHeader pih ON pid.PIID = pih.ID
         WHERE UPPER(pih.STATUS) IN ('ORDERED', 'PARTIALLY RECEIVED', 'DRAFT') AND pid.PENDINGQTY > 0
@@ -742,7 +742,7 @@ exports.getDashboardNotifications = async (req, res) => {
           d.ITEMCODE,
           ISNULL(d.SUBCODE, '') AS SUBCODE,
           SUM(d.PENDINGQTY) AS TotalPOPendingQty,
-          GROUP_CONCAT(h.PONO, ', ') AS PODetailsList
+          STRING_AGG(h.PONO, ', ') AS PODetailsList
         FROM PurchaseOrderDetail d
         INNER JOIN PurchaseOrderHeader h ON d.POID = h.ID
         WHERE UPPER(h.STATUS) IN ('PENDING', 'PARTIALLY FULFILLED') AND d.PENDINGQTY > 0
