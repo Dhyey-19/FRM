@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import { 
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, Alert,
   Autocomplete, Grid, Divider, MenuItem, Select, FormControl, InputLabel, Checkbox, FormControlLabel, Chip, TableSortLabel,
-  ToggleButtonGroup, ToggleButton
+  ToggleButtonGroup, ToggleButton, Tooltip
 } from '@mui/material';
 import { 
   Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, 
   Input as InputIcon, Visibility as ViewIcon, Close as CloseIcon, AddCircle as AddCircleIcon,
   Description as DescriptionIcon, Print as PrintIcon, ReceiptLong, Receipt, MoneyOff,
-  QrCode2 as QrCodeIcon, ElectricBolt as BoltIcon
+  QrCode2 as QrCodeIcon, ElectricBolt as BoltIcon, LocalShipping as ShippingIcon,
+  AssignmentTurnedIn as PodIcon, Warning as WarningIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 import PdfPreviewModal from '../components/common/PdfPreviewModal';
@@ -36,6 +37,7 @@ const emptyRow = {
 };
 
 const OutwardEntry = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const filterParamOutwardNo = searchParams.get('outwardNo');
 
@@ -76,6 +78,25 @@ const OutwardEntry = () => {
   const [totalAmount, setTotalAmount] = useState('');
   const [remark, setRemark] = useState('');
   
+  // Dispatch & POD Details State (in Entry modal)
+  const [courierCompany, setCourierCompany] = useState('');
+  const [awbNo, setAwbNo] = useState('');
+  const [transportMode, setTransportMode] = useState('Road');
+  const [dateOfPod, setDateOfPod] = useState('');
+  const [podRemarks, setPodRemarks] = useState('');
+
+  // Quick POD Modal State (to update POD later directly from table row)
+  const [quickPodModalOpen, setQuickPodModalOpen] = useState(false);
+  const [selectedQuickPodRow, setSelectedQuickPodRow] = useState(null);
+  const [quickPodForm, setQuickPodForm] = useState({
+    CourierCompany: '',
+    AwbNo: '',
+    TransportMode: 'Road',
+    DateOfPod: '',
+    PodRemarks: ''
+  });
+  const [savingQuickPod, setSavingQuickPod] = useState(false);
+
   // Purchase Order Linkage State
   const [ledgerPOs, setLedgerPOs] = useState([]);
   const [selectedPoId, setSelectedPoId] = useState(null);
@@ -102,6 +123,67 @@ const OutwardEntry = () => {
     setOutwards(prev => prev.map(o => (o.ID === updated.ID ? { ...o, ...updated } : o)));
     if (selectedEinvoiceRow && (selectedEinvoiceRow.ID === updated.ID || selectedEinvoiceRow.OUTWARDNO === updated.OUTWARDNO)) {
       setSelectedEinvoiceRow(prev => ({ ...prev, ...updated }));
+    }
+  };
+
+  // Helper to safely add days to YYYY-MM-DD string without timezone drift
+  const addDaysToDateStr = (dateStr, days) => {
+    if (!dateStr) return '';
+    const parts = String(dateStr).split('T')[0].split('-');
+    if (parts.length < 3) return dateStr;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const dt = new Date(y, m, d);
+    dt.setDate(dt.getDate() + (parseInt(days, 10) || 0));
+    const resY = dt.getFullYear();
+    const resM = String(dt.getMonth() + 1).padStart(2, '0');
+    const resD = String(dt.getDate()).padStart(2, '0');
+    return `${resY}-${resM}-${resD}`;
+  };
+
+  // Format YYYY-MM-DD to DD/MM/YYYY
+  const formatDateDisplay = (dateStr) => {
+    if (!dateStr) return '—';
+    const parts = String(dateStr).split('T')[0].split('-');
+    if (parts.length < 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  // Quick POD Modal Handlers
+  const handleOpenQuickPod = (row) => {
+    setSelectedQuickPodRow(row);
+    setQuickPodForm({
+      CourierCompany: row.CourierCompany || row.DefaultTransport || '',
+      AwbNo: row.AwbNo || '',
+      TransportMode: row.TransportMode || 'Road',
+      DateOfPod: row.DateOfPod ? row.DateOfPod.split('T')[0] : '',
+      PodRemarks: row.PodRemarks || ''
+    });
+    setQuickPodModalOpen(true);
+  };
+
+  const handleSaveQuickPod = async () => {
+    if (!selectedQuickPodRow) return;
+    setSavingQuickPod(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/outwards/${selectedQuickPodRow.ID}/pod`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quickPodForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQuickPodModalOpen(false);
+        setOutwards(prev => prev.map(o => o.ID === selectedQuickPodRow.ID ? { ...o, ...quickPodForm } : o));
+      } else {
+        alert(data.message || 'Error updating POD details');
+      }
+    } catch (err) {
+      console.error('Error saving POD details:', err);
+      alert('Error updating POD details: ' + err.message);
+    } finally {
+      setSavingQuickPod(false);
     }
   };
 
@@ -387,6 +469,11 @@ const OutwardEntry = () => {
     setRoundOff('');
     setTotalAmount('');
     setRemark('');
+    setCourierCompany('');
+    setAwbNo('');
+    setTransportMode('Road');
+    setDateOfPod('');
+    setPodRemarks('');
     setGridRows([{ ...emptyRow }]);
     setOpenDialog(true);
   };
@@ -415,6 +502,11 @@ const OutwardEntry = () => {
     setRoundOff(outward.ROUNDOFF || '');
     setTotalAmount(outward.TOTALAMOUNT || '');
     setRemark(outward.REMARK || '');
+    setCourierCompany(outward.CourierCompany || '');
+    setAwbNo(outward.AwbNo || '');
+    setTransportMode(outward.TransportMode || 'Road');
+    setDateOfPod(outward.DateOfPod ? outward.DateOfPod.split('T')[0] : '');
+    setPodRemarks(outward.PodRemarks || '');
     
     if (outward.Details && outward.Details.length > 0) {
       setGridRows(outward.Details.map(d => ({
@@ -519,6 +611,11 @@ const OutwardEntry = () => {
           }
           return r;
         }));
+      }
+
+      // Pre-fill default transport/courier from Ledger Master if currently blank
+      if (newValue.Transport && !courierCompany) {
+        setCourierCompany(newValue.Transport);
       }
     }
   };
@@ -682,11 +779,22 @@ const OutwardEntry = () => {
     const dateVal = outward.OUTWARDDATE || new Date();
     const formattedDate = new Date(dateVal).toLocaleDateString('en-GB'); // DD/MM/YYYY
     doc.text(`Date: ${formattedDate}`, 196, 29, { align: 'right' });
+    let rightY = 33;
     if (outward.PONO) {
-      doc.text(`PO Ref: ${outward.PONO}`, 196, 33, { align: 'right' });
+      doc.text(`PO Ref: ${outward.PONO}`, 196, rightY, { align: 'right' });
+      rightY += 4;
+    }
+    if (outward.CourierCompany || outward.AwbNo) {
+      const parts = [outward.CourierCompany, outward.AwbNo ? `AWB: ${outward.AwbNo}` : ''].filter(Boolean);
+      doc.text(`Dispatch: ${parts.join(' - ')}`, 196, rightY, { align: 'right' });
+      rightY += 4;
+    }
+    if (outward.TransportMode && outward.TransportMode !== 'Road') {
+      doc.text(`Mode: ${outward.TransportMode}`, 196, rightY, { align: 'right' });
+      rightY += 4;
     }
 
-    let dividerY = Math.max(currentHeaderY + 2, outward.PONO ? 37 : 33);
+    let dividerY = Math.max(currentHeaderY + 2, rightY);
 
     // If e-Invoice, draw e-Invoice banner & QR Code!
     if (isEInvoice) {
@@ -1005,6 +1113,11 @@ const OutwardEntry = () => {
       UPDATEDBY: username,
       POID: selectedPoId || null,
       PONO: selectedPo ? selectedPo.PONO : null,
+      CourierCompany: courierCompany || null,
+      AwbNo: awbNo || null,
+      TransportMode: transportMode || null,
+      DateOfPod: dateOfPod || null,
+      PodRemarks: podRemarks || null,
       Details: validRows.map(r => ({
         ...r,
         SUBCODE: r.SUBCODE || '',
@@ -1077,16 +1190,26 @@ const OutwardEntry = () => {
         <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
           <InputIcon /> Sales
         </Typography>
-        <Button 
-          variant="contained" 
-          color="secondary" 
-          startIcon={<AddIcon />} 
-          onClick={handleOpenDialog} 
-          disabled={!hasAddPermission()}
-          sx={{ fontWeight: 600, px: 2.5, width: { xs: '100%', sm: 'auto' } }}
-        >
-          Add Sales
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<ShippingIcon />}
+            onClick={() => navigate('/dashboard/reports/pending-pod')}
+            sx={{ fontWeight: 600, borderColor: '#0F3B66', color: '#0F3B66', '&:hover': { borderColor: '#0a2744', bgcolor: '#f0f7ff' } }}
+          >
+            Pending POD Report ({outwards.filter(o => !o.DateOfPod || !String(o.DateOfPod).trim()).length})
+          </Button>
+          <Button 
+            variant="contained" 
+            color="secondary" 
+            startIcon={<AddIcon />} 
+            onClick={handleOpenDialog} 
+            disabled={!hasAddPermission()}
+            sx={{ fontWeight: 600, px: 2.5, width: { xs: '100%', sm: 'auto' } }}
+          >
+            Add Sales
+          </Button>
+        </Box>
       </Box>
 
       <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
@@ -1172,6 +1295,7 @@ const OutwardEntry = () => {
                 <TableCell sx={{ fontWeight: 600 }}>PO No</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ledger</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Total Amount</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Dispatch & POD</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>e-Invoice</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
@@ -1210,6 +1334,48 @@ const OutwardEntry = () => {
                   <TableCell>{row.LedgerName}</TableCell>
                   <TableCell>{row.TOTALAMOUNT}</TableCell>
                   <TableCell>
+                    {row.DateOfPod ? (
+                      <Chip 
+                        size="small" 
+                        icon={<PodIcon fontSize="small" />} 
+                        label={`POD: ${formatDateDisplay(row.DateOfPod)}`} 
+                        color="success" 
+                        variant="filled"
+                        onClick={() => handleOpenQuickPod(row)}
+                        sx={{ fontSize: '0.72rem', height: 22, fontWeight: 600, cursor: 'pointer' }}
+                        title={`Delivered on ${formatDateDisplay(row.DateOfPod)}. Click to update POD`}
+                      />
+                    ) : (row.CourierCompany || row.AwbNo) ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+                        <Chip 
+                          size="small" 
+                          icon={<ShippingIcon fontSize="small" />} 
+                          label={row.CourierCompany || 'In Transit'} 
+                          color="info" 
+                          variant="outlined"
+                          onClick={() => handleOpenQuickPod(row)}
+                          sx={{ fontSize: '0.72rem', height: 22, fontWeight: 600, cursor: 'pointer' }}
+                          title={`In Transit. Click to enter Date of POD. AWB: ${row.AwbNo || 'N/A'}`}
+                        />
+                        {row.AwbNo && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.68rem', lineHeight: 1 }}>
+                            AWB: {row.AwbNo}
+                          </Typography>
+                        )}
+                      </Box>
+                    ) : (
+                      <Chip 
+                        size="small" 
+                        label="POD Pending" 
+                        color="default" 
+                        variant="outlined"
+                        onClick={() => handleOpenQuickPod(row)}
+                        sx={{ fontSize: '0.72rem', height: 22, cursor: 'pointer', color: '#64748b' }}
+                        title="Click to update dispatch details & POD"
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {row.Bill !== false && row.Bill !== 0 ? (
                       <Chip 
                         size="small" 
@@ -1225,6 +1391,9 @@ const OutwardEntry = () => {
                     )}
                   </TableCell>
                   <TableCell align="center">
+                    <IconButton color="info" size="small" onClick={() => handleOpenQuickPod(row)} title="Update Courier, AWB & Date of POD">
+                      <ShippingIcon fontSize="small" />
+                    </IconButton>
                     {row.Bill !== false && row.Bill !== 0 && (
                       <IconButton 
                         color={row.EInvoiceStatus === 'Generated' || row.IRN ? 'info' : 'primary'} 
@@ -1253,7 +1422,7 @@ const OutwardEntry = () => {
               ))}
               {sortedOutwards.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
+                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>No outward entries found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1357,6 +1526,39 @@ const OutwardEntry = () => {
                 </Button>
               </Box>
             )}
+
+            {ledgerId && (() => {
+              const selectedParty = ledgers.find(l => l.Id === ledgerId);
+              if (!selectedParty) return null;
+              const deliveryDays = parseInt(selectedParty.DeliveryDays, 10) || 0;
+              const expDate = addDaysToDateStr(outwardDate, deliveryDays);
+              return (
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                    <Chip 
+                      icon={<ShippingIcon fontSize="small" />} 
+                      label={`Expected Delivery: ${deliveryDays} Days (Party Master)`} 
+                      color={deliveryDays > 0 ? "primary" : "default"} 
+                      size="small" 
+                      sx={{ fontWeight: 600 }}
+                    />
+                    <Typography variant="body2" sx={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                      Expected Delivery Date: <strong style={{ color: '#0F3B66' }}>{formatDateDisplay(expDate)}</strong>
+                    </Typography>
+                    {selectedParty.City && (
+                      <Typography variant="caption" color="text.secondary">
+                        Destination: <strong>{selectedParty.City}{selectedParty.State ? `, ${selectedParty.State}` : ''}</strong>
+                      </Typography>
+                    )}
+                    {selectedParty.Transport && (
+                      <Typography variant="caption" color="text.secondary">
+                        Default Transporter: <strong>{selectedParty.Transport}</strong>
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              );
+            })()}
           </Paper>
 
           {/* Grid Section */}
@@ -1441,6 +1643,80 @@ const OutwardEntry = () => {
             + Add Row
           </Button>
 
+          {/* Dispatch & Proof of Delivery (POD) Details */}
+          <Paper sx={{ p: 2, mb: 2, border: '1px solid #cbd5e1', bgcolor: '#ffffff', borderRadius: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, pb: 1, borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ShippingIcon fontSize="small" color="primary" /> Dispatch & Proof of Delivery (POD) Details
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Optional: Enter now or update later via Sales list or Pending POD Report
+              </Typography>
+            </Box>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Courier / Transport Company"
+                  placeholder="e.g. DTDC, Blue Dart, VRL"
+                  value={courierCompany}
+                  onChange={(e) => setCourierCompany(e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={2.5}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="AWB / Docket / LR No."
+                  placeholder="e.g. D12345678"
+                  value={awbNo}
+                  onChange={(e) => setAwbNo(e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  select
+                  size="small"
+                  label="Transport Mode"
+                  value={transportMode || 'Road'}
+                  onChange={(e) => setTransportMode(e.target.value)}
+                  SelectProps={{ native: true }}
+                >
+                  <option value="Road">Road</option>
+                  <option value="Courier">Courier</option>
+                  <option value="Air">Air</option>
+                  <option value="Rail">Rail</option>
+                  <option value="Self / Hand Delivery">Self / Hand Delivery</option>
+                  <option value="Other">Other</option>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  size="small"
+                  label="Date of POD"
+                  value={dateOfPod}
+                  onChange={(e) => setDateOfPod(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  helperText={dateOfPod ? "Delivered" : "Leave blank if pending"}
+                />
+              </Grid>
+              <Grid item xs={12} sm={12} md={2.5}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="POD / Dispatch Remarks"
+                  placeholder="e.g. Received by Mr. X, Signed copy"
+                  value={podRemarks}
+                  onChange={(e) => setPodRemarks(e.target.value)}
+                />
+              </Grid>
+            </Grid>
+          </Paper>
+
           {/* Footer Section */}
           <Paper sx={{ p: 2, border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Grid container spacing={2}>
@@ -1521,6 +1797,125 @@ const OutwardEntry = () => {
           <Button onClick={handleCloseDialog} color="inherit" sx={{ order: { xs: 3, sm: 1 }, width: { xs: '100%', sm: 'auto' } }}>Cancel</Button>
           <Button onClick={() => handleSave(false)} disabled={editingId ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="primary" size="medium" sx={{ px: 3, order: { xs: 1, sm: 2 }, flex: { xs: 1, sm: 'none' } }}>Save</Button>
           <Button onClick={() => handleSave(true)} disabled={editingId ? !hasEditPermission() : !hasAddPermission()} variant="contained" color="secondary" size="medium" startIcon={<PrintIcon />} sx={{ px: 3, order: { xs: 2, sm: 3 }, flex: { xs: 1, sm: 'none' } }}>Save & Print</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Quick POD Update Modal */}
+      <Dialog 
+        open={quickPodModalOpen} 
+        onClose={() => setQuickPodModalOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#0F3B66', color: '#fff', py: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ShippingIcon />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Update Dispatch & POD — Invoice {selectedQuickPodRow?.OUTWARDNO}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, pt: '24px !important', bgcolor: '#f8fafc' }}>
+          {selectedQuickPodRow && (
+            <Box sx={{ mb: 2, p: 1.5, bgcolor: '#ffffff', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                {selectedQuickPodRow.LedgerName}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, mt: 0.5, flexWrap: 'wrap' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Invoice Date: <strong>{formatDateDisplay(selectedQuickPodRow.OUTWARDDATE)}</strong>
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Expected Delivery: <strong>{selectedQuickPodRow.DeliveryDays || 0} Days</strong>
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Due: <strong>{formatDateDisplay(addDaysToDateStr(selectedQuickPodRow.OUTWARDDATE, selectedQuickPodRow.DeliveryDays || 0))}</strong>
+                </Typography>
+                {selectedQuickPodRow.City && (
+                  <Typography variant="caption" color="text.secondary">
+                    City: <strong>{selectedQuickPodRow.City}</strong>
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Courier / Transport Company"
+                placeholder="e.g. DTDC, Blue Dart, VRL"
+                value={quickPodForm.CourierCompany}
+                onChange={(e) => setQuickPodForm({ ...quickPodForm, CourierCompany: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="AWB / Docket / LR No."
+                placeholder="e.g. D987654321"
+                value={quickPodForm.AwbNo}
+                onChange={(e) => setQuickPodForm({ ...quickPodForm, AwbNo: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                select
+                size="small"
+                label="Transport Mode"
+                value={quickPodForm.TransportMode}
+                onChange={(e) => setQuickPodForm({ ...quickPodForm, TransportMode: e.target.value })}
+                SelectProps={{ native: true }}
+              >
+                <option value="Road">Road</option>
+                <option value="Courier">Courier</option>
+                <option value="Air">Air</option>
+                <option value="Rail">Rail</option>
+                <option value="Self / Hand Delivery">Self / Hand Delivery</option>
+                <option value="Other">Other</option>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="date"
+                size="small"
+                label="Date of POD (Delivery Date)"
+                value={quickPodForm.DateOfPod}
+                onChange={(e) => setQuickPodForm({ ...quickPodForm, DateOfPod: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                helperText="Entering Date of POD marks shipment as Delivered"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                label="POD / Dispatch Remarks"
+                placeholder="e.g. Delivered to reception, Received by Mahesh"
+                value={quickPodForm.PodRemarks}
+                onChange={(e) => setQuickPodForm({ ...quickPodForm, PodRemarks: e.target.value })}
+                multiline
+                rows={2}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, bgcolor: '#ffffff', borderTop: '1px solid #e0e0e0' }}>
+          <Button onClick={() => setQuickPodModalOpen(false)} color="inherit" disabled={savingQuickPod}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSaveQuickPod} 
+            variant="contained" 
+            color="primary" 
+            disabled={savingQuickPod}
+            sx={{ px: 3, fontWeight: 600 }}
+          >
+            {savingQuickPod ? 'Saving...' : 'Save POD Details'}
+          </Button>
         </DialogActions>
       </Dialog>
 

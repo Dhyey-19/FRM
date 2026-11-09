@@ -22,7 +22,8 @@ import {
   Assignment as POIcon,
   ReceiptLong as PIIcon,
   Badge as BadgeIcon,
-  CalendarMonth as CalendarMonthIcon
+  CalendarMonth as CalendarMonthIcon,
+  LocalShipping as ShippingIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -130,6 +131,7 @@ export const MENU_STRUCTURE = [
           { title: 'Inward Log', path: '/dashboard/reports/inward', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Outward Log', path: '/dashboard/reports/outward', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Item-wise Sales', path: '/dashboard/reports/itemwise-outward', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Pending POD Report', path: '/dashboard/reports/pending-pod', icon: <ShippingIcon fontSize="small" /> },
         ]
       },
       {

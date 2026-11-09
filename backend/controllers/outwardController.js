@@ -34,7 +34,9 @@ exports.getOutwards = async (req, res) => {
     const pool = await connectDB();
     const headerReq = pool.request();
     let headerQuery = `
-      SELECT h.*, l.LedgerName 
+      SELECT h.*, l.LedgerName, l.City, l.State, l.MobileNo,
+             ISNULL(l.DeliveryDays, 0) AS DeliveryDays,
+             l.Transport AS DefaultTransport
       FROM OutwardHeader h
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
     `;
@@ -100,7 +102,15 @@ exports.getOutwardReport = async (req, res) => {
         h.AckNo,
         h.AckDate,
         h.EInvoiceStatus,
+        h.CourierCompany,
+        h.AwbNo,
+        h.TransportMode,
+        h.DateOfPod,
+        h.PodRemarks,
         l.LedgerName, 
+        l.City,
+        l.State,
+        ISNULL(l.DeliveryDays, 0) AS DeliveryDays,
         d.ITEMCODE, 
         ISNULL(d.SUBCODE, '') AS SUBCODE,
         d.PODETAILID,
@@ -132,7 +142,11 @@ exports.getOutwardReport = async (req, res) => {
 };
 
 exports.addOutward = async (req, res) => {
-  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, POID, PONO, Details } = req.body;
+  const { 
+    Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, 
+    SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, 
+    POID, PONO, CourierCompany, AwbNo, TransportMode, DateOfPod, PodRemarks, Details 
+  } = req.body;
 
   if (!OUTWARDNO || !OUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'OutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -178,10 +192,21 @@ exports.addOutward = async (req, res) => {
         .input('UPDATEDBY', sql.VarChar(40), getSignature(CREATEDBY))
         .input('POID', sql.Numeric(8, 0), resolvedPoId)
         .input('PONO', sql.VarChar(50), resolvedPoNo)
+        .input('CourierCompany', sql.VarChar(100), CourierCompany ? String(CourierCompany).trim() : null)
+        .input('AwbNo', sql.VarChar(100), AwbNo ? String(AwbNo).trim() : null)
+        .input('TransportMode', sql.VarChar(50), TransportMode ? String(TransportMode).trim() : null)
+        .input('DateOfPod', sql.VarChar(20), DateOfPod ? String(DateOfPod).trim() : null)
+        .input('PodRemarks', sql.VarChar(255), PodRemarks ? String(PodRemarks).trim() : null)
         .query(`
-          INSERT INTO OutwardHeader (Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY, POID, PONO)
+          INSERT INTO OutwardHeader (
+            Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, CREATEDBY, UPDATEDBY, POID, PONO,
+            CourierCompany, AwbNo, TransportMode, DateOfPod, PodRemarks
+          )
           OUTPUT INSERTED.ID
-          VALUES (@Bill, @OUTWARDNO, @OUTWARDDATE, @LEDGERID, @EXPENSE, @CDPER, @CDAMOUNT, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY, @POID, @PONO)
+          VALUES (
+            @Bill, @OUTWARDNO, @OUTWARDDATE, @LEDGERID, @EXPENSE, @CDPER, @CDAMOUNT, @SGST, @CGST, @IGST, @GSTPER, @ROUNDOFF, @TOTALAMOUNT, @REMARK, @CREATEDBY, @UPDATEDBY, @POID, @PONO,
+            @CourierCompany, @AwbNo, @TransportMode, @DateOfPod, @PodRemarks
+          )
         `);
 
       const newOutwardId = headerRes.recordset[0].ID;
@@ -341,7 +366,11 @@ exports.addOutward = async (req, res) => {
 
 exports.updateOutward = async (req, res) => {
   const { id } = req.params;
-  const { Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, POID, PONO, Details } = req.body;
+  const { 
+    Bill, OUTWARDNO, OUTWARDDATE, LEDGERID, EXPENSE, CDPER, CDAMOUNT, 
+    SGST, CGST, IGST, GSTPER, ROUNDOFF, TOTALAMOUNT, REMARK, UPDATEDBY, 
+    POID, PONO, CourierCompany, AwbNo, TransportMode, DateOfPod, PodRemarks, Details 
+  } = req.body;
 
   if (!OUTWARDNO || !OUTWARDDATE || !LEDGERID || !Details || !Array.isArray(Details) || Details.length === 0) {
     return res.status(400).json({ message: 'OutwardNo, Date, Ledger, and at least one detail row are required' });
@@ -469,12 +498,19 @@ exports.updateOutward = async (req, res) => {
         .input('UPDATEDBY', sql.VarChar(40), getSignature(UPDATEDBY))
         .input('POID', sql.Numeric(8, 0), resolvedPoId)
         .input('PONO', sql.VarChar(50), resolvedPoNo)
+        .input('CourierCompany', sql.VarChar(100), CourierCompany ? String(CourierCompany).trim() : null)
+        .input('AwbNo', sql.VarChar(100), AwbNo ? String(AwbNo).trim() : null)
+        .input('TransportMode', sql.VarChar(50), TransportMode ? String(TransportMode).trim() : null)
+        .input('DateOfPod', sql.VarChar(20), DateOfPod ? String(DateOfPod).trim() : null)
+        .input('PodRemarks', sql.VarChar(255), PodRemarks ? String(PodRemarks).trim() : null)
         .query(`
           UPDATE OutwardHeader 
           SET Bill = @Bill, OUTWARDNO = @OUTWARDNO, OUTWARDDATE = @OUTWARDDATE, LEDGERID = @LEDGERID, 
               EXPENSE = @EXPENSE, CDPER = @CDPER, CDAMOUNT = @CDAMOUNT, SGST = @SGST, CGST = @CGST, IGST = @IGST, 
               GSTPER = @GSTPER, ROUNDOFF = @ROUNDOFF, TOTALAMOUNT = @TOTALAMOUNT, REMARK = @REMARK, UPDATEDBY = @UPDATEDBY,
-              POID = @POID, PONO = @PONO
+              POID = @POID, PONO = @PONO,
+              CourierCompany = @CourierCompany, AwbNo = @AwbNo, TransportMode = @TransportMode,
+              DateOfPod = @DateOfPod, PodRemarks = @PodRemarks
           WHERE ID = @ID
         `);
 
@@ -733,5 +769,231 @@ exports.deleteOutward = async (req, res) => {
   } catch (error) {
     console.error('Error deleting outward:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// PATCH /api/outwards/:id/pod
+// Quick update for Courier Company, AWB No., Transport Mode, Date of POD, Remarks
+exports.updateOutwardPod = async (req, res) => {
+  const { id } = req.params;
+  const { CourierCompany, AwbNo, TransportMode, DateOfPod, PodRemarks } = req.body;
+
+  try {
+    const pool = await connectDB();
+    const result = await pool.request()
+      .input('ID', sql.Numeric(8, 0), id)
+      .input('CourierCompany', sql.VarChar(100), CourierCompany ? String(CourierCompany).trim() : null)
+      .input('AwbNo', sql.VarChar(100), AwbNo ? String(AwbNo).trim() : null)
+      .input('TransportMode', sql.VarChar(50), TransportMode ? String(TransportMode).trim() : null)
+      .input('DateOfPod', sql.VarChar(20), DateOfPod ? String(DateOfPod).trim() : null)
+      .input('PodRemarks', sql.VarChar(255), PodRemarks ? String(PodRemarks).trim() : null)
+      .query(`
+        UPDATE OutwardHeader
+        SET CourierCompany = @CourierCompany,
+            AwbNo = @AwbNo,
+            TransportMode = @TransportMode,
+            DateOfPod = @DateOfPod,
+            PodRemarks = @PodRemarks
+        WHERE ID = @ID
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ message: 'Outward record not found' });
+    }
+
+    res.status(200).json({ 
+      success: true,
+      message: 'Dispatch and POD details updated successfully',
+      podData: {
+        CourierCompany: CourierCompany || null,
+        AwbNo: AwbNo || null,
+        TransportMode: TransportMode || null,
+        DateOfPod: DateOfPod || null,
+        PodRemarks: PodRemarks || null
+      }
+    });
+  } catch (error) {
+    console.error('Error updating outward POD details:', error);
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+// GET /api/outwards/pending-pod
+// Dedicated report of invoices where Date of POD is NOT entered (pending delivery)
+exports.getPendingPodReport = async (req, res) => {
+  try {
+    const { fromDate, toDate, ledgerId, courierCompany, isOverdue, search } = req.query;
+    const pool = await connectDB();
+    const request = pool.request();
+
+    let query = `
+      SELECT 
+        h.ID,
+        h.OUTWARDNO,
+        h.OUTWARDDATE,
+        h.LEDGERID,
+        l.LedgerName,
+        l.City,
+        l.State,
+        l.MobileNo,
+        l.Transport AS DefaultTransport,
+        ISNULL(l.DeliveryDays, 0) AS DeliveryDays,
+        h.CourierCompany,
+        h.AwbNo,
+        h.TransportMode,
+        h.DateOfPod,
+        h.PodRemarks,
+        h.Bill,
+        h.TOTALAMOUNT,
+        h.REMARK
+      FROM OutwardHeader h
+      LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
+      WHERE (h.DateOfPod IS NULL OR TRIM(h.DateOfPod) = '' OR h.DateOfPod = '-')
+    `;
+
+    if (fromDate) {
+      query += ' AND h.OUTWARDDATE >= @FromDate';
+      request.input('FromDate', sql.Date, fromDate);
+    }
+    if (toDate) {
+      query += ' AND h.OUTWARDDATE <= @ToDate';
+      request.input('ToDate', sql.Date, toDate);
+    }
+    if (ledgerId && ledgerId !== 'ALL') {
+      query += ' AND h.LEDGERID = @LedgerId';
+      request.input('LedgerId', sql.Numeric(10, 0), ledgerId);
+    }
+    if (courierCompany && courierCompany !== 'ALL') {
+      query += ' AND UPPER(h.CourierCompany) = UPPER(@CourierCompany)';
+      request.input('CourierCompany', sql.VarChar(100), courierCompany);
+    }
+    if (search && search.trim()) {
+      query += ' AND (h.OUTWARDNO LIKE @Search OR l.LedgerName LIKE @Search OR h.AwbNo LIKE @Search OR l.City LIKE @Search)';
+      request.input('Search', sql.VarChar(100), `%${search.trim()}%`);
+    }
+
+    query += `
+      ORDER BY 
+        h.OUTWARDDATE ASC,
+        CASE WHEN TRY_CAST(h.OUTWARDNO AS INT) IS NOT NULL THEN 0 ELSE 1 END,
+        TRY_CAST(h.OUTWARDNO AS INT) ASC,
+        h.OUTWARDNO ASC
+    `;
+
+    const result = await request.query(query);
+    const records = result.recordset || [];
+
+    // Helper to safely add days to YYYY-MM-DD string without UTC timezone drift
+    const addDaysToDateStr = (dateStr, days) => {
+      if (!dateStr) return '';
+      const parts = String(dateStr).split('T')[0].split('-');
+      if (parts.length < 3) return dateStr;
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const dt = new Date(y, m, d);
+      dt.setDate(dt.getDate() + (parseInt(days, 10) || 0));
+      const resY = dt.getFullYear();
+      const resM = String(dt.getMonth() + 1).padStart(2, '0');
+      const resD = String(dt.getDate()).padStart(2, '0');
+      return `${resY}-${resM}-${resD}`;
+    };
+
+    // Helper to parse YYYY-MM-DD to local Date at midnight
+    const parseLocalDate = (dateStr) => {
+      if (!dateStr) return null;
+      const parts = String(dateStr).split('T')[0].split('-');
+      if (parts.length < 3) return null;
+      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    };
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const enriched = records.map(r => {
+      const invDateStr = String(r.OUTWARDDATE || '').split('T')[0];
+      const invDate = parseLocalDate(invDateStr);
+      const deliveryDays = parseInt(r.DeliveryDays, 10) || 0;
+
+      // Expected Delivery Date: invDateStr + deliveryDays
+      const expectedDateStr = invDate ? addDaysToDateStr(invDateStr, deliveryDays) : '';
+      const expectedDeliveryDate = parseLocalDate(expectedDateStr);
+
+      // Days Elapsed since Invoice Date
+      let daysElapsed = 0;
+      if (invDate) {
+        const diffTime = today.getTime() - invDate.getTime();
+        daysElapsed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      }
+
+      // Overdue calculation
+      let isOverdueBool = false;
+      let overdueDays = 0;
+      let daysRemaining = 0;
+
+      if (expectedDeliveryDate) {
+        const diffExp = today.getTime() - expectedDeliveryDate.getTime();
+        const diffDays = Math.floor(diffExp / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          isOverdueBool = true;
+          overdueDays = diffDays;
+        } else {
+          daysRemaining = Math.abs(diffDays);
+        }
+      }
+
+      let status = 'Pending POD';
+      if (!r.AwbNo && !r.CourierCompany) {
+        status = 'Not Dispatched';
+      } else if (isOverdueBool) {
+        status = `Overdue (${overdueDays}d late)`;
+      } else if (daysRemaining === 0) {
+        status = 'Delivery Due Today';
+      } else {
+        status = `In Transit (${daysRemaining}d left)`;
+      }
+
+      return {
+        ...r,
+        OUTWARDDATE: invDateStr,
+        ExpectedDeliveryDays: deliveryDays,
+        ExpectedDeliveryDate: expectedDateStr,
+        DaysElapsed: daysElapsed >= 0 ? daysElapsed : 0,
+        IsOverdue: isOverdueBool,
+        OverdueDays: overdueDays,
+        DaysRemaining: daysRemaining,
+        DeliveryStatus: status
+      };
+    });
+
+    // Filter by isOverdue if requested
+    const finalRecords = (isOverdue === 'true' || isOverdue === true)
+      ? enriched.filter(e => e.IsOverdue)
+      : enriched;
+
+    // Compute Summary Stats
+    const totalPending = finalRecords.length;
+    const overdueCount = finalRecords.filter(r => r.IsOverdue).length;
+    const inTransitCount = finalRecords.filter(r => !r.IsOverdue && (r.AwbNo || r.CourierCompany)).length;
+    const notDispatchedCount = finalRecords.filter(r => !r.AwbNo && !r.CourierCompany).length;
+    const totalPendingAmount = finalRecords.reduce((sum, r) => sum + (parseFloat(r.TOTALAMOUNT) || 0), 0);
+
+    // Distinct Courier Companies for filter dropdown
+    const courierList = Array.from(new Set(records.map(r => r.CourierCompany).filter(Boolean))).sort();
+
+    res.status(200).json({
+      stats: {
+        totalPending,
+        overdueCount,
+        inTransitCount,
+        notDispatchedCount,
+        totalPendingAmount: Math.round(totalPendingAmount)
+      },
+      courierCompanies: courierList,
+      records: finalRecords
+    });
+  } catch (error) {
+    console.error('Error fetching pending POD report:', error);
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 };

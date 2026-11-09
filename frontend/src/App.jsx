@@ -41,6 +41,7 @@ import StockJournalReport from './pages/reports/StockJournalReport';
 import InwardReport from './pages/reports/InwardReport';
 import OutwardReport from './pages/reports/OutwardReport';
 import ItemwiseOutwardReport from './pages/reports/ItemwiseOutwardReport';
+import PendingPODReport from './pages/reports/PendingPODReport';
 import PayableReport from './pages/reports/PayableReport';
 import ReceivableReport from './pages/reports/ReceivableReport';
 import ProfitLossReport from './pages/reports/ProfitLossReport';
@@ -183,6 +184,7 @@ function App() {
             <Route path="reports/inward" element={<InwardReport />} />
             <Route path="reports/outward" element={<OutwardReport />} />
             <Route path="reports/itemwise-outward" element={<ItemwiseOutwardReport />} />
+            <Route path="reports/pending-pod" element={<PendingPODReport />} />
             <Route path="reports/payable" element={<PayableReport />} />
             <Route path="reports/receivable" element={<ReceivableReport />} />
             <Route path="reports/profit-loss" element={<ProfitLossReport />} />

@@ -408,6 +408,11 @@ CREATE TABLE IF NOT EXISTS "OutwardHeader" (
     "EInvoiceStatus" VARCHAR(20) DEFAULT 'Pending',
     "EInvoiceCancelReason" VARCHAR(100) DEFAULT NULL,
     "EInvoiceCancelDate" VARCHAR(30) DEFAULT NULL,
+    "CourierCompany" VARCHAR(100) DEFAULT NULL,
+    "AwbNo" VARCHAR(100) DEFAULT NULL,
+    "TransportMode" VARCHAR(50) DEFAULT NULL,
+    "DateOfPod" VARCHAR(20) DEFAULT NULL,
+    "PodRemarks" VARCHAR(255) DEFAULT NULL,
     CONSTRAINT "UQ_OutwardHeader_OUTWARDNO" UNIQUE ("OUTWARDNO"),
     FOREIGN KEY ("LEDGERID") REFERENCES "LedgerMaster" ("Id"),
     FOREIGN KEY ("POID") REFERENCES "PurchaseOrderHeader" ("ID")
