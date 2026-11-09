@@ -12,7 +12,7 @@ async function calculateBOMShortfall(pool, parentCode, parentSubCode = '', short
     .input('ParentSubCode', sql.VarChar(50), cleanParentSubCode);
 
   let parentSql = `
-    SELECT 
+    SELECT TOP 1
       ItemCode, 
       ISNULL(SubCode, '') AS SubCode, 
       ItemName, 
@@ -30,7 +30,7 @@ async function calculateBOMShortfall(pool, parentCode, parentSubCode = '', short
   if (cleanParentSubCode) {
     parentSql += ` AND (SubCode = @ParentSubCode OR SubCode = '' OR SubCode IS NULL)`;
   }
-  parentSql += ` ORDER BY CASE WHEN SubCode = @ParentSubCode THEN 0 ELSE 1 END LIMIT 1`;
+  parentSql += ` ORDER BY CASE WHEN SubCode = @ParentSubCode THEN 0 ELSE 1 END`;
 
   const parentRes = await parentReq.query(parentSql);
   const parentItem = parentRes.recordset[0] || {
@@ -53,7 +53,7 @@ async function calculateBOMShortfall(pool, parentCode, parentSubCode = '', short
     const checkSub = await pool.request()
       .input('CheckCode', sql.VarChar(50), cleanParentCode)
       .input('CheckSub', sql.VarChar(50), cleanParentSubCode)
-      .query("SELECT 1 FROM BOM_Master WHERE ParentItemCode = @CheckCode AND ISNULL(ParentSubCode, '') = @CheckSub LIMIT 1");
+      .query("SELECT TOP 1 1 FROM BOM_Master WHERE ParentItemCode = @CheckCode AND ISNULL(ParentSubCode, '') = @CheckSub");
     if (checkSub.recordset.length === 0) {
       subCodeToMatch = '';
     }
@@ -348,7 +348,7 @@ exports.getBOMByParent = async (req, res) => {
       const checkSub = await pool.request()
         .input('CheckParent', sql.VarChar(50), parentCode)
         .input('CheckSub', sql.VarChar(50), parentSubCode)
-        .query("SELECT 1 FROM BOM_Master WHERE ParentItemCode = @CheckParent AND ISNULL(ParentSubCode, '') = @CheckSub LIMIT 1");
+        .query("SELECT TOP 1 1 FROM BOM_Master WHERE ParentItemCode = @CheckParent AND ISNULL(ParentSubCode, '') = @CheckSub");
 
       if (checkSub.recordset.length > 0) {
         query += ` AND ISNULL(b.ParentSubCode, '') = @ParentSubCode`;

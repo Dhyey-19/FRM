@@ -1,14 +1,72 @@
 const path = require('path');
 const fs = require('fs');
-const initSqlJs = require('sql.js');
-require('dotenv').config();
+const dotenv = require('dotenv');
 
+// Robustly load environment variables
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config();
+
+const isMSSQL = (process.env.DB_TYPE || '').toLowerCase() === 'mssql';
+
+// =========================================================================
+// 1. NATIVE MICROSOFT SQL SERVER 2022 ADAPTER
+// =========================================================================
+let nativeMssql = null;
+let mssqlPool = null;
+
+if (isMSSQL) {
+  try {
+    nativeMssql = require('mssql');
+  } catch (err) {
+    console.error('[Database] Failed to require mssql module:', err.message);
+  }
+}
+
+const mssqlConfig = {
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || '',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_NAME || 'FRM_DB',
+  port: parseInt(process.env.DB_PORT || '1433', 10),
+  options: {
+    encrypt: process.env.DB_ENCRYPT === 'true',
+    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE !== 'false',
+    enableArithAbort: true
+  },
+  pool: {
+    max: 20,
+    min: 0,
+    idleTimeoutMillis: 30000
+  }
+};
+
+async function connectMSSQL() {
+  if (!mssqlPool || !mssqlPool.connected) {
+    try {
+      mssqlPool = await nativeMssql.connect(mssqlConfig);
+      mssqlPool.on('error', err => {
+        console.error('[MSSQL Pool Error]:', err.message);
+        mssqlPool = null;
+      });
+      console.log(`[Database] Connected to Microsoft SQL Server (${mssqlConfig.server}:${mssqlConfig.port}/${mssqlConfig.database})`);
+    } catch (err) {
+      console.error('[MSSQL Connection Error]:', err.message);
+      throw err;
+    }
+  }
+  return mssqlPool;
+}
+
+// =========================================================================
+// 2. SQLITE (SQL.JS) EMULATION ADAPTER (FALLBACK)
+// =========================================================================
+let initSqlJs = null;
 let dbInstance = null;
-let poolInstance = null;
+let sqlitePoolInstance = null;
 let currentDbPath = null;
 let inTransaction = false;
 
-// Resolve SQLite database path robustly regardless of process.cwd()
 function resolveDatabasePath() {
   const defaultDbPath = path.resolve(__dirname, '../database/factoryflow.db');
   
@@ -16,15 +74,12 @@ function resolveDatabasePath() {
     if (path.isAbsolute(process.env.SQLITE_DB_PATH)) {
       return process.env.SQLITE_DB_PATH;
     }
-    // Check relative to project root (e.g. backend/database/factoryflow.db)
     const fromRoot = path.resolve(__dirname, '../../', process.env.SQLITE_DB_PATH);
     if (fs.existsSync(fromRoot)) return fromRoot;
 
-    // Check relative to backend/ (e.g. database/factoryflow.db)
     const fromBackend = path.resolve(__dirname, '../', process.env.SQLITE_DB_PATH);
     if (fs.existsSync(fromBackend)) return fromBackend;
 
-    // Check relative to process.cwd()
     const fromCwd = path.resolve(process.cwd(), process.env.SQLITE_DB_PATH);
     if (fs.existsSync(fromCwd)) return fromCwd;
   }
@@ -44,7 +99,12 @@ function saveToDisk() {
 }
 
 async function getDatabase() {
+  if (isMSSQL) return null;
+
   if (!dbInstance) {
+    if (!initSqlJs) {
+      initSqlJs = require('sql.js');
+    }
     currentDbPath = resolveDatabasePath();
     let wasmBinary = null;
     const candidates = [
@@ -70,7 +130,6 @@ async function getDatabase() {
       const dir = path.dirname(currentDbPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       dbInstance = new SQL.Database();
-      // Initialize tables from schema.sql if exists
       const schemaPath = path.resolve(__dirname, '../database/schema.sql');
       if (fs.existsSync(schemaPath)) {
         dbInstance.exec(fs.readFileSync(schemaPath, 'utf8'));
@@ -140,7 +199,6 @@ async function getDatabase() {
   return dbInstance;
 }
 
-// Balanced parentheses subquery TOP replacement
 function replaceTopInSubqueries(sqlText) {
   let result = '';
   let i = 0;
@@ -172,26 +230,15 @@ function replaceTopInSubqueries(sqlText) {
   return result;
 }
 
-// Transform T-SQL query into standard SQLite query
 function transformQuery(sqlText) {
   let q = sqlText;
 
-  // 1. ISNULL(x, y) -> IFNULL(x, y)
   q = q.replace(/\bISNULL\s*\(/gi, 'IFNULL(');
-
-  // 2. TRY_CAST(x AS INT) -> TRY_INT(x)
   q = q.replace(/\bTRY_CAST\s*\(\s*(.+?)\s+AS\s+(?:INT|BIGINT|INTEGER)\s*\)/gi, 'TRY_INT($1)');
-
-  // 3. CAST(x AS DATE) -> DATE(x)
   q = q.replace(/\bCAST\s*\(\s*(.+?)\s+AS\s+DATE\s*\)/gi, 'DATE($1)');
-
-  // 4. CONVERT(VARCHAR(10), x, 120) -> SUBSTR(x, 1, 10)
   q = q.replace(/\bCONVERT\s*\(\s*VARCHAR\s*\(\s*\d+\s*\)\s*,\s*([^,]+?)\s*,\s*120\s*\)/gi, 'SUBSTR($1, 1, 10)');
-
-  // 5. DATEADD(month, -6, GETDATE()) -> DATEADD('month', -6, GETDATE())
   q = q.replace(/\bDATEADD\s*\(\s*([a-zA-Z]+)\s*,/gi, "DATEADD('$1',");
 
-  // 6. OUTPUT INSERTED.col1, INSERTED.col2 -> RETURNING col1, col2
   const outputMatch = q.match(/INSERT\s+INTO\s+([^\s(]+)\s*(\([^)]+\))\s*OUTPUT\s+INSERTED\.([^\s(]+(?:\s*,\s*INSERTED\.[^\s(]+)*)\s*VALUES\s*(\([^)]+\))/i);
   if (outputMatch) {
     const fullMatch = outputMatch[0];
@@ -204,10 +251,8 @@ function transformQuery(sqlText) {
   }
   q = q.replace(/\s*OUTPUT\s+INSERTED\.([a-zA-Z0-9_]+)\s*VALUES/gi, ' VALUES');
 
-  // 7. Subqueries with SELECT TOP <n>
   q = replaceTopInSubqueries(q);
 
-  // 8. Top-level SELECT TOP <n>
   if (/^\s*SELECT\s+TOP\s+(\d+)\s+/i.test(q)) {
     const topMatch = q.match(/^\s*SELECT\s+TOP\s+(\d+)\s+/i);
     const topN = topMatch[1];
@@ -217,7 +262,6 @@ function transformQuery(sqlText) {
     }
   }
 
-  // 9. String concatenation '+' with string literals into '||'
   q = q.replace(/('(?:\\[\s\S]|[^'\\])*')\s*\+\s*(IFNULL|COALESCE|[a-zA-Z0-9_.]+)/gi, '$1 || $2');
   q = q.replace(/(IFNULL\([^)]+\)|COALESCE\([^)]+\)|[a-zA-Z0-9_.]+)\s*\+\s*('(?:\\[\s\S]|[^'\\])*')/gi, '$1 || $2');
 
@@ -257,7 +301,7 @@ function splitSqlStatements(sqlText) {
   return statements;
 }
 
-class Request {
+class SQLiteRequest {
   constructor(parent) {
     this.parent = parent;
     this.parameters = {};
@@ -280,7 +324,6 @@ class Request {
     const db = await getDatabase();
     const rawStatements = splitSqlStatements(sqlText);
 
-    // Prepare parameters: sql.js supports ':key', '@key', '$key'
     const params = {};
     for (const [k, v] of Object.entries(this.parameters)) {
       const cleanKey = k.startsWith('@') ? k.slice(1) : k;
@@ -345,7 +388,7 @@ class Request {
   }
 }
 
-class Transaction {
+class SQLiteTransaction {
   constructor(pool) {
     this.pool = pool;
   }
@@ -367,65 +410,77 @@ class Transaction {
     const db = await getDatabase();
     try {
       db.exec('ROLLBACK;');
-    } catch (e) {
-      // Ignore if transaction already ended
-    }
+    } catch (e) {}
     inTransaction = false;
   }
 }
 
-const pool = {
-  request: () => new Request(pool),
+const sqlitePool = {
+  request: () => new SQLiteRequest(sqlitePool),
   close: async () => {
     if (dbInstance) {
       saveToDisk();
       dbInstance.close();
       dbInstance = null;
-      poolInstance = null;
+      sqlitePoolInstance = null;
     }
   }
 };
 
-const sql = {
-  VarChar: () => sql.VarChar,
-  NVarChar: () => sql.NVarChar,
+const sqliteSql = {
+  VarChar: () => sqliteSql.VarChar,
+  NVarChar: () => sqliteSql.NVarChar,
   Text: 'Text',
   Int: 'Int',
   BigInt: 'BigInt',
   SmallInt: 'SmallInt',
   TinyInt: 'TinyInt',
-  Numeric: () => sql.Numeric,
-  Decimal: () => sql.Decimal,
+  Numeric: () => sqliteSql.Numeric,
+  Decimal: () => sqliteSql.Decimal,
   Float: 'Float',
   Bit: 'Bit',
   Date: 'Date',
   DateTime: 'DateTime',
   Time: 'Time',
   MAX: -1,
-  Request,
-  Transaction,
-  connect: async () => pool
+  Request: SQLiteRequest,
+  Transaction: SQLiteTransaction,
+  connect: async () => sqlitePool
 };
 
-const connectDB = async () => {
-  if (!poolInstance) {
+const connectSQLite = async () => {
+  if (!sqlitePoolInstance) {
     const dbPath = resolveDatabasePath();
     await getDatabase();
     console.log(`[Database] Connected to local SQLite database via sql.js (${dbPath})`);
-    poolInstance = pool;
+    sqlitePoolInstance = sqlitePool;
   }
-  return poolInstance;
+  return sqlitePoolInstance;
 };
 
-const config = {
-  database: 'factoryflow.db',
-  type: 'sqlite',
-  getPath: resolveDatabasePath
-};
-
-module.exports = {
-  sql,
-  connectDB,
-  config,
-  getDatabase
-};
+// =========================================================================
+// 3. EXPORTS (SELECTS MSSQL OR SQLITE TRANSPARENTLY)
+// =========================================================================
+if (isMSSQL && nativeMssql) {
+  module.exports = {
+    sql: nativeMssql,
+    connectDB: connectMSSQL,
+    config: {
+      database: mssqlConfig.database,
+      server: mssqlConfig.server,
+      type: 'mssql'
+    },
+    getDatabase: () => null
+  };
+} else {
+  module.exports = {
+    sql: sqliteSql,
+    connectDB: connectSQLite,
+    config: {
+      database: 'factoryflow.db',
+      type: 'sqlite',
+      getPath: resolveDatabasePath
+    },
+    getDatabase
+  };
+}

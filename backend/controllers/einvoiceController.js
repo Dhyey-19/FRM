@@ -321,7 +321,7 @@ exports.generateEInvoiceJSON = async (req, res) => {
     const buyer = ledgerRes.recordset[0] || {};
 
     // 3. Fetch Seller (CompanyProfile)
-    const companyRes = await pool.request().query('SELECT * FROM CompanyProfile LIMIT 1');
+    const companyRes = await pool.request().query('SELECT TOP 1 * FROM CompanyProfile');
     const seller = companyRes.recordset[0] || {};
 
     // 4. Fetch Details
@@ -377,7 +377,7 @@ exports.generateBulkEInvoiceJSON = async (req, res) => {
 
   try {
     const pool = await connectDB();
-    const companyRes = await pool.request().query('SELECT * FROM CompanyProfile LIMIT 1');
+    const companyRes = await pool.request().query('SELECT TOP 1 * FROM CompanyProfile');
     const seller = companyRes.recordset[0] || {};
 
     const bulkList = [];
@@ -742,7 +742,7 @@ exports.autoGenerateIRN = async (req, res) => {
     const buyer = ledgerRes.recordset[0] || {};
 
     // 3. Fetch Seller (CompanyProfile)
-    const companyRes = await pool.request().query('SELECT * FROM CompanyProfile LIMIT 1');
+    const companyRes = await pool.request().query('SELECT TOP 1 * FROM CompanyProfile');
     const seller = companyRes.recordset[0] || {};
 
     // 4. Fetch Details
