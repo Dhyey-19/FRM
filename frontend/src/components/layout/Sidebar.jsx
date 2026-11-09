@@ -46,8 +46,7 @@ import {
   MenuOpen as MenuOpenIcon,
   AccountCircle as AccountCircleIcon,
   OpenInNew as OpenInNewIcon,
-  Close as CloseIcon,
-  SystemUpdateAlt as UpdateIcon
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MENU_STRUCTURE } from '../../config/menuConfig';
@@ -69,6 +68,11 @@ const Sidebar = ({
   const [surrenderInput, setSurrenderInput] = useState('');
   const [surrenderError, setSurrenderError] = useState('');
   const [surrendering, setSurrendering] = useState(false);
+
+  const [openBackupDialog, setOpenBackupDialog] = useState(false);
+  const [backupInput, setBackupInput] = useState('');
+  const [backupError, setBackupError] = useState('');
+  const [backupDownloading, setBackupDownloading] = useState(false);
 
   useEffect(() => {
     setCurrentUser(user);
@@ -114,7 +118,26 @@ const Sidebar = ({
     }
   };
 
-  const handleBackup = async () => {
+  const handleOpenBackupDialog = () => {
+    setOpenBackupDialog(true);
+    setBackupInput('');
+    setBackupError('');
+  };
+
+  const handleCloseBackupDialog = () => {
+    if (backupDownloading) return;
+    setOpenBackupDialog(false);
+    setBackupInput('');
+    setBackupError('');
+  };
+
+  const handleConfirmBackup = async () => {
+    if (backupInput.trim().toLowerCase() !== 'backup') {
+      setBackupError("Please type 'backup' to confirm.");
+      return;
+    }
+    setBackupDownloading(true);
+    setBackupError('');
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/backup`, {
         method: 'GET'
@@ -139,12 +162,17 @@ const Sidebar = ({
         a.click();
         window.URL.revokeObjectURL(url);
         a.remove();
+        setOpenBackupDialog(false);
+        setBackupInput('');
+        setBackupError('');
       } else {
-        alert('Failed to download backup');
+        setBackupError('Failed to download backup file from server.');
       }
     } catch (err) {
       console.error('Backup error:', err);
-      alert('Failed to connect to server for backup');
+      setBackupError('Failed to connect to server for backup.');
+    } finally {
+      setBackupDownloading(false);
     }
   };
 
@@ -400,13 +428,9 @@ const Sidebar = ({
                       
                       {section.id === 'admin' && isAdmin && (
                         <>
-                          <ListItemButton onClick={() => navigate('/dashboard/system-maintenance?tab=updates')} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(248,138,1,0.15)' } }}>
-                            <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#F88A01' }}><UpdateIcon /></ListItemIcon>
-                            <ListItemText primary="Application Update" primaryTypographyProps={{ color: '#F88A01', fontWeight: 600 }} />
-                          </ListItemButton>
-                          <ListItemButton onClick={() => navigate('/dashboard/system-maintenance?tab=backup')} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(16,185,129,0.15)' } }}>
+                          <ListItemButton onClick={handleOpenBackupDialog} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(16,185,129,0.15)' } }}>
                             <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#10b981' }}><BackupIcon /></ListItemIcon>
-                            <ListItemText primary="Backup Database" primaryTypographyProps={{ color: '#10b981', fontWeight: 600 }} />
+                            <ListItemText primary="Excel Backup" primaryTypographyProps={{ color: '#10b981', fontWeight: 600 }} />
                           </ListItemButton>
                           <ListItemButton onClick={() => setOpenSurrenderDialog(true)} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(255,138,138,0.15)', color: '#ff8a8a' } }}>
                             <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#ff8a8a' }}><KeyOffIcon /></ListItemIcon>
@@ -507,6 +531,79 @@ const Sidebar = ({
     </Dialog>
   );
 
+  const backupDialog = (
+    <Dialog 
+      open={openBackupDialog} 
+      onClose={(e, reason) => { if (reason !== 'backdropClick') handleCloseBackupDialog(); }} 
+      maxWidth="xs" 
+      fullWidth
+    >
+      <DialogTitle sx={{ backgroundColor: '#ecfdf5', color: '#047857', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
+        <BackupIcon /> Download Database Excel Backup
+      </DialogTitle>
+      <DialogContent sx={{ mt: 2 }}>
+        <DialogContentText sx={{ mb: 2, color: '#334155' }}>
+          Export all system tables, configurations, and records into a Microsoft Excel (.xlsx) spreadsheet backup file.
+        </DialogContentText>
+        <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: '#0F3B66' }}>
+          Please type <strong style={{ color: '#059669' }}>backup</strong> to confirm:
+        </Typography>
+        <TextField
+          autoFocus
+          fullWidth
+          size="small"
+          variant="outlined"
+          placeholder="Type 'backup'"
+          value={backupInput}
+          onChange={(e) => {
+            setBackupInput(e.target.value);
+            if (backupError) setBackupError('');
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && backupInput.trim().toLowerCase() === 'backup' && !backupDownloading) {
+              handleConfirmBackup();
+            }
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              '&.Mui-focused fieldset': {
+                borderColor: backupInput.trim().toLowerCase() === 'backup' ? '#10b981' : '#0F3B66',
+              }
+            }
+          }}
+        />
+        {backupError && (
+          <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '8px', fontWeight: '500' }}>
+            {backupError}
+          </div>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2, backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+        <Button 
+          onClick={handleCloseBackupDialog} 
+          color="inherit" 
+          sx={{ fontWeight: 600 }}
+          disabled={backupDownloading}
+        >
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleConfirmBackup} 
+          variant="contained" 
+          disabled={backupInput.trim().toLowerCase() !== 'backup' || backupDownloading}
+          sx={{ 
+            fontWeight: 600,
+            bgcolor: '#10b981',
+            '&:hover': { bgcolor: '#059669' },
+            '&.Mui-disabled': { bgcolor: '#e2e8f0', color: '#94a3b8' }
+          }}
+        >
+          {backupDownloading ? 'Downloading...' : 'Download Backup'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   return (
     <>
       {isMobile ? (
@@ -557,6 +654,7 @@ const Sidebar = ({
         </Drawer>
       )}
       {surrenderDialog}
+      {backupDialog}
     </>
   );
 };

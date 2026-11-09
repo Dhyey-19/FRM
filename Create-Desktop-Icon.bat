@@ -12,3 +12,4 @@ node scripts/create-desktop-shortcut.js
 echo.
 echo =====================================================================
 pause
+

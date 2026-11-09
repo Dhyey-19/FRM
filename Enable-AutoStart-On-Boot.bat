@@ -12,3 +12,4 @@ node scripts/enable-autostart.js
 echo.
 echo =====================================================================
 pause
+

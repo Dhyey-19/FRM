@@ -29,3 +29,4 @@ echo [*] Starting FRM server on port 5000...
 echo.
 node backend\server.js
 pause
+
