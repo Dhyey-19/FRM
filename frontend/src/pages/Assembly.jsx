@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import {
-    Box, Typography, Paper, Toolbar, Button, TextField,
+    Box, Typography, Paper, Toolbar, Button, TextField, Autocomplete,
     Grid, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Divider, Tabs, Tab,
-    Popover, InputAdornment, Tooltip, Chip
+    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Divider, Tabs, Tab
 } from '@mui/material';
 import { 
-    BuildCircle as BuildIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon,
-    Search as SearchIcon, ArrowDropDown as ArrowDropDownIcon, TableChart as TableChartIcon
+    BuildCircle as BuildIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
 
@@ -25,32 +23,6 @@ const Assembly = ({ user }) => {
     const [remark, setRemark] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-
-    // Dropdown & Search state for Parent Item
-    const [dropdownOpen, setDropdownOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [itemModalOpen, setItemModalOpen] = useState(false);
-    const anchorRef = useRef(null);
-
-    // Parent items eligible for assembly (FG, SF, Inhouse)
-    const parentItems = useMemo(() => {
-        return items.filter(item => {
-            const t = (item.ItemType || '').trim().toLowerCase();
-            return ['fg', 'sf', 'finished', 'finished good', 'semi-finished'].includes(t) || item.Category === 'Inhouse';
-        });
-    }, [items]);
-
-    // Filtered parent items based on search query
-    const filteredParentItems = useMemo(() => {
-        if (!searchQuery.trim()) return parentItems;
-        const q = searchQuery.toLowerCase().trim();
-        return parentItems.filter(item => 
-            (item.ItemCode || '').toLowerCase().includes(q) ||
-            (item.SubCode || '').toLowerCase().includes(q) ||
-            (item.ItemName || '').toLowerCase().includes(q) ||
-            (item.ItemType || '').toLowerCase().includes(q)
-        );
-    }, [parentItems, searchQuery]);
     
     const [todayAssemblies, setTodayAssemblies] = useState([]);
     const [filterFromDate, setFilterFromDate] = useState(todayDate);
@@ -306,234 +278,66 @@ const Assembly = ({ user }) => {
                         />
                     </Grid>
 
-                    {/* Row 2: Select Parent Item (Wide Searchable Table-Style Dropdown & Modal Picker) & Quantity */}
-                    <Grid item xs={12} sm={9} md={10}>
-                        <Box ref={anchorRef} sx={{ width: '100%', position: 'relative' }}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                label="Select Parent Item (Finished Goods / Semi-Finished)"
-                                required
-                                value={dropdownOpen ? searchQuery : (selectedItem ? `${selectedItem.ItemCode}${selectedItem.SubCode ? ` / ${selectedItem.SubCode}` : ''} - ${selectedItem.ItemName}` : '')}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    if (!dropdownOpen) setDropdownOpen(true);
-                                }}
-                                onClick={() => {
-                                    if (!dropdownOpen) {
-                                        setSearchQuery('');
-                                        setDropdownOpen(true);
-                                    }
-                                }}
-                                placeholder={selectedItem ? `${selectedItem.ItemCode}${selectedItem.SubCode ? ` / ${selectedItem.SubCode}` : ''} - ${selectedItem.ItemName}` : "Click or type to search Parent Item by code, subcode, or name..."}
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <SearchIcon sx={{ color: '#0F3B66', fontSize: 20 }} />
-                                        </InputAdornment>
-                                    ),
-                                    endAdornment: (
-                                        <InputAdornment position="end" sx={{ gap: 0.5 }}>
-                                            {selectedItem && (
-                                                <Chip
-                                                    label={selectedItem.ItemType || 'FG'}
-                                                    size="small"
-                                                    sx={{ height: 22, fontSize: '0.72rem', fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1' }}
-                                                />
-                                            )}
-                                            {selectedItem && (
-                                                <Tooltip title="Clear selection">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedItem(null);
-                                                            setSearchQuery('');
-                                                        }}
-                                                    >
-                                                        <CloseIcon sx={{ fontSize: 16 }} />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            )}
-                                            <Tooltip title="Open full item table picker">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setDropdownOpen(false);
-                                                        setItemModalOpen(true);
-                                                    }}
-                                                    sx={{ color: '#0F3B66' }}
-                                                >
-                                                    <TableChartIcon sx={{ fontSize: 18 }} />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <IconButton
-                                                size="small"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setDropdownOpen(prev => !prev);
-                                                }}
-                                            >
-                                                <ArrowDropDownIcon />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    )
-                                }}
-                                sx={{
-                                    bgcolor: '#ffffff',
-                                    borderRadius: 1.5,
-                                    '& .MuiInputBase-input': {
-                                        fontWeight: selectedItem && !dropdownOpen ? 600 : 400,
-                                        color: selectedItem && !dropdownOpen ? '#0F3B66' : '#1e293b',
-                                        fontSize: '0.92rem'
-                                    }
-                                }}
-                            />
-
-                            {/* Dropdown Popover */}
-                            <Popover
-                                open={dropdownOpen}
-                                anchorEl={anchorRef.current}
-                                onClose={() => setDropdownOpen(false)}
-                                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                                disableAutoFocus
-                                disableEnforceFocus
-                                PaperProps={{
+                    {/* Row 2: Select Parent Item (Normal dropdown, DOUBLE width = 650px) & Quantity */}
+                    <Grid item xs={12} sm="auto">
+                        <Autocomplete
+                            options={items.filter(item => {
+                                const t = (item.ItemType || '').trim().toLowerCase();
+                                return ['fg', 'sf', 'finished', 'finished good', 'semi-finished'].includes(t) || item.Category === 'Inhouse';
+                            })}
+                            getOptionLabel={(option) => {
+                                if (!option) return '';
+                                const sub = option.SubCode ? ` / ${option.SubCode}` : '';
+                                const type = option.ItemType ? ` [${option.ItemType}]` : '';
+                                return `${option.ItemCode}${sub} - ${option.ItemName}${type}`;
+                            }}
+                            isOptionEqualToValue={(option, value) => 
+                                option?.ItemCode === value?.ItemCode && 
+                                String(option?.SubCode || '').trim() === String(value?.SubCode || '').trim()
+                            }
+                            value={selectedItem}
+                            onChange={(e, newValue) => setSelectedItem(newValue)}
+                            renderInput={(params) => (
+                                <TextField 
+                                    {...params} 
+                                    label="Select Parent Item" 
+                                    size="small" 
+                                    required 
+                                    placeholder="Select or search parent item..."
+                                />
+                            )}
+                            renderOption={(props, option) => {
+                                const { key, ...otherProps } = props;
+                                const sub = option.SubCode ? ` / ${option.SubCode}` : '';
+                                const type = option.ItemType ? ` [${option.ItemType}]` : '';
+                                return (
+                                    <li key={key || `${option.ItemCode}-${option.SubCode || ''}`} {...otherProps} style={{ whiteSpace: 'nowrap', padding: '8px 16px', fontSize: '0.88rem' }}>
+                                        <span style={{ fontWeight: 700, color: '#0F3B66' }}>{option.ItemCode}{sub}</span>
+                                        <span style={{ color: '#1e293b' }}> - {option.ItemName}</span>
+                                        {type && <span style={{ color: '#0284c7', fontWeight: 600, marginLeft: '6px' }}>{type}</span>}
+                                    </li>
+                                );
+                            }}
+                            slotProps={{
+                                paper: {
                                     sx: {
-                                        width: anchorRef.current ? Math.max(anchorRef.current.clientWidth, 820) : 820,
-                                        maxWidth: '96vw',
-                                        maxHeight: 440,
-                                        boxShadow: '0 16px 36px rgba(15, 59, 102, 0.22)',
+                                        minWidth: '100%',
+                                        width: 'max-content',
+                                        maxWidth: '95vw',
                                         borderRadius: 2,
-                                        border: '1px solid #cbd5e1',
-                                        mt: 0.8,
-                                        overflow: 'hidden',
-                                        display: 'flex',
-                                        flexDirection: 'column'
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
                                     }
-                                }}
-                            >
-                                {/* Header bar inside dropdown */}
-                                <Box sx={{ px: 2, py: 1.2, bgcolor: '#0F3B66', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <SearchIcon sx={{ fontSize: 16 }} /> Select Parent Item ({filteredParentItems.length} items)
-                                    </Typography>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        startIcon={<TableChartIcon sx={{ fontSize: 14 }} />}
-                                        onClick={() => {
-                                            setDropdownOpen(false);
-                                            setItemModalOpen(true);
-                                        }}
-                                        sx={{ 
-                                            color: '#ffffff', 
-                                            borderColor: 'rgba(255,255,255,0.4)', 
-                                            textTransform: 'none', 
-                                            fontSize: '0.75rem', 
-                                            py: 0.2,
-                                            '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', borderColor: '#ffffff' }
-                                        }}
-                                    >
-                                        Full Table View
-                                    </Button>
-                                </Box>
-
-                                {/* Column headers inside dropdown */}
-                                <Box sx={{ 
-                                    display: 'grid', 
-                                    gridTemplateColumns: '130px 90px 1fr 80px 100px', 
-                                    bgcolor: '#f1f5f9', 
-                                    px: 2, 
-                                    py: 1, 
-                                    borderBottom: '2px solid #e2e8f0', 
-                                    fontWeight: 700, 
-                                    fontSize: '0.75rem', 
-                                    color: '#475569',
-                                    letterSpacing: 0.5
-                                }}>
-                                    <Box>ITEM CODE</Box>
-                                    <Box>SUB CODE</Box>
-                                    <Box>FULL ITEM NAME & SPECIFICATION</Box>
-                                    <Box sx={{ textAlign: 'center' }}>TYPE</Box>
-                                    <Box sx={{ textAlign: 'right' }}>STOCK</Box>
-                                </Box>
-
-                                {/* Rows */}
-                                <Box sx={{ overflowY: 'auto', flex: 1, maxHeight: 350 }}>
-                                    {filteredParentItems.length === 0 ? (
-                                        <Box sx={{ p: 4, textAlign: 'center', color: '#64748b' }}>
-                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                No manufactured/parent items match "{searchQuery}"
-                                            </Typography>
-                                            <Typography variant="caption" sx={{ color: '#94a3b8', mt: 0.5, display: 'block' }}>
-                                                Only Finished Goods (FG) and Semi-Finished (SF) items can be assembled.
-                                            </Typography>
-                                        </Box>
-                                    ) : (
-                                        filteredParentItems.map((item) => {
-                                            const isSelected = selectedItem?.ItemCode === item.ItemCode && (selectedItem?.SubCode || '') === (item.SubCode || '');
-                                            return (
-                                                <Box
-                                                    key={`${item.ItemCode}-${item.SubCode || ''}`}
-                                                    onClick={() => {
-                                                        setSelectedItem(item);
-                                                        setDropdownOpen(false);
-                                                        setSearchQuery('');
-                                                    }}
-                                                    sx={{
-                                                        display: 'grid',
-                                                        gridTemplateColumns: '130px 90px 1fr 80px 100px',
-                                                        alignItems: 'center',
-                                                        px: 2,
-                                                        py: 1.2,
-                                                        cursor: 'pointer',
-                                                        bgcolor: isSelected ? '#eff6ff' : '#ffffff',
-                                                        borderBottom: '1px solid #f1f5f9',
-                                                        transition: 'background-color 0.15s ease',
-                                                        '&:hover': {
-                                                            bgcolor: isSelected ? '#dbeafe' : '#f8fafc'
-                                                        }
-                                                    }}
-                                                >
-                                                    <Typography sx={{ fontWeight: 700, color: '#0F3B66', fontSize: '0.86rem' }}>
-                                                        {item.ItemCode}
-                                                    </Typography>
-                                                    <Typography sx={{ color: '#0284c7', fontSize: '0.84rem', fontWeight: 600 }}>
-                                                        {item.SubCode || '—'}
-                                                    </Typography>
-                                                    <Typography sx={{ color: '#1e293b', fontSize: '0.88rem', fontWeight: 600, pr: 2 }}>
-                                                        {item.ItemName}
-                                                    </Typography>
-                                                    <Box sx={{ textAlign: 'center' }}>
-                                                        <Chip
-                                                            label={item.ItemType || 'FG'}
-                                                            size="small"
-                                                            sx={{
-                                                                height: 20,
-                                                                fontSize: '0.68rem',
-                                                                fontWeight: 700,
-                                                                bgcolor: (item.ItemType || '').toLowerCase() === 'sf' ? '#fef3c7' : '#dcfce7',
-                                                                color: (item.ItemType || '').toLowerCase() === 'sf' ? '#b45309' : '#15803d'
-                                                            }}
-                                                        />
-                                                    </Box>
-                                                    <Typography sx={{ textAlign: 'right', fontWeight: 700, color: (item.ClosingStock || 0) > 0 ? '#16a34a' : '#dc2626', fontSize: '0.86rem' }}>
-                                                        {item.ClosingStock ?? 0} {item.Unit || ''}
-                                                    </Typography>
-                                                </Box>
-                                            );
-                                        })
-                                    )}
-                                </Box>
-                            </Popover>
-                        </Box>
+                                }
+                            }}
+                            sx={{ 
+                                width: { xs: '100%', sm: 600, md: 700 },
+                                minWidth: { sm: 500 }
+                            }}
+                            autoHighlight
+                        />
                     </Grid>
-                    <Grid item xs={6} sm={3} md={2}>
+                    <Grid item xs={6} sm="auto">
                         <TextField
-                            fullWidth
                             label="Quantity"
                             type="number"
                             size="small"
@@ -542,7 +346,7 @@ const Assembly = ({ user }) => {
                             required
                             inputProps={{ min: 1, step: 'any', style: { textAlign: 'right' } }}
                             sx={{
-                                maxWidth: 140,
+                                width: { xs: 120, sm: 110, md: 100 },
                                 '& input': { fontWeight: 600 }
                             }}
                         />
@@ -674,120 +478,6 @@ const Assembly = ({ user }) => {
                 title="Confirm Deletion"
                 itemName={`Assembly Transaction #${assemblyToDelete?.AssemblyNo}`}
             />
-
-            {/* Full Item Selection Modal Dialog */}
-            <Dialog
-                open={itemModalOpen}
-                onClose={() => setItemModalOpen(false)}
-                maxWidth="md"
-                fullWidth
-                PaperProps={{ sx: { borderRadius: 3 } }}
-            >
-                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#0F3B66', color: '#ffffff', py: 1.5, px: 3 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TableChartIcon /> Select Parent Item for Assembly
-                    </Typography>
-                    <IconButton onClick={() => setItemModalOpen(false)} sx={{ color: '#ffffff' }}>
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ p: 2.5 }}>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        autoFocus
-                        placeholder="Filter by item code, subcode, name, type..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon sx={{ color: '#0F3B66' }} />
-                                </InputAdornment>
-                            )
-                        }}
-                        sx={{ mb: 2 }}
-                    />
-                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 420 }}>
-                        <Table size="small" stickyHeader>
-                            <TableHead>
-                                <TableRow sx={{ '& th': { bgcolor: '#f8fafc', fontWeight: 700, color: '#334155' } }}>
-                                    <TableCell>Item Code</TableCell>
-                                    <TableCell>Sub Code</TableCell>
-                                    <TableCell>Item Name</TableCell>
-                                    <TableCell align="center">Type</TableCell>
-                                    <TableCell align="right">Current Stock</TableCell>
-                                    <TableCell align="center">Action</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {filteredParentItems.map((item) => (
-                                    <TableRow 
-                                        key={`${item.ItemCode}-${item.SubCode || ''}`}
-                                        hover
-                                        sx={{ cursor: 'pointer' }}
-                                        onClick={() => {
-                                            setSelectedItem(item);
-                                            setItemModalOpen(false);
-                                            setSearchQuery('');
-                                        }}
-                                    >
-                                        <TableCell sx={{ fontWeight: 700, color: '#0F3B66' }}>{item.ItemCode}</TableCell>
-                                        <TableCell sx={{ color: '#0284c7', fontWeight: 600 }}>{item.SubCode || '—'}</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>{item.ItemName}</TableCell>
-                                        <TableCell align="center">
-                                            <Chip
-                                                label={item.ItemType || 'FG'}
-                                                size="small"
-                                                sx={{ 
-                                                    height: 20, 
-                                                    fontSize: '0.68rem', 
-                                                    fontWeight: 700,
-                                                    bgcolor: (item.ItemType || '').toLowerCase() === 'sf' ? '#fef3c7' : '#dcfce7',
-                                                    color: (item.ItemType || '').toLowerCase() === 'sf' ? '#b45309' : '#15803d'
-                                                }}
-                                            />
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: (item.ClosingStock || 0) > 0 ? '#16a34a' : '#dc2626' }}>
-                                            {item.ClosingStock ?? 0} {item.Unit || ''}
-                                        </TableCell>
-                                        <TableCell align="center">
-                                            <Button
-                                                size="small"
-                                                variant="contained"
-                                                sx={{ bgcolor: '#0F3B66', textTransform: 'none', py: 0.3, px: 1.8, borderRadius: 1.5, fontWeight: 700 }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedItem(item);
-                                                    setItemModalOpen(false);
-                                                    setSearchQuery('');
-                                                }}
-                                            >
-                                                Select
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {filteredParentItems.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#64748b' }}>
-                                            No manufactured/parent items match your search.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, py: 1.5, bgcolor: '#f8fafc', display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" sx={{ color: '#64748b' }}>
-                        Showing {filteredParentItems.length} available parent items (Finished Goods & Semi-Finished)
-                    </Typography>
-                    <Button onClick={() => setItemModalOpen(false)} sx={{ textTransform: 'none', fontWeight: 600 }}>
-                        Close
-                    </Button>
-                </DialogActions>
-            </Dialog>
 
 
 
