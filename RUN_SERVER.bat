@@ -1,44 +1,31 @@
 @echo off
-title FRM - Factory Resource Manager Local Server
+title FRM - Factory Flow Server
 cd /d "%~dp0"
 
 echo =====================================================================
-echo                FRM - FACTORY RESOURCE MANAGER LOCAL SERVER
+echo           FRM (FACTORY RESOURCE MANAGER) SERVER LAUNCHER
 echo =====================================================================
 echo.
 
-:: 1. Ensure local database exists with clean schema
-if not exist "backend\database\factoryflow.db" (
-    echo [*] Initializing local database schema...
-    node backend\database\init-db.js
-    echo.
+:: 1. Verify MS SQL Server service is running
+echo [*] Checking Microsoft SQL Server 2022 service...
+sc query "MSSQL$SQLEXPRESS" | find "RUNNING" >nul
+if %ERRORLEVEL% neq 0 (
+    echo [*] Starting SQL Server (SQLEXPRESS)...
+    net start MSSQL$SQLEXPRESS >nul 2>&1
 )
 
-:: 2. Ensure SSL certificates exist for PWA installation
-if not exist "backend\certs\cert.pem" (
-    echo [*] Generating local SSL certificates for PWA support...
-    node scripts\generate-cert.js
-    echo.
-)
-
-:: 3. Ensure frontend distribution exists
+:: 2. Ensure frontend distribution is built
 if not exist "frontend\dist\index.html" (
-    echo [*] Building production web frontend...
-    call npm run build:frontend
-    echo.
+    echo [*] Building web frontend for first-time run...
+    call npm --prefix frontend run build
 )
 
-:: 4. Launch Server
-echo [*] Starting FRM Server...
-echo.
-echo   - Local Web Access:    http://localhost:5000
-echo   - Network Access (LAN): Check your PC IP (e.g. http://192.168.x.x:5000)
-echo   - Mobile PWA Install:  https://[Server-IP]:5443
-echo.
-echo Press Ctrl+C at any time to stop the server.
-echo =====================================================================
-echo.
+:: 3. Automatically launch browser after 2 seconds in background
+start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:5000"
 
+:: 4. Start the Node.js Server
+echo [*] Starting FRM server on port 5000...
+echo.
 node backend\server.js
 pause
-

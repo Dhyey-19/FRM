@@ -16,3 +16,4 @@ router.get('/check-updates', systemController.checkUpdates);
 router.post('/apply-update', systemController.applyUpdate);
 
 module.exports = router;
+

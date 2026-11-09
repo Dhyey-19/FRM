@@ -123,7 +123,26 @@ const startServer = async () => {
   } else {
     const listenPort = Number(PORT) || 5000;
     httpServer = app.listen(listenPort, '0.0.0.0', () => {
-      console.log(`[Server] HTTP running on http://0.0.0.0:${listenPort}`);
+      console.log('\n=====================================================================');
+      console.log('           FRM (Factory Resource Manager) SERVER IS RUNNING          ');
+      console.log('=====================================================================');
+      console.log(`  This Server PC:                 http://localhost:${listenPort}`);
+
+      try {
+        const os = require('os');
+        const nets = os.networkInterfaces();
+        for (const name of Object.keys(nets)) {
+          for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('169.254')) {
+              const isTailscale = name.toLowerCase().includes('tailscale') || net.address.startsWith('100.');
+              const label = isTailscale ? 'Mobile Remote (Tailscale):   ' : 'Other Laptops & Mobile (Wi-Fi):';
+              console.log(`  ${label}   http://${net.address}:${listenPort}`);
+            }
+          }
+        }
+      } catch (e) {}
+
+      console.log('=====================================================================\n');
     });
   }
   httpServer.on('error', (err) => {
