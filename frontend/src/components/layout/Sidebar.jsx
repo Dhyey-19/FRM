@@ -19,7 +19,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  TextField
+  TextField,
+  Tooltip
 } from '@mui/material';
 import { 
   Dashboard as DashboardIcon, 
@@ -295,14 +296,16 @@ const Sidebar = ({
             </IconButton>
           </>
         ) : (
-          <IconButton onClick={toggleSidebar} sx={{ color: 'white', p: 0.5 }}>
-            <MenuIcon />
-          </IconButton>
+          <Tooltip title="Expand Sidebar" placement="right" arrow>
+            <IconButton onClick={toggleSidebar} sx={{ color: 'white', p: 0.5 }}>
+              <MenuIcon />
+            </IconButton>
+          </Tooltip>
         )}
       </Box>
 
         {/* Navigation Menu */}
-        <List sx={{ py: 0.5, px: 2, pt: 1 }}>
+        <List sx={{ py: 0.5, px: isCollapsed && !isMobile ? 0.8 : 2, pt: 1, overflowX: 'hidden' }}>
           {(() => {
             const hasMenuAccess = (path) => {
               if (!path || path === '/dashboard' || path === '/dashboard/tasks') return true;
@@ -347,8 +350,9 @@ const Sidebar = ({
               if (item.path && !hasMenuAccess(item.path)) return null;
 
               const isSel = isSelected(item.path);
+              const collapsedMode = isCollapsed && !isMobile;
 
-              return (
+              const buttonContent = (
                 <ListItemButton 
                   key={item.path || item.title}
                   selected={isSel} 
@@ -360,30 +364,49 @@ const Sidebar = ({
                   }}
                   sx={{ 
                     py: level > 0 ? 0.3 : 0.5, 
-                    pl: level > 0 ? 4 : 0, 
+                    px: collapsedMode ? 1 : 1.5,
+                    pl: collapsedMode ? 1 : (level > 0 ? 4 : 1.5), 
+                    justifyContent: collapsedMode ? 'center' : 'flex-start',
                     mb: level > 0 ? 0.1 : 0.2, 
                     borderRadius: 2,
                     '&.Mui-selected': { bgcolor: 'rgba(255, 255, 255, 0.15)', color: '#ffffff' },
                     '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
                   }}
                 >
-                  <ListItemIcon sx={{ py: 0.5, minWidth: level > 0 ? 32 : 40, color: isSel ? '#ffffff' : 'rgba(255,255,255,0.6)' }}>
+                  <ListItemIcon sx={{ 
+                    py: 0.5, 
+                    minWidth: collapsedMode ? 'unset' : (level > 0 ? 32 : 40), 
+                    justifyContent: 'center',
+                    color: isSel ? '#ffffff' : 'rgba(255,255,255,0.6)' 
+                  }}>
                     {item.icon}
                   </ListItemIcon>
-                  <ListItemText 
-                    primary={item.title} 
-                    primaryTypographyProps={{ 
-                      fontSize: level > 0 ? '0.85rem' : '1rem',
-                      fontWeight: isSel ? 600 : 400 
-                    }} 
-                  />
-                  {!isCollapsed && !isMobile && item.path && (
+                  {!collapsedMode && (
+                    <ListItemText 
+                      primary={item.title} 
+                      primaryTypographyProps={{ 
+                        fontSize: level > 0 ? '0.85rem' : '1rem',
+                        fontWeight: isSel ? 600 : 400 
+                      }} 
+                    />
+                  )}
+                  {!collapsedMode && item.path && (
                     <IconButton size="small" onClick={(e) => { e.stopPropagation(); window.open('/#' + item.path, '_blank'); }} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ffffff' } }} title="Open in new window">
                       <OpenInNewIcon fontSize="small" />
                     </IconButton>
                   )}
                 </ListItemButton>
               );
+
+              if (collapsedMode) {
+                return (
+                  <Tooltip key={item.path || item.title} title={item.title} placement="right" arrow>
+                    {buttonContent}
+                  </Tooltip>
+                );
+              }
+
+              return buttonContent;
             };
 
             const renderSection = (section) => {
@@ -412,51 +435,78 @@ const Sidebar = ({
                 );
               }
 
+              const collapsedMode = isCollapsed && !isMobile;
+
+              const sectionButton = (
+                <ListItemButton 
+                  onClick={() => handleMenuClick(section.id)} 
+                  sx={{ 
+                    py: 0.5, 
+                    px: collapsedMode ? 1 : 1.5,
+                    justifyContent: collapsedMode ? 'center' : 'flex-start',
+                    borderRadius: 2 
+                  }}
+                >
+                  <ListItemIcon sx={{ 
+                    py: 0.5, 
+                    minWidth: collapsedMode ? 'unset' : 40, 
+                    justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.7)' 
+                  }}>
+                    {section.icon}
+                  </ListItemIcon>
+                  {!collapsedMode && <ListItemText primary={section.title} />}
+                  {!collapsedMode && (openMenu === section.id ? <ExpandLess sx={{ py: 0.5, color: 'rgba(255,255,255,0.7)' }} /> : <ExpandMore sx={{ py: 0.5, color: 'rgba(255,255,255,0.7)' }} />)}
+                </ListItemButton>
+              );
+
               return (
                 <React.Fragment key={section.id}>
                   <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }}>
-                    <ListItemButton onClick={() => handleMenuClick(section.id)} sx={{ py: 0.5, borderRadius: 2 }}>
-                      <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: 'rgba(255,255,255,0.7)' }}>
-                        {section.icon}
-                      </ListItemIcon>
-                      <ListItemText primary={section.title} />
-                      {openMenu === section.id ? <ExpandLess sx={{ py: 0.5, color: 'rgba(255,255,255,0.7)' }} /> : <ExpandMore sx={{ py: 0.5, color: 'rgba(255,255,255,0.7)' }} />}
-                    </ListItemButton>
+                    {collapsedMode ? (
+                      <Tooltip title={section.title} placement="right" arrow>
+                        {sectionButton}
+                      </Tooltip>
+                    ) : (
+                      sectionButton
+                    )}
                   </ListItem>
                   
-                  <Collapse in={openMenu === section.id} timeout="auto" unmountOnExit>
-                    <List component="div" disablePadding sx={{ pb: section.groups ? 2 : 0 }}>
-                      {section.children && section.children.map(child => renderMenuItem(child, 1))}
-                      
-                      {section.id === 'admin' && isAdmin && (
-                        <>
-                          <ListItemButton onClick={handleOpenBackupDialog} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(16,185,129,0.15)' } }}>
-                            <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#10b981' }}><BackupIcon /></ListItemIcon>
-                            <ListItemText primary="Excel Backup" primaryTypographyProps={{ color: '#10b981', fontWeight: 600 }} />
-                          </ListItemButton>
-                          <ListItemButton onClick={() => setOpenSurrenderDialog(true)} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(255,138,138,0.15)', color: '#ff8a8a' } }}>
-                            <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#ff8a8a' }}><KeyOffIcon /></ListItemIcon>
-                            <ListItemText primary="Surrender License" primaryTypographyProps={{ color: '#ff8a8a', fontWeight: 500 }} />
-                          </ListItemButton>
-                        </>
-                      )}
+                  {!collapsedMode && (
+                    <Collapse in={openMenu === section.id} timeout="auto" unmountOnExit>
+                      <List component="div" disablePadding sx={{ pb: section.groups ? 2 : 0 }}>
+                        {section.children && section.children.map(child => renderMenuItem(child, 1))}
+                        
+                        {section.id === 'admin' && isAdmin && (
+                          <>
+                            <ListItemButton onClick={handleOpenBackupDialog} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(16,185,129,0.15)' } }}>
+                              <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#10b981' }}><BackupIcon /></ListItemIcon>
+                              <ListItemText primary="Excel Backup" primaryTypographyProps={{ color: '#10b981', fontWeight: 600 }} />
+                            </ListItemButton>
+                            <ListItemButton onClick={() => setOpenSurrenderDialog(true)} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(255,138,138,0.15)', color: '#ff8a8a' } }}>
+                              <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#ff8a8a' }}><KeyOffIcon /></ListItemIcon>
+                              <ListItemText primary="Surrender License" primaryTypographyProps={{ color: '#ff8a8a', fontWeight: 500 }} />
+                            </ListItemButton>
+                          </>
+                        )}
 
-                      {section.groups && section.groups.map(group => {
-                        const visibleGroupChildren = group.children.filter(child => hasMenuAccess(child.path));
-                        if (visibleGroupChildren.length === 0) return null;
-                        return (
-                          <React.Fragment key={group.groupTitle}>
-                            <Box sx={{ px: 3, pt: 1.5, pb: 0.5 }}>
-                              <Typography variant="caption" sx={{ color: '#F88A01', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.7rem' }}>
-                                {group.groupTitle}
-                              </Typography>
-                            </Box>
-                            {visibleGroupChildren.map(child => renderMenuItem(child, 1))}
-                          </React.Fragment>
-                        );
-                      })}
-                    </List>
-                  </Collapse>
+                        {section.groups && section.groups.map(group => {
+                          const visibleGroupChildren = group.children.filter(child => hasMenuAccess(child.path));
+                          if (visibleGroupChildren.length === 0) return null;
+                          return (
+                            <React.Fragment key={group.groupTitle}>
+                              <Box sx={{ px: 3, pt: 1.5, pb: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: '#F88A01', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.7rem' }}>
+                                  {group.groupTitle}
+                                </Typography>
+                              </Box>
+                              {visibleGroupChildren.map(child => renderMenuItem(child, 1))}
+                            </React.Fragment>
+                          );
+                        })}
+                      </List>
+                    </Collapse>
+                  )}
                 </React.Fragment>
               );
             };
