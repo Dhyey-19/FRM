@@ -340,7 +340,7 @@ exports.uploadAttendance = async (req, res) => {
             @TotalNetWorkHoursDecimal, @TotalOvertimeHoursDecimal, @SalaryType, @BaseSalary,
             @CalculatedSalary, @OvertimePay, @Deductions, @NetSalary, @UploadedFileName
           );
-          SELECT last_insert_rowid() AS NewId;
+          SELECT SCOPE_IDENTITY() AS NewId;
         `);
 
       const summaryId = (summaryInsert.recordset && summaryInsert.recordset[0] && summaryInsert.recordset[0].NewId)

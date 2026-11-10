@@ -1,19 +1,22 @@
 const { sql, connectDB } = require('../config/db');
 
-// Ensure PaymentQR table exists in local SQLite
+// Ensure PaymentQR table exists in MSSQL
 async function ensureTable(pool) {
   await pool.request().query(`
-    CREATE TABLE IF NOT EXISTS "PaymentQR" (
-      "Id" INTEGER PRIMARY KEY AUTOINCREMENT,
-      "Label" VARCHAR(100) NOT NULL,
-      "UpiId" VARCHAR(100) NOT NULL,
-      "PayeeName" VARCHAR(100),
-      "BankName" VARCHAR(100),
-      "AccountNo" VARCHAR(50),
-      "IFSC" VARCHAR(20),
-      "IsPrimary" INTEGER DEFAULT 0,
-      "CreatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PaymentQR')
+    BEGIN
+      CREATE TABLE [dbo].[PaymentQR] (
+        [Id] INT IDENTITY(1,1) PRIMARY KEY,
+        [Label] NVARCHAR(100) NOT NULL,
+        [UpiId] NVARCHAR(100) NOT NULL,
+        [PayeeName] NVARCHAR(100) NULL,
+        [BankName] NVARCHAR(100) NULL,
+        [AccountNo] NVARCHAR(50) NULL,
+        [IFSC] NVARCHAR(20) NULL,
+        [IsPrimary] BIT DEFAULT 0,
+        [CreatedAt] DATETIME DEFAULT GETDATE()
+      );
+    END
   `);
 }
 
@@ -140,7 +143,7 @@ exports.createPaymentQR = async (req, res) => {
       await pool.request().query('UPDATE PaymentQR SET IsPrimary = 0');
     }
 
-    await pool.request()
+    const insertRes = await pool.request()
       .input('Label', sql.VarChar(100), cleanLabel)
       .input('UpiId', sql.VarChar(100), cleanUpi)
       .input('PayeeName', sql.VarChar(100), payeeName ? payeeName.trim() : cleanLabel)
@@ -150,11 +153,11 @@ exports.createPaymentQR = async (req, res) => {
       .input('IsPrimary', sql.Int, isPrimary ? 1 : 0)
       .query(`
         INSERT INTO PaymentQR (Label, UpiId, PayeeName, BankName, AccountNo, IFSC, IsPrimary)
-        VALUES (@Label, @UpiId, @PayeeName, @BankName, @AccountNo, @IFSC, @IsPrimary)
+        OUTPUT INSERTED.Id AS id
+        VALUES (@Label, @UpiId, @PayeeName, @BankName, @AccountNo, @IFSC, @IsPrimary);
       `);
 
-    const idRes = await pool.request().query('SELECT last_insert_rowid() AS id');
-    const newId = idRes.recordset?.[0]?.id;
+    const newId = insertRes.recordset?.[0]?.id;
 
     res.status(201).json({ message: 'Payment QR added successfully', id: newId });
   } catch (error) {
