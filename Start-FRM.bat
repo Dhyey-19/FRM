@@ -7,15 +7,23 @@ echo           FRM (FACTORY RESOURCE MANAGER) SERVER LAUNCHER
 echo =====================================================================
 echo.
 
-:: 1. Verify MS SQL Server service is running
-echo [*] Checking Microsoft SQL Server 2022 service...
-sc query "MSSQL$SQLEXPRESS" | find "RUNNING" >nul
+:: 1. Verify MS SQL Server service is running (SQLEXPRESS or default MSSQLSERVER)
+echo [*] Checking Microsoft SQL Server service...
+sc query "MSSQL$SQLEXPRESS" | find "RUNNING" >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo [*] Starting SQL Server (SQLEXPRESS)...
-    net start MSSQL$SQLEXPRESS >nul 2>&1
+    sc query "MSSQLSERVER" | find "RUNNING" >nul 2>&1
+    if %ERRORLEVEL% neq 0 (
+        echo [*] Attempting to start SQL Server service...
+        net start "MSSQL$SQLEXPRESS" >nul 2>&1
+        if %ERRORLEVEL% neq 0 net start MSSQLSERVER >nul 2>&1
+    )
 )
 
-:: 2. Ensure frontend distribution is built
+:: 2. Ensure dependencies and frontend distribution are ready
+if not exist "node_modules" (
+    echo [*] Installing dependencies for first-time run...
+    call npm install
+)
 if not exist "frontend\dist\index.html" (
     echo [*] Building web frontend for first-time run...
     call npm --prefix frontend run build

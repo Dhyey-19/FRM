@@ -112,8 +112,30 @@ if (frontendDistPath) {
 }
 
 // Initialize Server and Database
+const connectDBWithRetry = async (maxAttempts = 10, delayMs = 3000) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await connectDB();
+    } catch (err) {
+      const msg = String(err && err.message ? err.message : '');
+      const isTransientSocketError =
+        err.code === 'ESOCKET' ||
+        err.code === 'ETIMEDOUT' ||
+        err.code === 'ECONNREFUSED' ||
+        /Could not connect|ECONNREFUSED|Failed to connect/i.test(msg);
+
+      if (!isTransientSocketError || attempt === maxAttempts) {
+        throw err;
+      }
+
+      console.warn(`[Server] Database not ready yet (attempt ${attempt}/${maxAttempts}). Retrying in ${delayMs / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+};
+
 const startServer = async () => {
-  await connectDB(); // Ensure DB connects before starting server
+  await connectDBWithRetry(); // Ensure DB connects before starting server
   
   // 1. Bind HTTP (supports TCP port and cPanel Passenger pipe/socket on GoDaddy)
   const isPipeOrSocket = process.env.PORT && isNaN(Number(process.env.PORT));
