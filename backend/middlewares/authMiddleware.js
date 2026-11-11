@@ -57,9 +57,19 @@ module.exports = async function (req, res, next) {
 
     const role = String(dbUser.UserRole || '').toUpperCase();
 
+    // Active users can always update their own password (verified inside changePassword)
+    if (path === '/auth/change-password' && req.method === 'POST') {
+      return next();
+    }
+
     // Admins bypass checks
     if (role === 'ADMIN' || role === 'ADMINISTRATOR') {
       return next();
+    }
+
+    // System maintenance & license surrender mutations are strictly Admin-only
+    if (path === '/auth/surrender' || path.startsWith('/system/')) {
+      return res.status(403).json({ message: 'Access denied: Administrator privileges required.' });
     }
 
     // Restrict Add actions

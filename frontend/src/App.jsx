@@ -57,6 +57,7 @@ import PendingPOReport from './pages/reports/PendingPOReport';
 import NotificationLogs from './pages/NotificationLogs';
 import AttendanceManager from './pages/AttendanceManager';
 import SystemMaintenance from './pages/SystemMaintenance';
+import Settings from './pages/Settings';
 import TaskManager from './pages/TaskManager';
 import ErrorBoundary from './components/common/ErrorBoundary';
 function AuthApp() {
@@ -202,6 +203,7 @@ function App() {
             <Route path="attendance" element={<AttendanceManager />} />
             <Route path="reports/attendance" element={<Navigate to="/dashboard/attendance" replace />} />
             <Route path="system-maintenance" element={<SystemMaintenance />} />
+            <Route path="settings" element={<Settings />} />
             <Route path="backups" element={<Navigate to="/dashboard/system-maintenance" replace />} />
             <Route path="updates" element={<Navigate to="/dashboard/system-maintenance" replace />} />
           </Route>

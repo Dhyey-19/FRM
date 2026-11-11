@@ -34,7 +34,7 @@ exports.login = async (req, res) => {
     const pool = await connectDB();
     const result = await pool.request()
       .input('Username', sql.VarChar(30), username)
-      .input('Password', sql.VarChar(10), password)
+      .input('Password', sql.NVarChar(50), password)
       .query(`
         SELECT UserId, Username, MobileNo, UserRole, IsActive, IsAdd, IsEdit, IsDelete, AllowedMenus 
         FROM Users 
@@ -54,6 +54,60 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const userIdHeader = req.headers['x-user-id'];
+  const usernameHeader = req.headers['x-username'];
+
+  if (!userIdHeader && !usernameHeader) {
+    return res.status(401).json({ message: 'Authentication required.' });
+  }
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'Current password and new password are required.' });
+  }
+  if (String(newPassword).length < 4 || String(newPassword).length > 50) {
+    return res.status(400).json({ message: 'New password must be between 4 and 50 characters.' });
+  }
+
+  try {
+    const pool = await connectDB();
+    const request = pool.request()
+      .input('CurrentPassword', sql.NVarChar(50), currentPassword);
+
+    let whereClause = '';
+    if (userIdHeader) {
+      request.input('UserId', sql.Int, parseInt(userIdHeader, 10));
+      whereClause = 'UserId = @UserId';
+    } else {
+      request.input('Username', sql.VarChar(30), usernameHeader);
+      whereClause = 'Username = @Username';
+    }
+
+    const userRes = await request.query(`SELECT UserId, Password, IsActive FROM Users WHERE ${whereClause}`);
+    if (userRes.recordset.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const dbUser = userRes.recordset[0];
+    if (!dbUser.IsActive) {
+      return res.status(401).json({ message: 'Account is deactivated.' });
+    }
+    if (String(dbUser.Password) !== String(currentPassword)) {
+      return res.status(400).json({ message: 'Current password is incorrect.' });
+    }
+
+    await pool.request()
+      .input('UserId', sql.Int, dbUser.UserId)
+      .input('NewPassword', sql.NVarChar(50), String(newPassword))
+      .query('UPDATE Users SET Password = @NewPassword WHERE UserId = @UserId');
+
+    res.status(200).json({ message: 'Password updated successfully.' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Server error changing password.' });
   }
 };
 

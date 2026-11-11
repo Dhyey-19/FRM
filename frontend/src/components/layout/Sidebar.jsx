@@ -10,16 +10,8 @@ import {
   ListItemText, 
   Collapse,
   Typography,
-  Avatar,
   Divider,
-  Button,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  TextField,
   Tooltip
 } from '@mui/material';
 import { 
@@ -51,6 +43,8 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MENU_STRUCTURE } from '../../config/menuConfig';
+import TypedConfirmActionDialog from '../settings/TypedConfirmActionDialog';
+import { downloadExcelBackup, surrenderSoftwareLicense } from '../../utils/systemActions';
 
 const Sidebar = ({ 
   user, 
@@ -66,12 +60,10 @@ const Sidebar = ({
   const [currentUser, setCurrentUser] = useState(user);
   const [openMenu, setOpenMenu] = useState('');
   const [openSurrenderDialog, setOpenSurrenderDialog] = useState(false);
-  const [surrenderInput, setSurrenderInput] = useState('');
   const [surrenderError, setSurrenderError] = useState('');
   const [surrendering, setSurrendering] = useState(false);
 
   const [openBackupDialog, setOpenBackupDialog] = useState(false);
-  const [backupInput, setBackupInput] = useState('');
   const [backupError, setBackupError] = useState('');
   const [backupDownloading, setBackupDownloading] = useState(false);
 
@@ -121,97 +113,43 @@ const Sidebar = ({
 
   const handleOpenBackupDialog = () => {
     setOpenBackupDialog(true);
-    setBackupInput('');
     setBackupError('');
   };
 
   const handleCloseBackupDialog = () => {
     if (backupDownloading) return;
     setOpenBackupDialog(false);
-    setBackupInput('');
     setBackupError('');
   };
 
   const handleConfirmBackup = async () => {
-    if (backupInput.trim().toLowerCase() !== 'backup') {
-      setBackupError("Please type 'backup' to confirm.");
-      return;
-    }
     setBackupDownloading(true);
     setBackupError('');
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/backup`, {
-        method: 'GET'
-      });
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = 'FRM Backup.xlsx';
-        if (contentDisposition && contentDisposition.includes('filename=')) {
-          const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-          if (filenameMatch && filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-          }
-        }
-        
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        a.remove();
-        setOpenBackupDialog(false);
-        setBackupInput('');
-        setBackupError('');
-      } else {
-        setBackupError('Failed to download backup file from server.');
-      }
+      await downloadExcelBackup();
+      setOpenBackupDialog(false);
     } catch (err) {
       console.error('Backup error:', err);
-      setBackupError('Failed to connect to server for backup.');
+      setBackupError(err.message || 'Failed to connect to server for backup.');
     } finally {
       setBackupDownloading(false);
     }
   };
 
   const handleCloseSurrenderDialog = () => {
+    if (surrendering) return;
     setOpenSurrenderDialog(false);
-    setSurrenderInput('');
     setSurrenderError('');
   };
 
   const handleConfirmSurrender = async () => {
-    if (surrenderInput.toLowerCase() !== 'surrender') {
-      setSurrenderError("Please type 'surrender' to confirm.");
-      return;
-    }
-
     setSurrendering(true);
     setSurrenderError('');
-
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/surrender`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (response.ok) {
-        localStorage.removeItem('isAppRegistered');
-        localStorage.removeItem('user');
-        sessionStorage.removeItem('user');
-        handleCloseSurrenderDialog();
-        window.location.href = '#/';
-        window.location.reload();
-      } else {
-        const data = await response.json();
-        setSurrenderError(data.message || 'Failed to surrender license.');
-      }
+      await surrenderSoftwareLicense();
     } catch (err) {
       console.error('Surrender error:', err);
-      setSurrenderError('Failed to contact the backend server.');
+      setSurrenderError(err.message || 'Failed to contact the backend server.');
     } finally {
       setSurrendering(false);
     }
@@ -308,7 +246,7 @@ const Sidebar = ({
         <List sx={{ py: 0.5, px: isCollapsed && !isMobile ? 0.8 : 2, pt: 1, overflowX: 'hidden' }}>
           {(() => {
             const hasMenuAccess = (path) => {
-              if (!path || path === '/dashboard' || path === '/dashboard/tasks') return true;
+              if (!path || path === '/dashboard' || path === '/dashboard/tasks' || path === '/dashboard/settings') return true;
 
               const cleanPath = path.split('?')[0];
 
@@ -429,9 +367,14 @@ const Sidebar = ({
 
               if (section.path) {
                 return (
-                  <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }} key={section.title}>
-                    {renderMenuItem(section)}
-                  </ListItem>
+                  <React.Fragment key={section.title}>
+                    {section.path === '/dashboard/settings' && (
+                      <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.12)' }} />
+                    )}
+                    <ListItem disablePadding sx={{ py: 0.5, mb: 0.2 }}>
+                      {renderMenuItem(section)}
+                    </ListItem>
+                  </React.Fragment>
                 );
               }
 
@@ -518,142 +461,43 @@ const Sidebar = ({
   );
 
   const surrenderDialog = (
-    <Dialog 
-      open={openSurrenderDialog} 
-      onClose={(e, reason) => { if (reason !== 'backdropClick') handleCloseSurrenderDialog(); }} 
-      maxWidth="xs" 
-      fullWidth
-    >
-      <DialogTitle sx={{ backgroundColor: '#fee2e2', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
-        <KeyOffIcon /> Surrender Software License
-      </DialogTitle>
-      <DialogContent sx={{ mt: 2 }}>
-        <DialogContentText sx={{ mb: 2, color: '#334155' }}>
-          Warning: You are surrendering the software license from this device. Once surrendered, you will not be able to use the application without registering it again.
-        </DialogContentText>
-        <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: '#0F3B66' }}>
-          Please type <strong style={{ color: '#dc2626' }}>surrender</strong> to confirm:
-        </Typography>
-        <TextField
-          autoFocus
-          fullWidth
-          size="small"
-          variant="outlined"
-          placeholder="Type 'surrender'"
-          value={surrenderInput}
-          onChange={(e) => setSurrenderInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && surrenderInput.toLowerCase() === 'surrender' && !surrendering) {
-              handleConfirmSurrender();
-            }
-          }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              '&.Mui-focused fieldset': {
-                borderColor: surrenderInput.toLowerCase() === 'surrender' ? '#10b981' : '#dc2626',
-              }
-            }
-          }}
-        />
-        {surrenderError && (
-          <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '8px', fontWeight: '500' }}>
-            {surrenderError}
-          </div>
-        )}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-        <Button 
-          onClick={handleCloseSurrenderDialog} 
-          color="inherit" 
-          sx={{ fontWeight: 600 }}
-          disabled={surrendering}
-        >
-          Cancel
-        </Button>
-        <Button 
-          onClick={handleConfirmSurrender} 
-          variant="contained" 
-          color="error" 
-          disabled={surrenderInput.toLowerCase() !== 'surrender' || surrendering}
-          sx={{ fontWeight: 600 }}
-        >
-          {surrendering ? 'Surrendering...' : 'Surrender'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <TypedConfirmActionDialog
+      open={openSurrenderDialog}
+      onClose={handleCloseSurrenderDialog}
+      onConfirm={handleConfirmSurrender}
+      loading={surrendering}
+      error={surrenderError}
+      title="Surrender Software License"
+      icon={<KeyOffIcon />}
+      description="Warning: You are surrendering the software license from this device. Once surrendered, you will not be able to use the application without registering it again."
+      confirmWord="surrender"
+      confirmLabel="Surrender"
+      loadingLabel="Surrendering..."
+      headerBg="#fee2e2"
+      titleColor="#b91c1c"
+      accentColor="#dc2626"
+      hoverColor="#b91c1c"
+    />
   );
 
   const backupDialog = (
-    <Dialog 
-      open={openBackupDialog} 
-      onClose={(e, reason) => { if (reason !== 'backdropClick') handleCloseBackupDialog(); }} 
-      maxWidth="xs" 
-      fullWidth
-    >
-      <DialogTitle sx={{ backgroundColor: '#ecfdf5', color: '#047857', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
-        <BackupIcon /> Download Database Excel Backup
-      </DialogTitle>
-      <DialogContent sx={{ mt: 2 }}>
-        <DialogContentText sx={{ mb: 2, color: '#334155' }}>
-          Export all system tables, configurations, and records into a Microsoft Excel (.xlsx) spreadsheet backup file.
-        </DialogContentText>
-        <Typography variant="body2" sx={{ mb: 1, fontWeight: 600, color: '#0F3B66' }}>
-          Please type <strong style={{ color: '#059669' }}>backup</strong> to confirm:
-        </Typography>
-        <TextField
-          autoFocus
-          fullWidth
-          size="small"
-          variant="outlined"
-          placeholder="Type 'backup'"
-          value={backupInput}
-          onChange={(e) => {
-            setBackupInput(e.target.value);
-            if (backupError) setBackupError('');
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && backupInput.trim().toLowerCase() === 'backup' && !backupDownloading) {
-              handleConfirmBackup();
-            }
-          }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              '&.Mui-focused fieldset': {
-                borderColor: backupInput.trim().toLowerCase() === 'backup' ? '#10b981' : '#0F3B66',
-              }
-            }
-          }}
-        />
-        {backupError && (
-          <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '8px', fontWeight: '500' }}>
-            {backupError}
-          </div>
-        )}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-        <Button 
-          onClick={handleCloseBackupDialog} 
-          color="inherit" 
-          sx={{ fontWeight: 600 }}
-          disabled={backupDownloading}
-        >
-          Cancel
-        </Button>
-        <Button 
-          onClick={handleConfirmBackup} 
-          variant="contained" 
-          disabled={backupInput.trim().toLowerCase() !== 'backup' || backupDownloading}
-          sx={{ 
-            fontWeight: 600,
-            bgcolor: '#10b981',
-            '&:hover': { bgcolor: '#059669' },
-            '&.Mui-disabled': { bgcolor: '#e2e8f0', color: '#94a3b8' }
-          }}
-        >
-          {backupDownloading ? 'Downloading...' : 'Download Backup'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <TypedConfirmActionDialog
+      open={openBackupDialog}
+      onClose={handleCloseBackupDialog}
+      onConfirm={handleConfirmBackup}
+      loading={backupDownloading}
+      error={backupError}
+      title="Download Database Excel Backup"
+      icon={<BackupIcon />}
+      description="Export all system tables, configurations, and records into a Microsoft Excel (.xlsx) spreadsheet backup file."
+      confirmWord="backup"
+      confirmLabel="Download Backup"
+      loadingLabel="Downloading..."
+      headerBg="#ecfdf5"
+      titleColor="#047857"
+      accentColor="#10b981"
+      hoverColor="#059669"
+    />
   );
 
   return (

@@ -164,6 +164,11 @@ export const MENU_STRUCTURE = [
         ]
       }
     ]
+  },
+  {
+    title: 'Settings',
+    path: '/dashboard/settings',
+    icon: <SettingsIcon />,
   }
 ];
 

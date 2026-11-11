@@ -8,6 +8,9 @@ router.post('/signup', authController.signup);
 // POST /api/auth/login
 router.post('/login', authController.login);
 
+// POST /api/auth/change-password
+router.post('/change-password', authController.changePassword);
+
 // GET /api/auth/registration-status
 router.get('/registration-status', authController.getRegistrationStatus);
 
