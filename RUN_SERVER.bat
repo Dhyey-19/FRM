@@ -38,8 +38,15 @@ if not exist "public\index.html" if not exist "frontend\dist\index.html" (
 :: 3. Automatically launch browser after 2 seconds in background
 start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:5000"
 
-:: 4. Start the Node.js Server
+:: 4. Start the Node.js Server (supports auto-restart exit code 42 after 1-click updates)
+:SERVER_LOOP
 echo [*] Starting FRM server on port 5000...
 echo.
 node backend\server.js
+if %ERRORLEVEL% equ 42 (
+    echo.
+    echo [*] Update installed! Restarting FRM server with new code...
+    timeout /t 2 /nobreak >nul
+    goto SERVER_LOOP
+)
 pause

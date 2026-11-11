@@ -91,6 +91,12 @@ function writeEnvFile(cfg) {
   if (cfg.emailPass) {
     lines.push(`EMAIL_PASS=${formatEnvValue(cfg.emailPass)}`);
   }
+  if (cfg.githubRepo) {
+    lines.push('', `GITHUB_REPO=${formatEnvValue(cfg.githubRepo)}`);
+  }
+  if (cfg.githubToken) {
+    lines.push(`GITHUB_TOKEN=${formatEnvValue(cfg.githubToken)}`);
+  }
 
   fs.writeFileSync(ENV_PATH, lines.join('\n') + '\n', 'utf8');
 }
@@ -277,7 +283,9 @@ async function main() {
       port,
       httpsPort,
       emailUser,
-      emailPass
+      emailPass,
+      githubRepo: existing.GITHUB_REPO || '',
+      githubToken: existing.GITHUB_TOKEN || ''
     };
 
     writeEnvFile(cfg);

@@ -99,6 +99,9 @@ So client bookmarks don't change when the server restarts:
 
 ## Day-to-Day Maintenance
 
-- **Backup Database**: Double-click `backup-database.bat` (creates `.bak` in `backend\database\backups\`) or use the in-app **Excel Backup**.
-- **Update Software**: Close the running server window, extract the new `FRM-Server-Package.zip` over the server folder (or run `update.bat` if installed via Git), then reopen `Start-FRM.bat`. Any pending database migrations apply automatically on restart.
+- **Backup Database**: Double-click `backup-database.bat` (creates `.bak` in `backend\database\backups\`) or go to **Settings -> Backups** for MS SQL `.bak` snapshots & Excel exports.
+- **1-Click Online Update (No ZIP Copy Needed)**:
+  1. In GitHub -> **Settings -> Developer settings -> Personal access tokens -> Fine-grained tokens**, create a Read-Only token with **Contents: Read** on `Dhyey-19/FRM`.
+  2. In FRM go to **Settings -> App Updates**, click **Connect GitHub Token**, paste the token once, and click **Save & Check Updates**.
+  3. Whenever new updates are pushed to GitHub (`main`), click **Check for Updates -> Update Now** inside FRM to download the compiled app, apply any new database migrations automatically, and restart the server cleanly.
 

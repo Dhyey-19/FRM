@@ -13,6 +13,15 @@ function copyIfExists(src, dest) {
   }
 }
 
+function getGitValue(cmd, fallback = 'Unknown') {
+  try {
+    const out = execSync(cmd, { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return out || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function main() {
   console.log('=====================================================================');
   console.log('      BUILDING FRM SERVER DEPLOYMENT PACKAGE (NO GIT REQUIRED)       ');
@@ -62,6 +71,7 @@ function main() {
   const rootFiles = [
     'Setup-Server.bat',
     'Start-FRM.bat',
+    'RUN_SERVER.bat',
     'Create-Desktop-Icon.bat',
     'Enable-AutoStart-On-Boot.bat',
     'backup-database.bat',
@@ -116,22 +126,35 @@ function main() {
   };
   fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(serverPkg, null, 2) + '\n', 'utf8');
 
+  // Embed build/version metadata so packaged servers without .git know their exact version & commit
+  const versionMeta = {
+    version: rootPkg.version || '1.0.0',
+    commit: getGitValue('git rev-parse --short HEAD', 'Package'),
+    commitDate: getGitValue('git log -1 --format=%cd --date=short', new Date().toISOString().slice(0, 10)),
+    commitMessage: getGitValue('git log -1 --format=%s', 'Server production release'),
+    builtAt: new Date().toISOString()
+  };
+  fs.writeFileSync(path.join(packageDir, 'version.json'), JSON.stringify(versionMeta, null, 2) + '\n', 'utf8');
+
   // 5. Compress into dist/FRM-Server-Package.zip
   console.log('[5/5] Creating ZIP archive dist/FRM-Server-Package.zip...');
   if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-  execSync(
-    `powershell -NoProfile -Command "Compress-Archive -Path '${packageDir}\\*' -DestinationPath '${zipPath}' -Force"`,
-    { stdio: 'inherit' }
-  );
+
+  if (process.platform === 'win32') {
+    execSync(
+      `powershell -NoProfile -Command "Compress-Archive -Path '${packageDir}\\*' -DestinationPath '${zipPath}' -Force"`,
+      { stdio: 'inherit' }
+    );
+  } else {
+    execSync(`zip -r -q "${zipPath}" .`, { cwd: packageDir, stdio: 'inherit' });
+  }
 
   const sizeMb = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
   console.log('\n=====================================================================');
   console.log(`✓ Package Ready: ${zipPath} (${sizeMb} MB)`);
+  console.log(`  - Version : ${versionMeta.version} (${versionMeta.commit} / ${versionMeta.commitDate})`);
   console.log('  - Excluded: .git/, frontend/src/, node_modules/, factoryflow.db');
-  console.log('  - Copy this single ZIP to your Server PC, extract it, and run');
-  console.log('    Setup-Server.bat as Administrator!');
   console.log('=====================================================================\n');
 }
 
 main();
-

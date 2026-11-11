@@ -14,6 +14,7 @@ router.delete('/backups/:filename', systemController.deleteBackup);
 // Updates
 router.get('/check-updates', systemController.checkUpdates);
 router.post('/apply-update', systemController.applyUpdate);
+router.post('/update-config', systemController.saveUpdateConfig);
 
 module.exports = router;
 
