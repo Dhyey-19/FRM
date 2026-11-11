@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { builtinModules } = require('module');
 const { execSync } = require('child_process');
 
 const rootDir = path.resolve(__dirname, '..');
@@ -7,28 +8,63 @@ const distDir = path.join(rootDir, 'dist');
 const packageDir = path.join(distDir, 'FRM-Server-Package');
 const zipPath = path.join(distDir, 'FRM-Server-Package.zip');
 
+const RUNTIME_DEPENDENCIES = [
+  'cors',
+  'dotenv',
+  'exceljs',
+  'express',
+  'mssql',
+  'multer',
+  'nodemailer',
+  'pdf-parse',
+  'selfsigned'
+];
+
+const EXTERNAL_SET = new Set([
+  ...builtinModules,
+  ...builtinModules.map((m) => `node:${m}`),
+  ...RUNTIME_DEPENDENCIES,
+  'sql.js'
+]);
+
 function copyIfExists(src, dest) {
   if (fs.existsSync(src)) {
     fs.cpSync(src, dest, { recursive: true });
   }
 }
 
-function getGitValue(cmd, fallback = 'Unknown') {
+function isExternalModule(id) {
+  if (!id || id.startsWith('.') || path.isAbsolute(id)) return false;
+  const parts = id.split('/');
+  const pkgName = id.startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0];
+  return EXTERNAL_SET.has(id) || EXTERNAL_SET.has(pkgName);
+}
+
+async function bundleNodeEntry(entryFile, outFile) {
+  const { rolldown } = await import('rolldown');
+  const bundle = await rolldown({
+    input: entryFile,
+    platform: 'node',
+    external: isExternalModule
+  });
   try {
-    const out = execSync(cmd, { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    return out || fallback;
-  } catch {
-    return fallback;
+    await bundle.write({
+      file: outFile,
+      format: 'cjs',
+      minify: true
+    });
+  } finally {
+    await bundle.close();
   }
 }
 
-function main() {
+async function main() {
   console.log('=====================================================================');
-  console.log('      BUILDING FRM SERVER DEPLOYMENT PACKAGE (NO GIT REQUIRED)       ');
+  console.log('   BUILDING FRM SERVER DEPLOYMENT PACKAGE (COMPILED - NO SOURCE)     ');
   console.log('=====================================================================\n');
 
-  // 1. Build frontend production bundle
-  console.log('[1/5] Building production frontend assets...');
+  // 1. Build minified frontend production bundle
+  console.log('[1/5] Compiling & minifying frontend web assets...');
   execSync('npm run build:frontend', { cwd: rootDir, stdio: 'inherit', shell: true });
 
   // 2. Clean staging directory
@@ -38,27 +74,29 @@ function main() {
   }
   fs.mkdirSync(packageDir, { recursive: true });
 
-  // 3. Copy compiled frontend -> public/ (zero frontend/src source files)
+  // 3. Copy compiled frontend -> public/ (zero frontend/src files)
   console.log('[3/5] Copying compiled frontend into public/...');
   copyIfExists(path.join(rootDir, 'frontend', 'dist'), path.join(packageDir, 'public'));
 
-  // 4. Copy lean backend runtime, database init/migrations, scripts & batch launchers
-  console.log('[4/5] Copying backend runtime, setup wizard & launchers...');
+  // 4. Bundle & minify backend into compiled server.js & database/backup.js (zero source folders)
+  console.log('[4/5] Compiling & minifying backend into single-file bundles...');
   const backendDest = path.join(packageDir, 'backend');
-  fs.mkdirSync(backendDest, { recursive: true });
-  fs.copyFileSync(path.join(rootDir, 'backend', 'server.js'), path.join(backendDest, 'server.js'));
-
-  for (const dir of ['config', 'controllers', 'routes', 'middlewares', 'services']) {
-    copyIfExists(path.join(rootDir, 'backend', dir), path.join(backendDest, dir));
-  }
-
   const dbDest = path.join(backendDest, 'database');
   fs.mkdirSync(dbDest, { recursive: true });
-  for (const file of ['migrator.js', 'backup.js', 'db.js', 'mssql_init_FRM_DB.sql']) {
-    const srcFile = path.join(rootDir, 'backend', 'database', file);
-    if (fs.existsSync(srcFile)) {
-      fs.copyFileSync(srcFile, path.join(dbDest, file));
-    }
+
+  await bundleNodeEntry(
+    path.join(rootDir, 'backend', 'server.js'),
+    path.join(backendDest, 'server.js')
+  );
+  await bundleNodeEntry(
+    path.join(rootDir, 'backend', 'database', 'backup.js'),
+    path.join(dbDest, 'backup.js')
+  );
+
+  // Copy SQL initialization & migration files required by MS SQL Server runtime
+  const initSqlSrc = path.join(rootDir, 'backend', 'database', 'mssql_init_FRM_DB.sql');
+  if (fs.existsSync(initSqlSrc)) {
+    fs.copyFileSync(initSqlSrc, path.join(dbDest, 'mssql_init_FRM_DB.sql'));
   }
   copyIfExists(path.join(rootDir, 'backend', 'database', 'migrations'), path.join(dbDest, 'migrations'));
 
@@ -85,7 +123,7 @@ function main() {
     }
   }
 
-  // Generate lean production package.json from existing dependency versions
+  // Generate lean production package.json from workspace versions
   const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
   const backendPkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'backend', 'package.json'), 'utf8'));
   const mergedDeps = {
@@ -94,20 +132,8 @@ function main() {
     ...(backendPkg.devDependencies || {})
   };
 
-  const runtimeDepNames = [
-    'cors',
-    'dotenv',
-    'exceljs',
-    'express',
-    'mssql',
-    'multer',
-    'nodemailer',
-    'pdf-parse',
-    'selfsigned'
-  ];
-
   const runtimeDeps = {};
-  for (const dep of runtimeDepNames) {
+  for (const dep of RUNTIME_DEPENDENCIES) {
     if (mergedDeps[dep]) {
       runtimeDeps[dep] = mergedDeps[dep];
     }
@@ -116,7 +142,7 @@ function main() {
   const serverPkg = {
     name: 'frm-server',
     version: rootPkg.version || '1.0.0',
-    description: 'FRM - Factory Resource Manager (Server Production Package)',
+    description: 'FRM - Factory Resource Manager (Compiled Server Package)',
     main: 'backend/server.js',
     scripts: {
       start: 'node backend/server.js',
@@ -126,12 +152,11 @@ function main() {
   };
   fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(serverPkg, null, 2) + '\n', 'utf8');
 
-  // Embed build/version metadata so packaged servers without .git know their exact version & commit
+  // Record clean build version metadata (no Git history required)
+  const buildDate = new Date().toISOString().slice(0, 10);
   const versionMeta = {
     version: rootPkg.version || '1.0.0',
-    commit: getGitValue('git rev-parse --short HEAD', 'Package'),
-    commitDate: getGitValue('git log -1 --format=%cd --date=short', new Date().toISOString().slice(0, 10)),
-    commitMessage: getGitValue('git log -1 --format=%s', 'Server production release'),
+    buildDate,
     builtAt: new Date().toISOString()
   };
   fs.writeFileSync(path.join(packageDir, 'version.json'), JSON.stringify(versionMeta, null, 2) + '\n', 'utf8');
@@ -151,10 +176,13 @@ function main() {
 
   const sizeMb = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
   console.log('\n=====================================================================');
-  console.log(`✓ Package Ready: ${zipPath} (${sizeMb} MB)`);
-  console.log(`  - Version : ${versionMeta.version} (${versionMeta.commit} / ${versionMeta.commitDate})`);
-  console.log('  - Excluded: .git/, frontend/src/, node_modules/, factoryflow.db');
+  console.log(`✓ Compiled Package Ready: ${zipPath} (${sizeMb} MB)`);
+  console.log(`  - Version : v${versionMeta.version} (${versionMeta.buildDate})`);
+  console.log('  - Excluded: .git/, frontend/src/, backend controllers/routes source, node_modules/');
   console.log('=====================================================================\n');
 }
 
-main();
+main().catch((err) => {
+  console.error('[Package Error]:', err);
+  process.exit(1);
+});

@@ -18,7 +18,10 @@ function loadModule(pkgName, fallbackRelative) {
 
 const dotenv = loadModule('dotenv', 'node_modules/dotenv');
 const sql = loadModule('mssql', 'backend/node_modules/mssql');
-const { runMssqlMigrations } = require(path.join(PROJECT_ROOT, 'backend', 'database', 'migrator'));
+const migratorPath = path.join(PROJECT_ROOT, 'backend', 'database', 'migrator.js');
+const { runMssqlMigrations } = fs.existsSync(migratorPath)
+  ? require(migratorPath)
+  : require(path.join(PROJECT_ROOT, 'backend', 'server.js'));
 const { generateLocalCert } = require(path.join(PROJECT_ROOT, 'scripts', 'generate-cert'));
 
 function createPrompt() {
@@ -90,12 +93,6 @@ function writeEnvFile(cfg) {
   }
   if (cfg.emailPass) {
     lines.push(`EMAIL_PASS=${formatEnvValue(cfg.emailPass)}`);
-  }
-  if (cfg.githubRepo) {
-    lines.push('', `GITHUB_REPO=${formatEnvValue(cfg.githubRepo)}`);
-  }
-  if (cfg.githubToken) {
-    lines.push(`GITHUB_TOKEN=${formatEnvValue(cfg.githubToken)}`);
   }
 
   fs.writeFileSync(ENV_PATH, lines.join('\n') + '\n', 'utf8');
@@ -283,9 +280,7 @@ async function main() {
       port,
       httpsPort,
       emailUser,
-      emailPass,
-      githubRepo: existing.GITHUB_REPO || '',
-      githubToken: existing.GITHUB_TOKEN || ''
+      emailPass
     };
 
     writeEnvFile(cfg);

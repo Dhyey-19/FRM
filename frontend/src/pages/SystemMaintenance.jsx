@@ -37,7 +37,7 @@ const SystemMaintenance = () => {
             System Maintenance & Backups
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
-            Manage SQL Server database backups, restore points, and seamless 1-click application updates.
+            Manage SQL Server database backups and compiled package updates.
           </Typography>
         </Box>
         <Button

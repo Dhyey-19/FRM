@@ -1,10 +1,13 @@
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
+const { resolveAppRoots } = require('../utils/appPaths');
+
+const { backendRoot: BACKEND_ROOT, projectRoot: PROJECT_ROOT } = resolveAppRoots(__dirname);
 
 // Robustly load environment variables
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.join(PROJECT_ROOT, '.env') });
+dotenv.config({ path: path.join(BACKEND_ROOT, '.env') });
 dotenv.config();
 
 const isMSSQL = (process.env.DB_TYPE || '').toLowerCase() === 'mssql';
@@ -76,16 +79,16 @@ let currentDbPath = null;
 let inTransaction = false;
 
 function resolveDatabasePath() {
-  const defaultDbPath = path.resolve(__dirname, '../database/factoryflow.db');
+  const defaultDbPath = path.join(BACKEND_ROOT, 'database', 'factoryflow.db');
   
   if (process.env.SQLITE_DB_PATH) {
     if (path.isAbsolute(process.env.SQLITE_DB_PATH)) {
       return process.env.SQLITE_DB_PATH;
     }
-    const fromRoot = path.resolve(__dirname, '../../', process.env.SQLITE_DB_PATH);
+    const fromRoot = path.resolve(PROJECT_ROOT, process.env.SQLITE_DB_PATH);
     if (fs.existsSync(fromRoot)) return fromRoot;
 
-    const fromBackend = path.resolve(__dirname, '../', process.env.SQLITE_DB_PATH);
+    const fromBackend = path.resolve(BACKEND_ROOT, process.env.SQLITE_DB_PATH);
     if (fs.existsSync(fromBackend)) return fromBackend;
 
     const fromCwd = path.resolve(process.cwd(), process.env.SQLITE_DB_PATH);
@@ -117,8 +120,8 @@ async function getDatabase() {
     let wasmBinary = null;
     const candidates = [
       () => require.resolve('sql.js/dist/sql-wasm.wasm'),
-      () => path.join(__dirname, '../../node_modules/sql.js/dist/sql-wasm.wasm'),
-      () => path.join(__dirname, '../node_modules/sql.js/dist/sql-wasm.wasm')
+      () => path.join(PROJECT_ROOT, 'node_modules/sql.js/dist/sql-wasm.wasm'),
+      () => path.join(BACKEND_ROOT, 'node_modules/sql.js/dist/sql-wasm.wasm')
     ];
     for (const getCand of candidates) {
       try {
@@ -138,7 +141,7 @@ async function getDatabase() {
       const dir = path.dirname(currentDbPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       dbInstance = new SQL.Database();
-      const schemaPath = path.resolve(__dirname, '../database/schema.sql');
+      const schemaPath = path.join(BACKEND_ROOT, 'database', 'schema.sql');
       if (fs.existsSync(schemaPath)) {
         dbInstance.exec(fs.readFileSync(schemaPath, 'utf8'));
       }

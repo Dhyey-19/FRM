@@ -1,9 +1,12 @@
 const path = require('path');
 const fs = require('fs');
 const { connectDB } = require('../config/db');
+const { resolveAppRoots } = require('../utils/appPaths');
+
+const { backendRoot: BACKEND_ROOT } = resolveAppRoots(__dirname);
 
 async function backup() {
-  const backupDir = path.resolve(__dirname, 'backups');
+  const backupDir = path.join(BACKEND_ROOT, 'database', 'backups');
   if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
   }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -21,8 +21,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions,
-  TextField
+  DialogActions
 } from '@mui/material';
 import {
   Storage as StorageIcon,
@@ -31,16 +30,15 @@ import {
   Delete as DeleteIcon,
   SystemUpdateAlt as UpdateIcon,
   CheckCircle as CheckCircleIcon,
-  Sync as SyncIcon,
+  UploadFile as UploadFileIcon,
   Code as CodeIcon,
-  Security as SecurityIcon,
-  VpnKey as TokenIcon
+  Security as SecurityIcon
 } from '@mui/icons-material';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 /**
- * Four KPI summary cards displaying database engine, migrations, git version, and backup counts.
+ * Four KPI summary cards displaying database engine, migrations, app version, and backup counts.
  */
 export const SystemStatusCards = ({ status, backupsCount = 0 }) => (
   <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -94,15 +92,13 @@ export const SystemStatusCards = ({ status, backupsCount = 0 }) => (
           </Box>
           <Box>
             <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-              App Version {status?.deployMode === 'package' ? '(Package)' : ''}
+              App Version
             </Typography>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-              {status?.currentCommit && status.currentCommit !== 'Unknown'
-                ? status.currentCommit
-                : (status?.appVersion ? `v${status.appVersion}` : 'Production')}
+              {status?.appVersion ? `v${status.appVersion}` : 'Production'}
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b' }}>
-              {status?.commitDate && status.commitDate !== 'Unknown' ? status.commitDate : 'Production Build'}
+              {status?.buildDate || 'Production Build'}
             </Typography>
           </Box>
         </CardContent>
@@ -293,268 +289,155 @@ export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, 
 };
 
 /**
- * GitHub / schema migration update check and execution panel.
+ * Offline compiled server update package (.zip) uploader and installer panel.
  */
-export const AppUpdatePanel = ({ onRefreshStatus, onSuccess, onError }) => {
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState(null);
+export const AppUpdatePanel = ({ onSuccess, onError }) => {
+  const fileInputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [updateLogs, setUpdateLogs] = useState('');
   const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
-  const [showTokenConfig, setShowTokenConfig] = useState(false);
-  const [githubRepoInput, setGithubRepoInput] = useState('Dhyey-19/FRM');
-  const [githubTokenInput, setGithubTokenInput] = useState('');
-  const [savingConfig, setSavingConfig] = useState(false);
 
-  const handleCheckUpdates = async () => {
-    try {
-      setCheckingUpdate(true);
-      if (onError) onError('');
-      const res = await fetch(`${API_BASE}/system/check-updates`);
-      const data = await res.json();
-      if (res.ok) {
-        setUpdateInfo(data);
-        if (data.githubRepo) setGithubRepoInput(data.githubRepo);
-      } else if (onError) {
-        onError(data.message || 'Failed to check for updates');
-      }
-    } catch (err) {
-      if (onError) onError('Failed to check for updates: ' + err.message);
-    } finally {
-      setCheckingUpdate(false);
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      if (onError) onError('Please select a valid .zip update package (FRM-Server-Package.zip).');
+      e.target.value = '';
+      return;
     }
-  };
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/system/check-updates`);
-        const data = await res.json();
-        if (active && res.ok) {
-          setUpdateInfo(data);
-          if (data.githubRepo) setGithubRepoInput(data.githubRepo);
-        }
-      } catch (err) {
-        console.error('Update check notice:', err);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const handleSaveUpdateConfig = async (e) => {
-    e.preventDefault();
-    try {
-      setSavingConfig(true);
-      if (onError) onError('');
-      if (onSuccess) onSuccess('');
-      const res = await fetch(`${API_BASE}/system/update-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          githubRepo: githubRepoInput.trim() || 'Dhyey-19/FRM',
-          githubToken: githubTokenInput.trim()
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setGithubTokenInput('');
-        setShowTokenConfig(false);
-        if (onSuccess) onSuccess('GitHub update settings saved! Checking for updates...');
-        if (onRefreshStatus) onRefreshStatus();
-        await handleCheckUpdates();
-      } else if (onError) {
-        onError(data.message || 'Failed to save GitHub update settings.');
-      }
-    } catch (err) {
-      if (onError) onError('Error saving GitHub settings: ' + err.message);
-    } finally {
-      setSavingConfig(false);
-    }
+    if (onError) onError('');
+    setSelectedFile(file);
   };
 
   const handleApplyUpdate = async () => {
     setConfirmUpdateOpen(false);
+    if (!selectedFile) return;
+
     try {
       setUpdating(true);
-      setUpdateLogs('Connecting to GitHub to download & install updates...\nPlease do not close this window.');
+      setUpdateLogs(`Uploading ${selectedFile.name} to server...\nPlease do not close this window.`);
       if (onError) onError('');
-      const res = await fetch(`${API_BASE}/system/apply-update`, { method: 'POST' });
+      if (onSuccess) onSuccess('');
+
+      const formData = new FormData();
+      formData.append('updatePackage', selectedFile);
+
+      const res = await fetch(`${API_BASE}/system/upload-update`, {
+        method: 'POST',
+        body: formData
+      });
       const data = await res.json();
+
       if (res.ok) {
         setUpdateLogs(data.logs || 'Update successfully installed!');
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (onSuccess) onSuccess('Update installed and server restarting cleanly! Reloading page in 4 seconds...');
         if (data.restartRequired) {
-          if (onSuccess) onSuccess('Server updated and restarting cleanly! Page will reload in 4 seconds...');
           setTimeout(() => {
             window.location.reload();
           }, 4000);
-        } else {
-          if (onSuccess) onSuccess('Application and database updated successfully! Please reload your browser.');
-          if (onRefreshStatus) onRefreshStatus();
-          handleCheckUpdates();
         }
       } else {
-        setUpdateLogs(data.logs || ('Failed: ' + data.message));
+        setUpdateLogs(data.logs || ('Failed: ' + (data.message || 'Update failed')));
         if (onError) onError(data.message || 'Update failed');
       }
     } catch (err) {
-      if (onError) onError('Error applying update: ' + err.message);
+      if (onError) onError('Error uploading update package: ' + err.message);
       setUpdateLogs((prev) => prev + '\nError: ' + err.message);
     } finally {
       setUpdating(false);
     }
   };
 
-  const isPackageMode = updateInfo?.deployMode === 'package';
-  const showSourceSetup = isPackageMode && (showTokenConfig || updateInfo?.needsToken || updateInfo?.tokenInvalid);
-
   return (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-            Application & Database Updates
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b' }}>
-            {isPackageMode
-              ? 'Check GitHub releases and install updated web/backend code + database migrations in 1 click without copying ZIPs.'
-              : 'Check for new features, bug fixes, and database migrations from GitHub without affecting your live data.'}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {isPackageMode && (
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<TokenIcon />}
-              onClick={() => setShowTokenConfig((v) => !v)}
-              disabled={checkingUpdate || updating}
-              sx={{ fontWeight: 600 }}
-            >
-              {updateInfo?.hasGithubToken ? 'GitHub Token Settings' : 'Connect GitHub Token'}
-            </Button>
-          )}
-          <Button
-            variant="outlined"
-            startIcon={checkingUpdate ? <CircularProgress size={18} color="inherit" /> : <SyncIcon />}
-            onClick={handleCheckUpdates}
-            disabled={checkingUpdate || updating}
-            sx={{ fontWeight: 600 }}
-          >
-            {checkingUpdate ? 'Checking GitHub...' : 'Check for Updates'}
-          </Button>
-        </Box>
+      <Box sx={{ mb: 2.5 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+          Application & Database Package Update
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#64748b' }}>
+          Upload a compiled update package (<code>FRM-Server-Package.zip</code>) directly from this browser. No Git, GitHub, or manual file copying needed.
+        </Typography>
       </Box>
 
-      {showSourceSetup && (
-        <Paper
-          component="form"
-          onSubmit={handleSaveUpdateConfig}
-          variant="outlined"
-          sx={{ p: 2.5, mb: 3, borderRadius: 2, backgroundColor: '#fffbeb', borderColor: '#fde68a' }}
-        >
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#92400e', mb: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TokenIcon fontSize="small" /> GitHub Auto-Update Connection (One-Time Setup)
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#78350f', mb: 2 }}>
-            {updateInfo?.configNotice || 'Enter a fine-grained Read-Only GitHub Token (Contents: Read on Dhyey-19/FRM) so this server can download updates directly from GitHub.'}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-            <TextField
-              label="GitHub Repository"
-              size="small"
-              value={githubRepoInput}
-              onChange={(e) => setGithubRepoInput(e.target.value)}
-              sx={{ minWidth: 200, bgcolor: '#ffffff' }}
-            />
-            <TextField
-              label={updateInfo?.hasGithubToken ? 'New GitHub Token (leave blank to keep)' : 'GitHub Personal Access Token (Read-Only)'}
-              size="small"
-              type="password"
-              value={githubTokenInput}
-              onChange={(e) => setGithubTokenInput(e.target.value)}
-              sx={{ flex: 1, minWidth: 260, bgcolor: '#ffffff' }}
-            />
-            <Button type="submit" variant="contained" disabled={savingConfig} sx={{ bgcolor: '#0F3B66', fontWeight: 600 }}>
-              {savingConfig ? 'Saving...' : 'Save & Check Updates'}
-            </Button>
-          </Box>
-        </Paper>
-      )}
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2.5,
+          mb: 3,
+          borderRadius: 2,
+          backgroundColor: '#f8fafc',
+          borderColor: '#cbd5e1'
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1 }}>
+          Select Compiled Update Package (.zip)
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".zip"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          <Button
+            variant="outlined"
+            startIcon={<UploadFileIcon />}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={updating}
+            sx={{ fontWeight: 600, bgcolor: '#ffffff' }}
+          >
+            Choose .zip File
+          </Button>
 
-      {updateInfo && (
-        <Box sx={{ mb: 3 }}>
-          {updateInfo.configNotice && !updateInfo.hasUpdate && (
-            <Alert severity={updateInfo.needsToken || updateInfo.tokenInvalid ? 'warning' : 'info'} sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                GitHub Auto-Update Notice
-              </Typography>
-              <Typography variant="body2">
-                {updateInfo.configNotice}
-              </Typography>
-            </Alert>
+          {selectedFile ? (
+            <Chip
+              label={`${selectedFile.name} (${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)`}
+              onDelete={updating ? undefined : () => {
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+              color="primary"
+              variant="outlined"
+              sx={{ fontWeight: 600, bgcolor: '#ffffff' }}
+            />
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No package selected yet.
+            </Typography>
           )}
 
-          {updateInfo.hasUpdate ? (
-            <Alert severity="warning" icon={<UpdateIcon />} sx={{ mb: 2, '& .MuiAlert-message': { width: '100%' } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    New Updates Available! {updateInfo.remoteCommit ? `(${updateInfo.remoteCommit})` : ''}
-                  </Typography>
-                  <Typography variant="body2">
-                    {updateInfo.commitsBehind > 0 && `${updateInfo.commitsBehind} new commit(s) available. `}
-                    {updateInfo.latestCommitMessage && `Latest: "${updateInfo.latestCommitMessage}". `}
-                    {updateInfo.pendingMigrations?.length > 0 && `${updateInfo.pendingMigrations.length} pending database migration(s).`}
-                  </Typography>
-                </Box>
-                <Button
-                  variant="contained"
-                  color="warning"
-                  startIcon={<UpdateIcon />}
-                  onClick={() => setConfirmUpdateOpen(true)}
-                  disabled={updating}
-                  sx={{ fontWeight: 700 }}
-                >
-                  Update Now
-                </Button>
-              </Box>
-            </Alert>
-          ) : !updateInfo.configNotice && (
-            <Alert severity="success" icon={<CheckCircleIcon />} sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                Your Application & Database Are Fully Up to Date! ({updateInfo.currentCommit || 'Latest'})
-              </Typography>
-              <Typography variant="body2">
-                Running the latest version with no pending database migrations.
-              </Typography>
-            </Alert>
-          )}
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={updating ? <CircularProgress size={18} color="inherit" /> : <UpdateIcon />}
+            onClick={() => setConfirmUpdateOpen(true)}
+            disabled={!selectedFile || updating}
+            sx={{ fontWeight: 700, ml: { sm: 'auto' } }}
+          >
+            {updating ? 'Installing Update...' : 'Install Update'}
+          </Button>
         </Box>
-      )}
-
-      <Paper variant="outlined" sx={{ p: 2.5, backgroundColor: '#f8fafc', borderRadius: 2, mb: 3 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <SecurityIcon sx={{ fontSize: 18, color: '#10b981' }} />
-          How Non-Destructive Database Updates Work:
-        </Typography>
-        <Typography variant="body2" sx={{ color: '#475569', mb: 0.5 }}>
-          • <strong>Zero Data Loss:</strong> Database modifications use sequential migration scripts executed inside safe database transactions.
-        </Typography>
-        <Typography variant="body2" sx={{ color: '#475569', mb: 0.5 }}>
-          • <strong>Live Data Untouched:</strong> All existing client ledgers, vouchers, items, attendance records, and passwords remain 100% intact.
-        </Typography>
-        <Typography variant="body2" sx={{ color: '#475569' }}>
-          • <strong>Automated Verification:</strong> The system automatically records executed updates in the <code>_Migrations</code> table to prevent duplicate executions.
-        </Typography>
       </Paper>
+
+      <Alert severity="info" icon={<SecurityIcon />} sx={{ mb: 3 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Safe, Compiled, Zero-Data-Loss Updates
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          • <strong>Zero Source Code:</strong> Only compiled frontend assets and minified backend runtime are installed.<br />
+          • <strong>Database & Config Protected:</strong> Live <code>FRM_DB</code> data, <code>.env</code>, SSL certificates, and backups remain 100% intact while pending SQL migrations apply in safe transactions.<br />
+          • <strong>All Devices Updated Automatically:</strong> Once installed, Windows, Mac, Android, and iOS devices see the new version on refresh.
+        </Typography>
+      </Alert>
 
       {updateLogs && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-            Update Process Log:
+            Update Installation Log:
           </Typography>
           <Paper
             sx={{
@@ -572,44 +455,26 @@ export const AppUpdatePanel = ({ onRefreshStatus, onSuccess, onError }) => {
           >
             {updateLogs}
           </Paper>
-          {updating && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1.5, color: '#2563eb' }}>
-              <CircularProgress size={18} />
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Applying updates and rebuilding frontend assets... Please wait.
-              </Typography>
-            </Box>
-          )}
         </Box>
       )}
 
       <Dialog open={confirmUpdateOpen} onClose={() => setConfirmUpdateOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <UpdateIcon color="primary" /> Confirm Application Update
+          <UpdateIcon color="warning" /> Install Update Package?
         </DialogTitle>
         <DialogContent dividers>
           <DialogContentText sx={{ mb: 2, color: '#334155' }}>
-            Are you sure you want to update the application and database now?
+            Install compiled package <strong>{selectedFile?.name}</strong> on this server now?
           </DialogContentText>
           <Box sx={{ p: 2, backgroundColor: '#f1f5f9', borderRadius: 1.5 }}>
             <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F3B66', mb: 0.5 }}>
               What this will do:
             </Typography>
             <Typography variant="body2" sx={{ color: '#475569' }}>
-              {isPackageMode ? (
-                <>
-                  1. Download latest server release package from GitHub over HTTPS.<br />
-                  2. Update web app, backend code, and apply pending <code>FRM_DB</code> SQL migrations.<br />
-                  3. Automatically restart the FRM server (keeping `.env`, SSL certs &amp; live data untouched).
-                </>
-              ) : (
-                <>
-                  1. Pull latest code from GitHub.<br />
-                  2. Apply any pending SQL Server migrations to <code>FRM_DB</code>.<br />
-                  3. Recompile frontend bundles.<br />
-                  4. All existing customer data and vouchers will remain 100% safe.
-                </>
-              )}
+              1. Extract verified compiled web &amp; backend bundles.<br />
+              2. Preserve <code>.env</code>, SSL certificates, and <code>.bak</code> backups.<br />
+              3. Apply any pending SQL Server migrations safely to <code>FRM_DB</code>.<br />
+              4. Automatically restart the FRM server (~2 seconds downtime).
             </Typography>
           </Box>
         </DialogContent>
@@ -618,7 +483,7 @@ export const AppUpdatePanel = ({ onRefreshStatus, onSuccess, onError }) => {
             Cancel
           </Button>
           <Button onClick={handleApplyUpdate} variant="contained" color="warning" disabled={updating}>
-            Yes, Apply Update
+            Yes, Install Update
           </Button>
         </DialogActions>
       </Dialog>

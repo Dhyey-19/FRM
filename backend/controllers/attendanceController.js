@@ -2,6 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const { sql, connectDB, getDatabase } = require('../config/db');
 const { parseMonthlyAttendancePdf, parseTimeToDecimal, formatDecimalToTime } = require('../services/attendanceParserService');
+const { resolveAppRoots } = require('../utils/appPaths');
+
+const { projectRoot: PROJECT_ROOT } = resolveAppRoots(__dirname);
 
 /**
  * Robustly matches an attendance employee to a User Master record
@@ -166,7 +169,7 @@ exports.uploadAttendance = async (req, res) => {
       fileName = req.body.fileName || fileName;
     } else if (req.body && req.body.useSample) {
       // Allow testing with existing sample file in folder
-      const samplePath = path.resolve(__dirname, '../../Monthly Attendence Report/rptMonthlyLog.pdf');
+      const samplePath = path.join(PROJECT_ROOT, 'Monthly Attendence Report', 'rptMonthlyLog.pdf');
       if (fs.existsSync(samplePath)) {
         pdfBuffer = fs.readFileSync(samplePath);
         fileName = 'rptMonthlyLog.pdf';

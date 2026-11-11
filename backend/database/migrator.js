@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { resolveAppRoots } = require('../utils/appPaths');
+
+const { backendRoot: BACKEND_ROOT } = resolveAppRoots(__dirname);
 
 /**
  * Automatically applies any pending SQL migrations to the SQLite database
@@ -17,7 +20,7 @@ async function runSQLiteMigrations(db, saveToDisk) {
       );
     `);
 
-    const migrationsDir = path.resolve(__dirname, 'migrations');
+    const migrationsDir = path.join(BACKEND_ROOT, 'database', 'migrations');
     if (!fs.existsSync(migrationsDir)) return;
 
     const files = fs.readdirSync(migrationsDir)
@@ -85,7 +88,7 @@ async function runMssqlMigrations(pool, sqlLib) {
     `);
 
     // 2. Locate migrations directory
-    const migrationsDir = path.resolve(__dirname, 'migrations');
+    const migrationsDir = path.join(BACKEND_ROOT, 'database', 'migrations');
     if (!fs.existsSync(migrationsDir)) return;
 
     const files = fs.readdirSync(migrationsDir)

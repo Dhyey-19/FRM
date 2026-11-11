@@ -8,6 +8,7 @@ dotenv.config({ path: envPath });
 const express = require('express');
 const cors = require('cors');
 const { connectDB } = require('./config/db');
+const { runMssqlMigrations } = require('./database/migrator');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const assetRoutes = require('./routes/assetRoutes');
@@ -223,4 +224,4 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = { startServer, app };
+module.exports = { startServer, app, runMssqlMigrations };
