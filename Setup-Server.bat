@@ -48,12 +48,17 @@ if %ERRORLEVEL% equ 0 (
 )
 
 echo.
-echo [*] Installing npm packages ^(root, backend, frontend^)...
+echo [*] Installing Node.js dependencies...
 call npm install
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] npm install failed. Check your internet connection and try again.
-    pause
-    exit /b %ERRORLEVEL%
+    if exist "node_modules" (
+        echo [WARNING] npm install returned an error ^(offline?^). Continuing with existing node_modules...
+    ) else (
+        echo [ERROR] npm install failed and no node_modules folder was found.
+        echo         Check your internet connection and try again.
+        pause
+        exit /b %ERRORLEVEL%
+    )
 )
 
 echo.
@@ -63,3 +68,4 @@ node scripts/setup-server.js
 
 echo.
 pause
+

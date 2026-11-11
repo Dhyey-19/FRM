@@ -24,9 +24,15 @@ if not exist "node_modules" (
     echo [*] Installing dependencies for first-time run...
     call npm install
 )
-if not exist "frontend\dist\index.html" (
-    echo [*] Building web frontend for first-time run...
-    call npm --prefix frontend run build
+if not exist "public\index.html" if not exist "frontend\dist\index.html" (
+    if exist "frontend\package.json" (
+        echo [*] Building web frontend for first-time run...
+        call npm --prefix frontend run build
+    ) else (
+        echo [ERROR] Frontend build files not found in public\ or frontend\dist\.
+        pause
+        exit /b 1
+    )
 )
 
 :: 3. Automatically launch browser after 2 seconds in background

@@ -294,13 +294,21 @@ async function main() {
       console.warn('       HTTP access on port ' + port + ' will still work normally.');
     }
 
-    console.log('\nStep 4: Building Frontend Production Bundle');
-    execSync('npm --prefix frontend run build', {
-      cwd: PROJECT_ROOT,
-      stdio: 'inherit',
-      shell: true
-    });
-    console.log('[OK] Frontend production build completed.');
+    console.log('\nStep 4: Frontend Web Assets Check');
+    const frontendPkg = path.join(PROJECT_ROOT, 'frontend', 'package.json');
+    const prebuiltIndex = path.join(PROJECT_ROOT, 'public', 'index.html');
+    if (fs.existsSync(frontendPkg)) {
+      execSync('npm --prefix frontend run build', {
+        cwd: PROJECT_ROOT,
+        stdio: 'inherit',
+        shell: true
+      });
+      console.log('[OK] Frontend production build completed.');
+    } else if (fs.existsSync(prebuiltIndex)) {
+      console.log('[OK] Pre-built frontend assets found in public/ (skipping build).');
+    } else {
+      throw new Error('Frontend assets missing: neither frontend/ nor public/index.html was found.');
+    }
 
     console.log('\nStep 5: Windows Shortcuts & Boot Auto-Start');
     if (await prompt.askYesNo('Create Desktop Shortcut ("FRM - Factory Flow")?', true)) {
@@ -339,3 +347,4 @@ main()
     console.error('\n[Setup Failed]:', err && err.message ? err.message : err);
     process.exit(1);
   });
+

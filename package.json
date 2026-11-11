@@ -11,6 +11,7 @@
     "start": "npm run dev",
     "server": "node backend/server.js",
     "publish": "node scripts/publish.js",
+    "package:server": "node scripts/package-server.js",
     "tunnel": "npx localtunnel --port 5000",
     "cert": "node scripts/generate-cert.js",
     "update-version": "node scripts/update-version.js",

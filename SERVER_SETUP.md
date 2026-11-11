@@ -31,16 +31,23 @@ SQL Server 2022 Express disables remote/TCP connections and `sa` SQL login by de
 
 ---
 
-## Step 2: Copy / Clone FRM onto the Server PC
+## Step 2: Copy FRM onto the Server PC (No Git Clone Required)
 
-Either clone via Git or copy the `FRM` folder (for example to `C:\FRM` or `D:\FRM`):
+### Option A: Server Production Package (Recommended — No Git, No Frontend Source Code)
+On your development PC, run:
+```cmd
+npm run package:server
+```
+This builds **`dist\FRM-Server-Package.zip`** containing only the compiled web app (`public/`), backend server, SQL init/migrations, and setup scripts (no `.git/`, no `frontend/src/`, no dev tools):
+1. Copy `dist\FRM-Server-Package.zip` to the Server PC (USB / LAN share) and extract it to a folder like `C:\FRM`.
+2. *(For future updates later)*: Build `npm run package:server` again, extract `public\` and `backend\` into `C:\FRM` (overwriting files). Your `.env`, `backend\certs\`, and `FRM_DB` data remain safe.
 
+### Option B: Using Git (Optional)
+If you prefer pulling directly from GitHub on the server PC:
 ```cmd
 git clone https://github.com/Dhyey-19/FRM.git
 cd FRM
 ```
-
-*(Ensure Git, Node.js LTS, and SQL Server 2022 Express are installed.)*
 
 ---
 
@@ -93,4 +100,5 @@ So client bookmarks don't change when the server restarts:
 ## Day-to-Day Maintenance
 
 - **Backup Database**: Double-click `backup-database.bat` (creates `.bak` in `backend\database\backups\`) or use the in-app **Excel Backup**.
-- **Update Software**: Close the running server window, double-click `update.bat`, then reopen `Start-FRM.bat`.
+- **Update Software**: Close the running server window, extract the new `FRM-Server-Package.zip` over the server folder (or run `update.bat` if installed via Git), then reopen `Start-FRM.bat`. Any pending database migrations apply automatically on restart.
+
