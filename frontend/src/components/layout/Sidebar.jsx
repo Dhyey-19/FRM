@@ -33,8 +33,6 @@ import {
   ExpandLess, 
   ExpandMore,
   Logout,
-  SaveAlt as BackupIcon,
-  KeyOff as KeyOffIcon,
   Menu as MenuIcon,
   MenuOpen as MenuOpenIcon,
   AccountCircle as AccountCircleIcon,
@@ -43,8 +41,6 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MENU_STRUCTURE } from '../../config/menuConfig';
-import TypedConfirmActionDialog from '../settings/TypedConfirmActionDialog';
-import { downloadExcelBackup, surrenderSoftwareLicense } from '../../utils/systemActions';
 
 const Sidebar = ({ 
   user, 
@@ -59,13 +55,6 @@ const Sidebar = ({
   const location = useLocation();
   const [currentUser, setCurrentUser] = useState(user);
   const [openMenu, setOpenMenu] = useState('');
-  const [openSurrenderDialog, setOpenSurrenderDialog] = useState(false);
-  const [surrenderError, setSurrenderError] = useState('');
-  const [surrendering, setSurrendering] = useState(false);
-
-  const [openBackupDialog, setOpenBackupDialog] = useState(false);
-  const [backupError, setBackupError] = useState('');
-  const [backupDownloading, setBackupDownloading] = useState(false);
 
   useEffect(() => {
     setCurrentUser(user);
@@ -108,50 +97,6 @@ const Sidebar = ({
       setOpenMenu(menuName);
     } else {
       setOpenMenu(openMenu === menuName ? '' : menuName);
-    }
-  };
-
-  const handleOpenBackupDialog = () => {
-    setOpenBackupDialog(true);
-    setBackupError('');
-  };
-
-  const handleCloseBackupDialog = () => {
-    if (backupDownloading) return;
-    setOpenBackupDialog(false);
-    setBackupError('');
-  };
-
-  const handleConfirmBackup = async () => {
-    setBackupDownloading(true);
-    setBackupError('');
-    try {
-      await downloadExcelBackup();
-      setOpenBackupDialog(false);
-    } catch (err) {
-      console.error('Backup error:', err);
-      setBackupError(err.message || 'Failed to connect to server for backup.');
-    } finally {
-      setBackupDownloading(false);
-    }
-  };
-
-  const handleCloseSurrenderDialog = () => {
-    if (surrendering) return;
-    setOpenSurrenderDialog(false);
-    setSurrenderError('');
-  };
-
-  const handleConfirmSurrender = async () => {
-    setSurrendering(true);
-    setSurrenderError('');
-    try {
-      await surrenderSoftwareLicense();
-    } catch (err) {
-      console.error('Surrender error:', err);
-      setSurrenderError(err.message || 'Failed to contact the backend server.');
-    } finally {
-      setSurrendering(false);
     }
   };
 
@@ -419,19 +364,6 @@ const Sidebar = ({
                     <Collapse in={openMenu === section.id} timeout="auto" unmountOnExit>
                       <List component="div" disablePadding sx={{ pb: section.groups ? 2 : 0 }}>
                         {section.children && section.children.map(child => renderMenuItem(child, 1))}
-                        
-                        {section.id === 'admin' && isAdmin && (
-                          <>
-                            <ListItemButton onClick={handleOpenBackupDialog} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(16,185,129,0.15)' } }}>
-                              <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#10b981' }}><BackupIcon /></ListItemIcon>
-                              <ListItemText primary="Excel Backup" primaryTypographyProps={{ color: '#10b981', fontWeight: 600 }} />
-                            </ListItemButton>
-                            <ListItemButton onClick={() => setOpenSurrenderDialog(true)} sx={{ py: 0.5, pl: 4, mb: 0.2, borderRadius: 2, '&:hover': { bgcolor: 'rgba(255,138,138,0.15)', color: '#ff8a8a' } }}>
-                              <ListItemIcon sx={{ py: 0.5, minWidth: 40, color: '#ff8a8a' }}><KeyOffIcon /></ListItemIcon>
-                              <ListItemText primary="Surrender License" primaryTypographyProps={{ color: '#ff8a8a', fontWeight: 500 }} />
-                            </ListItemButton>
-                          </>
-                        )}
 
                         {section.groups && section.groups.map(group => {
                           const visibleGroupChildren = group.children.filter(child => hasMenuAccess(child.path));
@@ -458,46 +390,6 @@ const Sidebar = ({
           })()}
         </List>
       </Box>
-  );
-
-  const surrenderDialog = (
-    <TypedConfirmActionDialog
-      open={openSurrenderDialog}
-      onClose={handleCloseSurrenderDialog}
-      onConfirm={handleConfirmSurrender}
-      loading={surrendering}
-      error={surrenderError}
-      title="Surrender Software License"
-      icon={<KeyOffIcon />}
-      description="Warning: You are surrendering the software license from this device. Once surrendered, you will not be able to use the application without registering it again."
-      confirmWord="surrender"
-      confirmLabel="Surrender"
-      loadingLabel="Surrendering..."
-      headerBg="#fee2e2"
-      titleColor="#b91c1c"
-      accentColor="#dc2626"
-      hoverColor="#b91c1c"
-    />
-  );
-
-  const backupDialog = (
-    <TypedConfirmActionDialog
-      open={openBackupDialog}
-      onClose={handleCloseBackupDialog}
-      onConfirm={handleConfirmBackup}
-      loading={backupDownloading}
-      error={backupError}
-      title="Download Database Excel Backup"
-      icon={<BackupIcon />}
-      description="Export all system tables, configurations, and records into a Microsoft Excel (.xlsx) spreadsheet backup file."
-      confirmWord="backup"
-      confirmLabel="Download Backup"
-      loadingLabel="Downloading..."
-      headerBg="#ecfdf5"
-      titleColor="#047857"
-      accentColor="#10b981"
-      hoverColor="#059669"
-    />
   );
 
   return (
@@ -549,8 +441,6 @@ const Sidebar = ({
           {drawerContent}
         </Drawer>
       )}
-      {surrenderDialog}
-      {backupDialog}
     </>
   );
 };
