@@ -6,9 +6,12 @@ import {
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Chip
 } from '@mui/material';
 import { 
-  Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Category as CategoryIcon
+  Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, Category as CategoryIcon,
+  FileDownload as ExportIcon, FileUpload as ImportIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const ItemTypeMaster = () => {
   const [itemTypes, setItemTypes] = useState([]);
@@ -142,6 +145,73 @@ const ItemTypeMaster = () => {
     }
   };
 
+  const handleExport = () => {
+    const exportData = filteredItemTypes.map((t, index) => ({
+      'Sr. No.': index + 1,
+      'Item Type': t.ItemType,
+      'Description': t.Description || (
+        t.ItemType === 'FG' ? 'Finished Good' :
+        t.ItemType === 'RM' ? 'Raw Material' :
+        t.ItemType === 'SF' ? 'Semi-Finished' :
+        t.ItemType === 'BOP' ? 'Bought Out Part' : ''
+      )
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'ItemTypes');
+    XLSX.writeFile(workbook, 'ItemTypeMaster.xlsx');
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const wsname = workbook.SheetNames[0];
+        const ws = workbook.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length > 0) {
+          const mappedData = data.map(row => ({
+            ItemType: row['Item Type'] || row.ItemType || row.Type || '',
+            Description: row.Description || row['Description'] || ''
+          })).filter(r => r.ItemType && String(r.ItemType).trim());
+
+          if (mappedData.length === 0) {
+            alert('No valid item type rows found in the uploaded file.');
+            return;
+          }
+
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/item-types/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mappedData)
+          });
+
+          const resData = await response.json();
+          if (response.ok) {
+            fetchItemTypes();
+            alert(resData.message || 'Item types imported successfully!');
+          } else {
+            alert(`Error importing item types: ${resData.message}`);
+          }
+        } else {
+          alert('Excel file is empty.');
+        }
+      } catch (err) {
+        console.error('Error importing item types:', err);
+        alert('Failed to parse or upload excel file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = null;
+  };
+
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
@@ -161,15 +231,43 @@ const ItemTypeMaster = () => {
             InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
             sx={{ width: { xs: '100%', sm: 300 } }}
           />
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
-            sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
-          >
-            Add Item Type
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+            <input
+              accept=".xlsx, .xls"
+              style={{ display: 'none' }}
+              id="itemtype-import-file"
+              type="file"
+              onChange={handleImport}
+            />
+            <label htmlFor={hasAddPermission() ? "itemtype-import-file" : ""} style={{ flex: 1 }}>
+              <Button 
+                disabled={!hasAddPermission()} 
+                variant="outlined" 
+                component="span"
+                startIcon={<ImportIcon />}
+                sx={{ boxShadow: 0, width: '100%' }}
+              >
+                Import
+              </Button>
+            </label>
+            <Button 
+              variant="outlined" 
+              startIcon={<ExportIcon />}
+              onClick={handleExport}
+              sx={{ boxShadow: 0, flex: { xs: 1, sm: 'none' } }}
+            >
+              Export
+            </Button>
+            <Button 
+              variant="contained" 
+              color="secondary" 
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
+              sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
+            >
+              Add Item Type
+            </Button>
+          </Box>
         </Toolbar>
 
         <TableContainer>

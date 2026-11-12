@@ -129,3 +129,47 @@ exports.deleteUnit = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// POST /api/units/bulk
+exports.bulkCreateUnits = async (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Array of units is required' });
+  }
+
+  let added = 0;
+  let skipped = 0;
+
+  try {
+    const pool = await connectDB();
+    for (const item of items) {
+      const rawUnit = item.Unit || item['Unit Name'] || item['Unit'];
+      if (!rawUnit) continue;
+      const unitCode = String(rawUnit).trim().toUpperCase();
+      if (!unitCode) continue;
+
+      const check = await pool.request()
+        .input('Unit', sql.VarChar(10), unitCode)
+        .query('SELECT Unit FROM UnitMaster WHERE Unit = @Unit');
+
+      if (check.recordset.length === 0) {
+        await pool.request()
+          .input('Unit', sql.VarChar(10), unitCode)
+          .query('INSERT INTO UnitMaster (Unit, IsSystem) VALUES (@Unit, 0)');
+        added++;
+      } else {
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      message: `Processed ${items.length} records. Added: ${added}, Skipped (Already existed): ${skipped}`,
+      added,
+      skipped
+    });
+  } catch (error) {
+    console.error('Error bulk creating units:', error);
+    res.status(500).json({ message: error.message || 'Server error bulk creating units' });
+  }
+};
+

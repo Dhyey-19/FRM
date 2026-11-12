@@ -1109,3 +1109,173 @@ exports.getInvoiceWiseReceivableReport = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// POST /api/ledgers/bulk
+exports.bulkCreateLedgers = async (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Array of ledgers is required' });
+  }
+
+  let added = 0;
+  let updated = 0;
+
+  try {
+    const pool = await connectDB();
+
+    // Cache existing account groups
+    const groupRes = await pool.request().query('SELECT Id, GroupName FROM AccountGroup');
+    const groupMap = new Map();
+    let defaultGroupId = null;
+    for (const g of groupRes.recordset) {
+      groupMap.set(g.GroupName.trim().toLowerCase(), g.Id);
+      if (!defaultGroupId) defaultGroupId = g.Id;
+    }
+
+    for (const item of items) {
+      const rawName = item.LedgerName || item['Ledger Name'] || item['Party Name'];
+      if (!rawName) continue;
+      const ledgerName = String(rawName).trim();
+      if (!ledgerName) continue;
+
+      // Resolve Account Group ID
+      let rawGroup = item.AccountGroupName || item['Account Group'] || item.AccountGroup || item['Group Name'] || item.AccountGroupID;
+      let accountGroupId = defaultGroupId;
+      if (rawGroup) {
+        if (!isNaN(Number(rawGroup)) && Number(rawGroup) > 0) {
+          accountGroupId = parseInt(rawGroup, 10);
+        } else {
+          const groupNameStr = String(rawGroup).trim();
+          const lookupKey = groupNameStr.toLowerCase();
+          if (groupMap.has(lookupKey)) {
+            accountGroupId = groupMap.get(lookupKey);
+          } else {
+            // Create the new AccountGroup
+            const insGroup = await pool.request()
+              .input('GroupName', sql.VarChar(30), groupNameStr.slice(0, 30))
+              .query('INSERT INTO AccountGroup (GroupName, IsSystem) OUTPUT INSERTED.Id VALUES (@GroupName, 0)');
+            if (insGroup.recordset.length > 0) {
+              accountGroupId = insGroup.recordset[0].Id;
+              groupMap.set(lookupKey, accountGroupId);
+            }
+          }
+        }
+      }
+
+      const address = (item.Address || '').slice(0, 255) || null;
+      const city = (item.City || '').slice(0, 20) || null;
+      const state = (item.State || '').slice(0, 20) || null;
+      const gstin = (item.GSTIN || '').slice(0, 15) || null;
+      const mobileNo = (item.MobileNo || item['Mobile No'] || item['Mobile'] || '').slice(0, 10) || null;
+      const email = (item.Email || '').slice(0, 50) || null;
+      const openingBalance = parseFloat(item.OpeningBalance || item['Opening Balance'] || 0) || 0;
+      const closingBalance = item.ClosingBalance !== undefined && item.ClosingBalance !== ''
+        ? parseFloat(item.ClosingBalance || item['Closing Balance']) || openingBalance
+        : openingBalance;
+      const bankName = (item.BankName || item['Bank Name'] || '').slice(0, 50) || null;
+      const accountNo = (item.AccountNo || item['Account No'] || '').slice(0, 30) || null;
+      const ifsc = (item.IFSC || '').slice(0, 15) || null;
+      const upi = (item.UPI || '').slice(0, 50) || null;
+      const ownBrand = (item.OwnBrand || item['Own Brand'] || '').slice(0, 50) || null;
+      const otherBrand = (item.OtherBrand || item['Other Brand'] || '').slice(0, 50) || null;
+      const discount = item.Discount !== undefined && item.Discount !== '' ? parseFloat(item.Discount || item['Discount (%)']) || null : null;
+      const cd = item.CD !== undefined && item.CD !== '' ? parseFloat(item.CD || item['CD (%)']) || null : null;
+      const bill = (item.Bill || '').slice(0, 20) || null;
+      const paymentTerm = (item.PaymentTerm || item['Payment Term'] || '').slice(0, 30) || null;
+      const transport = (item.Transport || '').slice(0, 50) || null;
+      const deliveryDays = parseInt(item.DeliveryDays || item['Delivery Days'] || 0, 10) || 0;
+      const remark = (item.Remark || '').slice(0, 255) || null;
+
+      // Check if ledger already exists
+      const checkLedger = await pool.request()
+        .input('LedgerName', sql.VarChar(100), ledgerName)
+        .query('SELECT Id FROM LedgerMaster WHERE LedgerName = @LedgerName');
+
+      if (checkLedger.recordset.length > 0) {
+        // Update existing
+        const existingId = checkLedger.recordset[0].Id;
+        await pool.request()
+          .input('Id', sql.Numeric(10, 0), existingId)
+          .input('AccountGroupID', sql.Int, accountGroupId)
+          .input('Address', sql.VarChar(255), address)
+          .input('City', sql.VarChar(20), city)
+          .input('State', sql.VarChar(20), state)
+          .input('GSTIN', sql.VarChar(15), gstin)
+          .input('MobileNo', sql.VarChar(10), mobileNo)
+          .input('Email', sql.VarChar(50), email)
+          .input('BankName', sql.VarChar(50), bankName)
+          .input('AccountNo', sql.VarChar(30), accountNo)
+          .input('IFSC', sql.VarChar(15), ifsc)
+          .input('UPI', sql.VarChar(50), upi)
+          .input('OwnBrand', sql.VarChar(50), ownBrand)
+          .input('OtherBrand', sql.VarChar(50), otherBrand)
+          .input('Discount', sql.Numeric(5, 2), discount)
+          .input('CD', sql.Numeric(5, 2), cd)
+          .input('Bill', sql.VarChar(20), bill)
+          .input('PaymentTerm', sql.VarChar(30), paymentTerm)
+          .input('Transport', sql.VarChar(50), transport)
+          .input('DeliveryDays', sql.Int, deliveryDays)
+          .input('Remark', sql.VarChar(255), remark)
+          .query(`
+            UPDATE LedgerMaster SET
+              AccountGroupID = @AccountGroupID, Address = @Address, City = @City, State = @State,
+              GSTIN = @GSTIN, MobileNo = @MobileNo, Email = @Email,
+              BankName = @BankName, AccountNo = @AccountNo, IFSC = @IFSC, UPI = @UPI,
+              OwnBrand = @OwnBrand, OtherBrand = @OtherBrand, Discount = @Discount, CD = @CD,
+              Bill = @Bill, PaymentTerm = @PaymentTerm, Transport = @Transport,
+              DeliveryDays = @DeliveryDays, Remark = @Remark
+            WHERE Id = @Id
+          `);
+        updated++;
+      } else {
+        // Insert new
+        await pool.request()
+          .input('LedgerName', sql.VarChar(100), ledgerName)
+          .input('AccountGroupID', sql.Int, accountGroupId)
+          .input('Address', sql.VarChar(255), address)
+          .input('City', sql.VarChar(20), city)
+          .input('State', sql.VarChar(20), state)
+          .input('GSTIN', sql.VarChar(15), gstin)
+          .input('MobileNo', sql.VarChar(10), mobileNo)
+          .input('Email', sql.VarChar(50), email)
+          .input('OpeningBalance', sql.Numeric(12, 2), openingBalance)
+          .input('ClosingBalance', sql.Numeric(12, 2), closingBalance)
+          .input('BankName', sql.VarChar(50), bankName)
+          .input('AccountNo', sql.VarChar(30), accountNo)
+          .input('IFSC', sql.VarChar(15), ifsc)
+          .input('UPI', sql.VarChar(50), upi)
+          .input('OwnBrand', sql.VarChar(50), ownBrand)
+          .input('OtherBrand', sql.VarChar(50), otherBrand)
+          .input('Discount', sql.Numeric(5, 2), discount)
+          .input('CD', sql.Numeric(5, 2), cd)
+          .input('Bill', sql.VarChar(20), bill)
+          .input('PaymentTerm', sql.VarChar(30), paymentTerm)
+          .input('Transport', sql.VarChar(50), transport)
+          .input('DeliveryDays', sql.Int, deliveryDays)
+          .input('Remark', sql.VarChar(255), remark)
+          .query(`
+            INSERT INTO LedgerMaster (
+              LedgerName, AccountGroupID, Address, City, State, GSTIN, MobileNo, Email,
+              OpeningBalance, ClosingBalance, BankName, AccountNo, IFSC, UPI,
+              OwnBrand, OtherBrand, Discount, CD, Bill, PaymentTerm, Transport, DeliveryDays, Remark
+            ) VALUES (
+              @LedgerName, @AccountGroupID, @Address, @City, @State, @GSTIN, @MobileNo, @Email,
+              @OpeningBalance, @ClosingBalance, @BankName, @AccountNo, @IFSC, @UPI,
+              @OwnBrand, @OtherBrand, @Discount, @CD, @Bill, @PaymentTerm, @Transport, @DeliveryDays, @Remark
+            )
+          `);
+        added++;
+      }
+    }
+
+    res.status(200).json({
+      message: `Processed ${items.length} records. Added: ${added}, Updated: ${updated}`,
+      added,
+      updated
+    });
+  } catch (error) {
+    console.error('Error bulk creating ledgers:', error);
+    res.status(500).json({ message: error.message || 'Server error bulk creating ledgers' });
+  }
+};
+

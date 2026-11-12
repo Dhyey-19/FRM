@@ -116,3 +116,47 @@ exports.deleteBrand = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// POST /api/brands/bulk
+exports.bulkCreateBrands = async (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Array of series/brands is required' });
+  }
+
+  let added = 0;
+  let skipped = 0;
+
+  try {
+    const pool = await connectDB();
+    for (const item of items) {
+      const rawName = item.BrandName || item['Series Name'] || item['Brand Name'] || item.Series;
+      if (!rawName) continue;
+      const brandName = String(rawName).trim();
+      if (!brandName) continue;
+
+      const check = await pool.request()
+        .input('BrandName', sql.VarChar(15), brandName)
+        .query('SELECT BrandId FROM BrandMaster WHERE BrandName = @BrandName');
+
+      if (check.recordset.length === 0) {
+        await pool.request()
+          .input('BrandName', sql.VarChar(15), brandName)
+          .query('INSERT INTO BrandMaster (BrandName) VALUES (@BrandName)');
+        added++;
+      } else {
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      message: `Processed ${items.length} records. Added: ${added}, Skipped (Already existed): ${skipped}`,
+      added,
+      skipped
+    });
+  } catch (error) {
+    console.error('Error bulk creating brands:', error);
+    res.status(500).json({ message: error.message || 'Server error bulk creating series' });
+  }
+};
+

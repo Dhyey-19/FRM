@@ -4,6 +4,7 @@ const accountGroupController = require('../controllers/accountGroupController');
 
 router.get('/', accountGroupController.getAccountGroups);
 router.post('/', accountGroupController.addAccountGroup);
+router.post('/bulk', accountGroupController.bulkCreateAccountGroups);
 router.put('/:id', accountGroupController.updateAccountGroup);
 router.delete('/:id', accountGroupController.deleteAccountGroup);
 

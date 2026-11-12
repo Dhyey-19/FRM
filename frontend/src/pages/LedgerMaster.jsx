@@ -6,8 +6,13 @@ import {
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert,
   MenuItem, Select, FormControl, InputLabel, Autocomplete, Chip
 } from '@mui/material';
-import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, ContactPage as ContactIcon } from '@mui/icons-material';
+import { 
+  Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, ContactPage as ContactIcon,
+  FileDownload as ExportIcon, FileUpload as ImportIcon
+} from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const initialFormState = {
   LedgerName: '', AccountGroupID: '', Address: '', City: '', State: '', GSTIN: '',
@@ -224,6 +229,111 @@ const LedgerMaster = () => {
     }
   };
 
+  const handleExport = () => {
+    const exportData = filteredLedgers.map((l, index) => ({
+      'Sr. No.': index + 1,
+      'Ledger Name': l.LedgerName,
+      'Account Group': l.AccountGroupName || '',
+      'Address': l.Address || '',
+      'City': l.City || '',
+      'State': l.State || '',
+      'GSTIN': l.GSTIN || '',
+      'Mobile No': l.MobileNo || '',
+      'Email': l.Email || '',
+      'Opening Balance': Number(l.OpeningBalance) || 0,
+      'Closing Balance': Number(l.ClosingBalance) || 0,
+      'Bank Name': l.BankName || '',
+      'Account No': l.AccountNo || '',
+      'IFSC': l.IFSC || '',
+      'UPI': l.UPI || '',
+      'Own Brand': l.OwnBrand || '',
+      'Other Brand': l.OtherBrand || '',
+      'Discount (%)': Number(l.Discount) || 0,
+      'CD (%)': Number(l.CD) || 0,
+      'Bill': l.Bill || '',
+      'Payment Term': l.PaymentTerm || '',
+      'Transport': l.Transport || '',
+      'Delivery Days': Number(l.DeliveryDays) || 0,
+      'Remark': l.Remark || ''
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Ledgers');
+    XLSX.writeFile(workbook, 'LedgerMaster.xlsx');
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const wsname = workbook.SheetNames[0];
+        const ws = workbook.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length > 0) {
+          const mappedData = data.map(row => ({
+            LedgerName: row['Ledger Name'] || row.LedgerName || row['Party Name'] || '',
+            AccountGroupName: row['Account Group'] || row.AccountGroupName || row.AccountGroup || row['Group Name'] || '',
+            Address: row.Address || '',
+            City: row.City || '',
+            State: row.State || '',
+            GSTIN: row.GSTIN || '',
+            MobileNo: row['Mobile No'] || row.MobileNo || row.Mobile || '',
+            Email: row.Email || '',
+            OpeningBalance: row['Opening Balance'] !== undefined ? row['Opening Balance'] : row.OpeningBalance,
+            ClosingBalance: row['Closing Balance'] !== undefined ? row['Closing Balance'] : row.ClosingBalance,
+            BankName: row['Bank Name'] || row.BankName || '',
+            AccountNo: row['Account No'] || row.AccountNo || '',
+            IFSC: row.IFSC || '',
+            UPI: row.UPI || '',
+            OwnBrand: row['Own Brand'] || row.OwnBrand || '',
+            OtherBrand: row['Other Brand'] || row.OtherBrand || '',
+            Discount: row['Discount (%)'] !== undefined ? row['Discount (%)'] : row.Discount,
+            CD: row['CD (%)'] !== undefined ? row['CD (%)'] : row.CD,
+            Bill: row.Bill || '',
+            PaymentTerm: row['Payment Term'] || row.PaymentTerm || '',
+            Transport: row.Transport || '',
+            DeliveryDays: row['Delivery Days'] !== undefined ? row['Delivery Days'] : row.DeliveryDays,
+            Remark: row.Remark || ''
+          })).filter(r => r.LedgerName && String(r.LedgerName).trim());
+
+          if (mappedData.length === 0) {
+            alert('No valid ledger rows found in the uploaded file.');
+            return;
+          }
+
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/ledgers/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mappedData)
+          });
+
+          const resData = await response.json();
+          if (response.ok) {
+            fetchLedgers();
+            fetchAccountGroups();
+            alert(resData.message || 'Ledgers imported successfully!');
+          } else {
+            alert(`Error importing ledgers: ${resData.message}`);
+          }
+        } else {
+          alert('Excel file is empty.');
+        }
+      } catch (err) {
+        console.error('Error importing ledgers:', err);
+        alert('Failed to parse or upload excel file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = null;
+  };
+
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
@@ -279,16 +389,44 @@ const LedgerMaster = () => {
               </Button>
             )}
           </Box>
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            startIcon={<AddIcon />} 
-            onClick={() => handleOpenDialog('add')} 
-            disabled={!hasAddPermission()}
-            sx={{ width: { xs: '100%', md: 'auto' } }}
-          >
-            Add Ledger
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
+            <input
+              accept=".xlsx, .xls"
+              style={{ display: 'none' }}
+              id="ledger-import-file"
+              type="file"
+              onChange={handleImport}
+            />
+            <label htmlFor={hasAddPermission() ? "ledger-import-file" : ""} style={{ flex: 1 }}>
+              <Button 
+                disabled={!hasAddPermission()} 
+                variant="outlined" 
+                component="span"
+                startIcon={<ImportIcon />}
+                sx={{ boxShadow: 0, width: '100%' }}
+              >
+                Import
+              </Button>
+            </label>
+            <Button 
+              variant="outlined" 
+              startIcon={<ExportIcon />}
+              onClick={handleExport}
+              sx={{ boxShadow: 0, flex: { xs: 1, md: 'none' } }}
+            >
+              Export
+            </Button>
+            <Button 
+              variant="contained" 
+              color="secondary" 
+              startIcon={<AddIcon />} 
+              onClick={() => handleOpenDialog('add')} 
+              disabled={!hasAddPermission()}
+              sx={{ width: { xs: '100%', md: 'auto' } }}
+            >
+              Add Ledger
+            </Button>
+          </Box>
         </Toolbar>
 
         <TableContainer>

@@ -144,3 +144,56 @@ exports.deleteItemType = async (req, res) => {
     res.status(500).json({ message: 'Server error deleting item type' });
   }
 };
+
+// POST /api/item-types/bulk
+exports.bulkCreateItemTypes = async (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Array of item types is required' });
+  }
+
+  let added = 0;
+  let updated = 0;
+
+  try {
+    const pool = await connectDB();
+    for (const item of items) {
+      const rawCode = item.ItemType || item['Item Type'] || item.Type;
+      if (!rawCode) continue;
+      const itemType = String(rawCode).trim().toUpperCase();
+      if (!itemType) continue;
+      const description = String(item.Description || item['Description'] || '').trim();
+
+      const check = await pool.request()
+        .input('ItemType', sql.VarChar(15), itemType)
+        .query('SELECT ItemType, IsSystem FROM ItemTypeMaster WHERE ItemType = @ItemType');
+
+      if (check.recordset.length === 0) {
+        await pool.request()
+          .input('ItemType', sql.VarChar(15), itemType)
+          .input('Description', sql.NVarChar(100), description || null)
+          .query('INSERT INTO ItemTypeMaster (ItemType, Description, IsSystem) VALUES (@ItemType, @Description, 0)');
+        added++;
+      } else {
+        // If description is provided and not empty, update it
+        if (description) {
+          await pool.request()
+            .input('ItemType', sql.VarChar(15), itemType)
+            .input('Description', sql.NVarChar(100), description)
+            .query('UPDATE ItemTypeMaster SET Description = @Description WHERE ItemType = @ItemType');
+          updated++;
+        }
+      }
+    }
+
+    res.status(200).json({
+      message: `Processed ${items.length} records. Added: ${added}, Updated: ${updated}`,
+      added,
+      updated
+    });
+  } catch (error) {
+    console.error('Error bulk creating item types:', error);
+    res.status(500).json({ message: error.message || 'Server error bulk creating item types' });
+  }
+};
+

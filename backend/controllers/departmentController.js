@@ -190,3 +190,47 @@ exports.getDepartmentStockReport = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// POST /api/departments/bulk
+exports.bulkCreateDepartments = async (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Array of departments is required' });
+  }
+
+  let added = 0;
+  let skipped = 0;
+
+  try {
+    const pool = await connectDB();
+    for (const item of items) {
+      const rawName = item.DeptName || item['Department Name'] || item.DepartmentName || item.Department;
+      if (!rawName) continue;
+      const deptName = String(rawName).trim();
+      if (!deptName) continue;
+
+      const check = await pool.request()
+        .input('DeptName', sql.VarChar(20), deptName)
+        .query('SELECT DeptID FROM DepartmentMaster WHERE DeptName = @DeptName');
+
+      if (check.recordset.length === 0) {
+        await pool.request()
+          .input('DeptName', sql.VarChar(20), deptName)
+          .query('INSERT INTO DepartmentMaster (DeptName) VALUES (@DeptName)');
+        added++;
+      } else {
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      message: `Processed ${items.length} records. Added: ${added}, Skipped (Already existed): ${skipped}`,
+      added,
+      skipped
+    });
+  } catch (error) {
+    console.error('Error bulk creating departments:', error);
+    res.status(500).json({ message: error.message || 'Server error bulk creating departments' });
+  }
+};
+

@@ -102,8 +102,11 @@ async function main() {
 
   const scriptsDest = path.join(packageDir, 'scripts');
   fs.mkdirSync(scriptsDest, { recursive: true });
-  for (const scriptFile of ['setup-server.js', 'generate-cert.js', 'create-desktop-shortcut.js', 'enable-autostart.js']) {
-    fs.copyFileSync(path.join(rootDir, 'scripts', scriptFile), path.join(scriptsDest, scriptFile));
+  for (const scriptFile of ['setup-server.js', 'generate-cert.js', 'create-desktop-shortcut.js', 'enable-autostart.js', 'configure-sqlserver.ps1']) {
+    const srcPath = path.join(rootDir, 'scripts', scriptFile);
+    if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, path.join(scriptsDest, scriptFile));
+    }
   }
 
   const rootFiles = [

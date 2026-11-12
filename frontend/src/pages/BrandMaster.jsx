@@ -27,9 +27,13 @@ import {
   Add as AddIcon, 
   Search as SearchIcon, 
   Edit as EditIcon, 
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  FileDownload as ExportIcon,
+  FileUpload as ImportIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const BrandMaster = () => {
   const [brands, setBrands] = useState([]);
@@ -168,6 +172,66 @@ const BrandMaster = () => {
     }
   };
 
+  const handleExport = () => {
+    const exportData = filteredBrands.map((brand, index) => ({
+      'Sr. No.': index + 1,
+      'Series Name': brand.BrandName
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Series');
+    XLSX.writeFile(workbook, 'SeriesMaster.xlsx');
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const wsname = workbook.SheetNames[0];
+        const ws = workbook.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length > 0) {
+          const mappedData = data.map(row => ({
+            BrandName: row['Series Name'] || row.BrandName || row['Brand Name'] || row.Series || ''
+          })).filter(r => r.BrandName && String(r.BrandName).trim());
+
+          if (mappedData.length === 0) {
+            alert('No valid series rows found in the uploaded file.');
+            return;
+          }
+
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/brands/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mappedData)
+          });
+
+          const resData = await response.json();
+          if (response.ok) {
+            fetchBrands();
+            alert(resData.message || 'Series imported successfully!');
+          } else {
+            alert(`Error importing series: ${resData.message}`);
+          }
+        } else {
+          alert('Excel file is empty.');
+        }
+      } catch (err) {
+        console.error('Error importing series:', err);
+        alert('Failed to parse or upload excel file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = null;
+  };
+
   return (
     <Box>
       {/* Page Title */}
@@ -196,15 +260,43 @@ const BrandMaster = () => {
             }}
             sx={{ width: { xs: '100%', sm: 300 } }}
           />
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
-            sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
-          >
-            Add Series
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+            <input
+              accept=".xlsx, .xls"
+              style={{ display: 'none' }}
+              id="brand-import-file"
+              type="file"
+              onChange={handleImport}
+            />
+            <label htmlFor={hasAddPermission() ? "brand-import-file" : ""} style={{ flex: 1 }}>
+              <Button 
+                disabled={!hasAddPermission()} 
+                variant="outlined" 
+                component="span"
+                startIcon={<ImportIcon />}
+                sx={{ boxShadow: 0, width: '100%' }}
+              >
+                Import
+              </Button>
+            </label>
+            <Button 
+              variant="outlined" 
+              startIcon={<ExportIcon />}
+              onClick={handleExport}
+              sx={{ boxShadow: 0, flex: { xs: 1, sm: 'none' } }}
+            >
+              Export
+            </Button>
+            <Button 
+              variant="contained" 
+              color="secondary" 
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
+              sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
+            >
+              Add Series
+            </Button>
+          </Box>
         </Toolbar>
 
         {/* Data Table */}

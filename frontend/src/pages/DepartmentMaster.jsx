@@ -27,9 +27,13 @@ import {
   Add as AddIcon, 
   Search as SearchIcon, 
   Edit as EditIcon, 
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  FileDownload as ExportIcon,
+  FileUpload as ImportIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const DepartmentMaster = () => {
   const [departments, setDepartments] = useState([]);
@@ -168,6 +172,66 @@ const DepartmentMaster = () => {
     }
   };
 
+  const handleExport = () => {
+    const exportData = filteredDepartments.map((d, index) => ({
+      'Sr. No.': index + 1,
+      'Department Name': d.DeptName
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(worksheet);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Departments');
+    XLSX.writeFile(workbook, 'DepartmentMaster.xlsx');
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const wsname = workbook.SheetNames[0];
+        const ws = workbook.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length > 0) {
+          const mappedData = data.map(row => ({
+            DeptName: row['Department Name'] || row.DeptName || row.DepartmentName || row.Department || ''
+          })).filter(r => r.DeptName && String(r.DeptName).trim());
+
+          if (mappedData.length === 0) {
+            alert('No valid department rows found in the uploaded file.');
+            return;
+          }
+
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/departments/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mappedData)
+          });
+
+          const resData = await response.json();
+          if (response.ok) {
+            fetchDepartments();
+            alert(resData.message || 'Departments imported successfully!');
+          } else {
+            alert(`Error importing departments: ${resData.message}`);
+          }
+        } else {
+          alert('Excel file is empty.');
+        }
+      } catch (err) {
+        console.error('Error importing departments:', err);
+        alert('Failed to parse or upload excel file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = null;
+  };
+
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
@@ -193,15 +257,43 @@ const DepartmentMaster = () => {
             }}
             sx={{ width: { xs: '100%', sm: 300 } }}
           />
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
-            sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
-          >
-            Add Department
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+            <input
+              accept=".xlsx, .xls"
+              style={{ display: 'none' }}
+              id="department-import-file"
+              type="file"
+              onChange={handleImport}
+            />
+            <label htmlFor={hasAddPermission() ? "department-import-file" : ""} style={{ flex: 1 }}>
+              <Button 
+                disabled={!hasAddPermission()} 
+                variant="outlined" 
+                component="span"
+                startIcon={<ImportIcon />}
+                sx={{ boxShadow: 0, width: '100%' }}
+              >
+                Import
+              </Button>
+            </label>
+            <Button 
+              variant="outlined" 
+              startIcon={<ExportIcon />}
+              onClick={handleExport}
+              sx={{ boxShadow: 0, flex: { xs: 1, sm: 'none' } }}
+            >
+              Export
+            </Button>
+            <Button 
+              variant="contained" 
+              color="secondary" 
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
+              sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
+            >
+              Add Department
+            </Button>
+          </Box>
         </Toolbar>
 
         <TableContainer>

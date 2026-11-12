@@ -21,15 +21,18 @@ net session >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo [OK] Running with Administrator privileges.
 
-    echo [*] Checking Microsoft SQL Server service...
-    sc query "MSSQL$SQLEXPRESS" | find "RUNNING" >nul 2>&1
-    if %ERRORLEVEL% neq 0 (
-        sc query "MSSQLSERVER" | find "RUNNING" >nul 2>&1
-        if %ERRORLEVEL% neq 0 (
-            echo [*] Starting SQL Server service...
-            net start "MSSQL$SQLEXPRESS" >nul 2>&1
-            if %ERRORLEVEL% neq 0 net start MSSQLSERVER >nul 2>&1
-        )
+    echo [*] Configuring SQL Server service to start automatically on Windows boot...
+    sc config "MSSQL$SQLEXPRESS" start= auto >nul 2>&1
+    sc config "MSSQLSERVER" start= auto >nul 2>&1
+    sc config "SQLBrowser" start= auto >nul 2>&1
+
+    if exist "scripts\configure-sqlserver.ps1" (
+        powershell -ExecutionPolicy Bypass -File "scripts\configure-sqlserver.ps1"
+    ) else (
+        echo [*] Starting SQL Server service...
+        net start "MSSQL$SQLEXPRESS" >nul 2>&1
+        if %ERRORLEVEL% neq 0 net start MSSQLSERVER >nul 2>&1
+        net start "SQLBrowser" >nul 2>&1
     )
 
     echo [*] Opening Windows Firewall ports 5000 ^(HTTP^) and 5443 ^(HTTPS^) for LAN access...

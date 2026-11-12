@@ -98,3 +98,47 @@ exports.deleteAccountGroup = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// POST /api/account-groups/bulk
+exports.bulkCreateAccountGroups = async (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Array of account groups is required' });
+  }
+
+  let added = 0;
+  let skipped = 0;
+
+  try {
+    const pool = await connectDB();
+    for (const item of items) {
+      const rawName = item.GroupName || item['Group Name'] || item['Account Group'];
+      if (!rawName) continue;
+      const groupName = String(rawName).trim();
+      if (!groupName) continue;
+
+      const check = await pool.request()
+        .input('GroupName', sql.VarChar(30), groupName)
+        .query('SELECT Id FROM AccountGroup WHERE GroupName = @GroupName');
+
+      if (check.recordset.length === 0) {
+        await pool.request()
+          .input('GroupName', sql.VarChar(30), groupName)
+          .query('INSERT INTO AccountGroup (GroupName, IsSystem) VALUES (@GroupName, 0)');
+        added++;
+      } else {
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      message: `Processed ${items.length} records. Added: ${added}, Skipped (Already existed): ${skipped}`,
+      added,
+      skipped
+    });
+  } catch (error) {
+    console.error('Error bulk creating account groups:', error);
+    res.status(500).json({ message: error.message || 'Server error bulk creating account groups' });
+  }
+};
+

@@ -113,7 +113,7 @@ if (frontendDistPath) {
 }
 
 // Initialize Server and Database
-const connectDBWithRetry = async (maxAttempts = 10, delayMs = 3000) => {
+const connectDBWithRetry = async (maxAttempts = 30, delayMs = 3000) => {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await connectDB();
@@ -126,10 +126,18 @@ const connectDBWithRetry = async (maxAttempts = 10, delayMs = 3000) => {
         /Could not connect|ECONNREFUSED|Failed to connect/i.test(msg);
 
       if (!isTransientSocketError || attempt === maxAttempts) {
+        console.error('\n=====================================================================');
+        console.error('[DATABASE CONNECTION FAILED]');
+        console.error(`Could not connect to SQL Server after ${attempt * (delayMs / 1000)} seconds.`);
+        console.error('Troubleshooting Tips:');
+        console.error('  1. Open Windows Services (services.msc) and ensure "SQL Server (SQLEXPRESS)" is RUNNING.');
+        console.error('  2. In SQL Server Configuration Manager -> Protocols for SQLEXPRESS -> Enable TCP/IP on Port 1433.');
+        console.error('  3. Run Setup-Server.bat as Administrator to automatically fix service & firewall settings.');
+        console.error('=====================================================================\n');
         throw err;
       }
 
-      console.warn(`[Server] Database not ready yet (attempt ${attempt}/${maxAttempts}). Retrying in ${delayMs / 1000}s...`);
+      console.warn(`[Server] Database not ready yet (attempt ${attempt}/${maxAttempts}). Waiting for SQL Server on port 1433... Retrying in ${delayMs / 1000}s...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }

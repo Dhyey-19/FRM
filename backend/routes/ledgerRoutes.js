@@ -10,6 +10,7 @@ router.get('/invoice-wise-payable', ledgerController.getInvoiceWisePayableReport
 router.get('/invoice-wise-receivable', ledgerController.getInvoiceWiseReceivableReport);
 router.get('/', ledgerController.getLedgers);
 router.post('/', ledgerController.addLedger);
+router.post('/bulk', ledgerController.bulkCreateLedgers);
 router.put('/:id', ledgerController.updateLedger);
 router.delete('/:id', ledgerController.deleteLedger);
 

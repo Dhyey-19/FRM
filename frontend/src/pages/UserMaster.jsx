@@ -37,9 +37,12 @@ import {
   Delete as DeleteIcon,
   Home as HomeIcon,
   Visibility,
-  VisibilityOff
+  VisibilityOff,
+  FileDownload as ExportIcon
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+import * as XLSX from 'xlsx';
+import { ensureNumericWorksheet } from '../utils/excelHelper';
 import { MENU_STRUCTURE, getAllMenuPaths } from '../config/menuConfig';
 
 // We will fetch users from the backend
@@ -311,6 +314,30 @@ const UserMaster = () => {
     }
   };
 
+  const handleExport = () => {
+    const exportData = sortedUsers.map((u, index) => ({
+      'Sr. No.': index + 1,
+      'Biometric ID': u.BiometricCode || '',
+      'Full Name': u.FullName || '',
+      'Username': u.Username || '',
+      'Department': u.Department || '',
+      'Designation': u.Designation || '',
+      'Role': u.UserRole || '',
+      'Salary Type': u.SalaryType || 'Monthly',
+      'Monthly Salary': Number(u.MonthlySalary) || 0,
+      'Daily Rate': Number(u.DailyRate) || 0,
+      'Hourly Rate': Number(u.HourlyRate) || 0,
+      'Phone': u.Phone || '',
+      'Email': u.Email || '',
+      'Status': u.IsActive ? 'Active' : 'Inactive'
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    ensureNumericWorksheet(ws);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Users');
+    XLSX.writeFile(wb, 'UserMaster.xlsx');
+  };
+
   return (
     <Box>
       {/* Page Title */}
@@ -339,15 +366,25 @@ const UserMaster = () => {
             }}
             sx={{ width: { xs: '100%', sm: 300 } }}
           />
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
-            sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
-          >
-            Add User
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+            <Button 
+              variant="outlined" 
+              startIcon={<ExportIcon />}
+              onClick={handleExport}
+              sx={{ boxShadow: 0, flex: { xs: 1, sm: 'none' } }}
+            >
+              Export
+            </Button>
+            <Button 
+              variant="contained" 
+              color="secondary" 
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog('add')} disabled={!hasAddPermission()}
+              sx={{ boxShadow: 0, width: { xs: '100%', sm: 'auto' } }}
+            >
+              Add User
+            </Button>
+          </Box>
         </Toolbar>
 
         {/* Data Table */}

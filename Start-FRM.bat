@@ -16,6 +16,8 @@ if %ERRORLEVEL% neq 0 (
         echo [*] Attempting to start SQL Server service...
         net start "MSSQL$SQLEXPRESS" >nul 2>&1
         if %ERRORLEVEL% neq 0 net start MSSQLSERVER >nul 2>&1
+        net start "SQLBrowser" >nul 2>&1
+        timeout /t 3 /nobreak >nul
     )
 )
 
@@ -38,15 +40,23 @@ if not exist "public\index.html" if not exist "frontend\dist\index.html" (
 :: 3. Automatically launch browser after 2 seconds in background
 start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:5000"
 
-:: 4. Start the Node.js Server (supports auto-restart exit code 42 after 1-click updates)
+:: 4. Start the Node.js Server (supports auto-restart exit code 42 after 1-click updates and auto-recovery)
 :SERVER_LOOP
 echo [*] Starting FRM server on port 5000...
 echo.
 node backend\server.js
-if %ERRORLEVEL% equ 42 (
+set SERVER_EXIT=%ERRORLEVEL%
+if %SERVER_EXIT% equ 42 (
     echo.
     echo [*] Update installed! Restarting FRM server with new code...
     timeout /t 2 /nobreak >nul
+    goto SERVER_LOOP
+)
+if %SERVER_EXIT% neq 0 (
+    echo.
+    echo [!] FRM Server stopped with exit code %SERVER_EXIT%.
+    echo [*] Attempting auto-reconnect in 5 seconds... (Press Ctrl+C to abort)
+    timeout /t 5 /nobreak >nul
     goto SERVER_LOOP
 )
 pause
