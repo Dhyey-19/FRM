@@ -145,7 +145,7 @@ async function main() {
   const serverPkg = {
     name: 'frm-bbp-server',
     version: rootPkg.version || '1.0.0',
-    description: 'FRM-BBP - Factory Resource Manager (Compiled Server Package)',
+    description: 'FRM-BBP (Compiled Server Package)',
     main: 'backend/server.js',
     scripts: {
       start: 'node backend/server.js',

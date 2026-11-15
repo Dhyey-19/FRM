@@ -741,7 +741,7 @@ const DashboardLayout = () => {
               </Typography>
               <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
                 <li>Click the <strong>Install icon</strong> in your browser's address bar (right side of URL).</li>
-                <li>Or click browser menu (<strong>⋮</strong>) → <strong>"Install FRM-BBP - Factory Resource Manager"</strong>.</li>
+                <li>Or click browser menu (<strong>⋮</strong>) → <strong>"Install FRM-BBP"</strong>.</li>
                 <li>Click <strong>Install</strong> to launch FRM-BBP in its own dedicated window!</li>
               </Box>
             </Box>

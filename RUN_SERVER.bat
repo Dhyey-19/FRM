@@ -3,7 +3,7 @@ title FRM-BBP Server
 cd /d "%~dp0"
 
 echo =====================================================================
-echo           FRM-BBP (FACTORY RESOURCE MANAGER) SERVER LAUNCHER
+echo           FRM-BBP SERVER LAUNCHER
 echo =====================================================================
 echo.
 

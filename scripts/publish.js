@@ -63,7 +63,7 @@ fs.writeFileSync(path.join(publishDir, 'app.js'), appJsContent);
 const pkgJsonContent = {
   name: "frm-godaddy",
   version: "1.0.0",
-  description: "FRM - Factory Resource Manager (GoDaddy Edition)",
+  description: "FRM-BBP (GoDaddy Edition)",
   main: "app.js",
   scripts: {
     "start": "node app.js"
@@ -118,7 +118,7 @@ fs.writeFileSync(path.join(publishDir, '.htaccess'), htaccessContent);
 
 // README_GODADDY.txt
 const readmeContent = `=====================================================================
-            FRM - FACTORY RESOURCE MANAGER (GODADDY DEPLOYMENT GUIDE)
+            FRM-BBP (GODADDY DEPLOYMENT GUIDE)
 =====================================================================
 
 TWO PACKAGES ARE GENERATED IN dist/:

@@ -159,7 +159,7 @@ const startServer = async () => {
     const listenPort = Number(PORT) || 5000;
     httpServer = app.listen(listenPort, '0.0.0.0', () => {
       console.log('\n=====================================================================');
-      console.log('           FRM (Factory Resource Manager) SERVER IS RUNNING          ');
+      console.log('                 FRM-BBP SERVER IS RUNNING              ');
       console.log('=====================================================================');
       console.log(`  This Server PC:                 http://localhost:${listenPort}`);
 

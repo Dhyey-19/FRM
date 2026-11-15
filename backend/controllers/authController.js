@@ -116,8 +116,12 @@ const path = require('path');
 
 const getRegistrationFilePath = () => {
   const appDataDir = process.env.APPDATA || (process.platform === 'darwin' ? `${process.env.HOME}/Library/Application Support` : `${process.env.HOME}/.config`);
-  const folderPath = path.join(appDataDir, 'FRM');
+  const folderPath = path.join(appDataDir, 'FRM-BBP');
   if (!fs.existsSync(folderPath)) {
+    const legacyPath = path.join(appDataDir, 'FRM');
+    if (fs.existsSync(path.join(legacyPath, 'registration.json'))) {
+      return path.join(legacyPath, 'registration.json');
+    }
     fs.mkdirSync(folderPath, { recursive: true });
   }
   return path.join(folderPath, 'registration.json');
@@ -257,20 +261,20 @@ exports.requestActivation = async (req, res) => {
     const mailOptions = {
       from: emailUser,
       to: 'softechit@gmail.com',
-      subject: `Activation - App: ${appName || 'FRM'}, Device Verification: ${randomNumber}, Activation Key: ${activationKey}`,
+      subject: `Activation - App: ${appName || 'FRM-BBP'}, Device Verification: ${randomNumber}, Activation Key: ${activationKey}`,
       text: `Hello,
 
 A request for application activation has been made.
 
 Application Details:
-- Application Name: ${appName || 'FRM'}
+- Application Name: ${appName || 'FRM-BBP'}
 - Device Verification Number: ${randomNumber}
 - Generated Activation Key: ${activationKey}
 
 Please use the Activation Key above to register the application on the user's device.
 
 Best regards,
-FRM System`
+FRM-BBP System`
     };
 
     await transporter.sendMail(mailOptions);

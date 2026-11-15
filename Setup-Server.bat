@@ -3,7 +3,7 @@ title FRM-BBP - First-Time Server Setup
 cd /d "%~dp0"
 
 echo =====================================================================
-echo         FRM-BBP (FACTORY RESOURCE MANAGER) - SERVER SETUP WIZARD
+echo         FRM-BBP - SERVER SETUP WIZARD
 echo =====================================================================
 echo.
 

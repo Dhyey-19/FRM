@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "FRM-BBP - Factory Resource Manager",
+  "name": "FRM-BBP",
   "short_name": "FRM-BBP",
-  "description": "FRM-BBP - Factory Resource Manager (Inventory, Manufacturing & Accounts ERP)",
+  "description": "FRM-BBP (Inventory, Manufacturing & Accounts ERP)",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

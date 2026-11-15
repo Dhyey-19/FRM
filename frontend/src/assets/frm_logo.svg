@@ -75,14 +75,9 @@
     <rect x="64" y="342" width="384" height="114" rx="20" fill="#05192D" stroke="#1E5A96" stroke-width="3" />
     <rect x="70" y="348" width="372" height="102" rx="16" fill="none" stroke="#F88A01" stroke-width="1.5" stroke-opacity="0.6" />
 
-    <!-- FRM Monogram -->
-    <text x="256" y="408" font-family="'Inter', 'Segoe UI', Arial, sans-serif" font-size="56" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="8">
-      F<tspan fill="#F88A01">R</tspan>M
-    </text>
-    
-    <!-- Subtitle -->
-    <text x="256" y="434" font-family="'Inter', 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">
-      FACTORY RESOURCE MANAGER
+    <!-- FRM-BBP Monogram -->
+    <text x="256" y="415" font-family="'Inter', 'Segoe UI', Arial, sans-serif" font-size="46" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="4">
+      FRM-<tspan fill="#F88A01">BBP</tspan>
     </text>
   </g>
 </svg>

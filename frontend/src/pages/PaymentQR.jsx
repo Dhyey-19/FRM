@@ -275,11 +275,11 @@ const PaymentQR = () => {
     ctx.fillStyle = '#F88A01';
     ctx.fillRect(24, 24, 552, 6);
 
-    // FRM Logo text / Brand
+    // FRM-BBP Logo text / Brand
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 22px Inter, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('FRM PAY • FACTORY RESOURCE MANAGER', 300, 75);
+    ctx.fillText('FRM-BBP PAY', 300, 75);
 
     // Subtitle Pill
     ctx.fillStyle = '#F88A01';

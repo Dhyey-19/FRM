@@ -1,4 +1,4 @@
-# FRM - Factory Resource Manager
+# FRM-BBP
 
 A modern, offline-first manufacturing ERP and operations management platform built with React 19, Vite, Express, and local SQLite (`sql.js`).
 
@@ -105,4 +105,4 @@ FRM/
 ---
 
 ## License
-Proprietary / Private - Factory Resource Manager (FRM).
+Proprietary / Private - FRM-BBP.

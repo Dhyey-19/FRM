@@ -1,5 +1,5 @@
 -- =====================================================================
--- FRM - Factory Resource Manager Local Database Schema (SQLite)
+-- FRM-BBP Local Database Schema (SQLite)
 -- Total Tables: 28
 -- =====================================================================
 

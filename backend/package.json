@@ -1,7 +1,7 @@
 {
   "name": "frm-backend",
   "version": "1.0.0",
-  "description": "FRM - Factory Resource Manager Backend",
+  "description": "FRM-BBP Backend",
   "main": "index.js",
   "scripts": {
     "start": "node server.js",

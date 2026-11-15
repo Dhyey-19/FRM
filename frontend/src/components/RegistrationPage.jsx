@@ -45,7 +45,7 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
 
   const getCorrectKeys = () => {
     if (!randomNumber) return [];
-    return ['FRM', 'FACTORYFLOW'].map(suffix => {
+    return ['FRM-BBP', 'FRM', 'FACTORYFLOW'].map(suffix => {
       const validationString = randomNumber + suffix;
       let asciiSum = 0;
       for (let i = 0; i < validationString.length; i++) {
@@ -112,7 +112,7 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          appName: 'FRM',
+          appName: 'FRM-BBP',
           randomNumber: randomNumber,
           activationKey: correctKeys[0] || ''
         })
@@ -136,11 +136,11 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
     <div className="auth-container">
       <div className="auth-card" style={{ maxWidth: '450px' }}>
         <div className="logo-container">
-          <img src={logo} alt="FRM Logo" />
+          <img src={logo} alt="FRM-BBP Logo" />
         </div>
         <h2 className="auth-title">Application Registration</h2>
         <p style={{ textAlign: 'center', color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>
-          This is the first time FRM-BBP (Factory Resource Manager) is running on this device. Please register the application to activate it.
+          This is the first time FRM-BBP is running on this device. Please register the application to activate it.
         </p>
 
         <form onSubmit={handleRegister}>
@@ -203,7 +203,7 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
               type="text"
               id="appName"
               name="appName"
-              value="FRM-BBP - Factory Resource Manager"
+              value="FRM-BBP"
               disabled
               style={{ 
                 backgroundColor: '#f8fafc', 

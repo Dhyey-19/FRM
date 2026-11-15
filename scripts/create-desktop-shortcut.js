@@ -15,7 +15,7 @@ function createShortcut() {
     'Set oLink = oWS.CreateShortcut(sLinkFile)',
     `oLink.TargetPath = "${targetBat.replace(/\\/g, '\\\\')}"`,
     `oLink.WorkingDirectory = "${projectRoot.replace(/\\/g, '\\\\')}"`,
-    'oLink.Description = "Launch FRM-BBP Factory Resource Manager"',
+    'oLink.Description = "Launch FRM-BBP"',
     'oLink.Save'
   ].join('\r\n');
 
