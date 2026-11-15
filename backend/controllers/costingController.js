@@ -1,5 +1,5 @@
 const { connectDB, sql } = require('../config/db');
-const { DEFAULT_CONFIG, calculateCostingMatrix } = require('../utils/itemCostingEngine');
+const { DEFAULT_CONFIG, calculateCostingMatrix, SERIES_DEFINITIONS, SIZES } = require('../utils/itemCostingEngine');
 
 /**
  * Synchronizes the calculated costing matrix to ItemMaster and BOM_Master
@@ -375,5 +375,206 @@ exports.applyToItemMaster = async (req, res) => {
   } catch (error) {
     console.error('Error applying costing to ItemMaster:', error);
     res.status(500).json({ success: false, message: 'Server error applying costing to Item Master: ' + error.message });
+  }
+};
+
+/**
+ * GET /api/costing/item-bom-breakdown/:itemCode
+ * Returns dynamic BOM costing breakdown for any selected item.
+ */
+exports.getItemBOMBreakdown = async (req, res) => {
+  try {
+    const pool = await connectDB();
+    const itemCode = req.params.itemCode;
+    const subCode = req.query.subCode || '';
+
+    // 1. Fetch Item details
+    const itmRes = await pool.request()
+      .input('ItemCode', sql.NVarChar(50), itemCode)
+      .input('SubCode', sql.NVarChar(50), subCode)
+      .query(`
+        SELECT TOP 1 ItemCode, SubCode, ItemName, ItemType, Category, Series, Unit, Costing, MRP
+        FROM [ItemMaster]
+        WHERE [ItemCode] = @ItemCode AND [SubCode] = @SubCode
+      `);
+
+    if (itmRes.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Item not found: ' + itemCode });
+    }
+    const item = itmRes.recordset[0];
+
+    // 2. Fetch active costing configuration
+    const configRes = await pool.request()
+      .input('ConfigKey', sql.NVarChar(50), 'DEFAULT')
+      .query('SELECT TOP 1 * FROM [ItemCostingConfig] WHERE [ConfigKey] = @ConfigKey');
+    const config = (configRes.recordset && configRes.recordset[0]) || DEFAULT_CONFIG;
+    const matrix = calculateCostingMatrix(config);
+
+    // 3. Detect series and size (for pipe multipliers & series formulas)
+    const seriesDef = SERIES_DEFINITIONS.find(s => 
+      (item.Series && item.Series.includes(s.seriesKey)) || 
+      (item.ItemCode && item.ItemCode.includes(s.seriesKey)) ||
+      (item.ItemName && item.ItemName.includes(s.seriesKey))
+    );
+
+    const sizeDef = SIZES.find(sz => 
+      (item.ItemName && item.ItemName.includes(sz.size)) ||
+      (item.ItemCode && item.ItemCode.endsWith('-' + sz.size.replace(/"/g, '')))
+    ) || { size: '12"', mult: 11 };
+
+    // 4. Fetch BOM child components from BOM_Master
+    const bomRes = await pool.request()
+      .input('ParentItemCode', sql.NVarChar(50), itemCode)
+      .input('ParentSubCode', sql.NVarChar(50), subCode)
+      .query(`
+        SELECT b.ChildItemCode, b.ChildSubCode, b.Quantity,
+               i.ItemName as ChildItemName, i.ItemType as ChildItemType,
+               i.Category as ChildCategory, i.Unit as ChildUnit, i.Costing as MasterCosting
+        FROM [BOM_Master] b
+        LEFT JOIN [ItemMaster] i ON b.ChildItemCode = i.ItemCode AND b.ChildSubCode = i.SubCode
+        WHERE b.ParentItemCode = @ParentItemCode AND b.ParentSubCode = @ParentSubCode
+      `);
+
+    const bomRows = bomRes.recordset || [];
+    let totalCosting = 0;
+    const breakdown = [];
+
+    const pRate = (seriesDef && seriesDef.isHcp) 
+      ? (Number(config.HcpPipeRatePerMeter) || DEFAULT_CONFIG.HcpPipeRatePerMeter)
+      : (Number(config.PipeRatePerMeter) || DEFAULT_CONFIG.PipeRatePerMeter);
+
+    for (const b of bomRows) {
+      const childCode = b.ChildItemCode;
+      let unitRate = Number(b.MasterCosting) || 0;
+      let rateSource = 'Master Cost';
+
+      if (childCode === 'RM-PIPE-STD' || childCode === 'RM-PIPE-HCP' || childCode.includes('PIPE')) {
+        unitRate = (pRate / 38) * sizeDef.mult;
+        rateSource = `(${pRate}/38)×${sizeDef.mult}`;
+      } else if (childCode === 'RM-INS-BRS') {
+        unitRate = matrix.derived.brassInsertCost;
+        rateSource = 'Brass Formula';
+      } else if (childCode === 'RM-NUT-BRS-N') {
+        unitRate = matrix.derived.brassNutNCost;
+        rateSource = 'Brass Formula';
+      } else if (childCode === 'RM-NUT-BRS-PC') {
+        unitRate = matrix.derived.brassNutPCCost;
+        rateSource = 'Brass Formula';
+      } else if (childCode === 'RM-NUT-NYL') {
+        unitRate = Number(config.NylonNutRate) || DEFAULT_CONFIG.NylonNutRate;
+        rateSource = 'Nylon Rate';
+      } else if (childCode === 'RM-INS-NYL') {
+        unitRate = Number(config.NylonInsertRate) || DEFAULT_CONFIG.NylonInsertRate;
+        rateSource = 'Nylon Rate';
+      } else if (childCode === 'RM-NUT-SS201') {
+        unitRate = Number(config.SS201NutRate) || DEFAULT_CONFIG.SS201NutRate;
+        rateSource = 'SS Rate';
+      } else if (childCode === 'RM-NUT-SS304') {
+        unitRate = Number(config.SS304NutRate) || DEFAULT_CONFIG.SS304NutRate;
+        rateSource = 'SS Rate';
+      } else if (childCode === 'RM-INR-SS') {
+        unitRate = Number(config.SSInnerRate) || DEFAULT_CONFIG.SSInnerRate;
+        rateSource = 'SS Rate';
+      } else if (childCode === 'BOP-CAP') {
+        unitRate = Number(config.CapRate) || DEFAULT_CONFIG.CapRate;
+        rateSource = 'Standard Rate';
+      } else if (childCode === 'BOP-KEY') {
+        unitRate = Number(config.KeyRate) || DEFAULT_CONFIG.KeyRate;
+        rateSource = 'Standard Rate';
+      } else if (childCode === 'BOP-WSH') {
+        unitRate = Number(config.WasherRate) || DEFAULT_CONFIG.WasherRate;
+        rateSource = 'Standard Rate';
+      } else if (childCode === 'SRV-LABOUR') {
+        unitRate = Number(config.LabourRate) || DEFAULT_CONFIG.LabourRate;
+        rateSource = 'Labour Rate';
+      } else if (childCode === 'BOP-PCK') {
+        unitRate = Number(config.PackingRate) || DEFAULT_CONFIG.PackingRate;
+        rateSource = 'Packing Rate';
+      }
+
+      const qty = Number(b.Quantity) || 1;
+      const lineCost = Math.round(unitRate * qty * 100) / 100;
+      totalCosting += lineCost;
+
+      breakdown.push({
+        childItemCode: b.ChildItemCode,
+        childSubCode: b.ChildSubCode,
+        childItemName: b.ChildItemName || b.ChildItemCode,
+        childItemType: b.ChildItemType || 'RM',
+        childCategory: b.ChildCategory || 'BOP',
+        childUnit: b.ChildUnit || 'PCS',
+        quantity: qty,
+        unitRate: Math.round(unitRate * 100) / 100,
+        lineCost: lineCost,
+        rateSource: rateSource
+      });
+    }
+
+    totalCosting = Math.round(totalCosting * 100) / 100;
+
+    let storedMargin = 0;
+    if (config.MarginsJson) {
+      try {
+        const mObj = typeof config.MarginsJson === 'string' ? JSON.parse(config.MarginsJson) : config.MarginsJson;
+        if (seriesDef && mObj[seriesDef.seriesKey] && mObj[seriesDef.seriesKey][sizeDef.size] !== undefined) {
+          storedMargin = Number(mObj[seriesDef.seriesKey][sizeDef.size]) || 0;
+        }
+      } catch (e) {}
+    }
+
+    const currentMRP = Number(item.MRP) || totalCosting;
+    const margin = storedMargin !== 0 ? storedMargin : Math.max(0, Math.round((currentMRP - totalCosting) * 100) / 100);
+    const salePrice = Math.round((totalCosting + margin) * 100) / 100;
+
+    res.status(200).json({
+      success: true,
+      item,
+      seriesKey: seriesDef?.seriesKey || null,
+      size: sizeDef.size,
+      multiplier: sizeDef.mult,
+      breakdown,
+      totalCosting,
+      margin,
+      salePrice,
+      config,
+      derived: matrix.derived
+    });
+  } catch (error) {
+    console.error('Error fetching item BOM breakdown:', error);
+    res.status(500).json({ success: false, message: 'Server error retrieving BOM breakdown: ' + error.message });
+  }
+};
+
+/**
+ * POST /api/costing/update-item-price
+ * Updates Costing and MRP for an individual item.
+ */
+exports.updateItemPrice = async (req, res) => {
+  try {
+    const pool = await connectDB();
+    const { itemCode, subCode = '', costing, mrp } = req.body;
+
+    if (!itemCode) {
+      return res.status(400).json({ success: false, message: 'ItemCode is required' });
+    }
+
+    await pool.request()
+      .input('ItemCode', sql.NVarChar(50), itemCode)
+      .input('SubCode', sql.NVarChar(50), subCode)
+      .input('Costing', sql.Decimal(15, 2), Number(costing) || 0)
+      .input('MRP', sql.Decimal(15, 2), Number(mrp) || Number(costing) || 0)
+      .query(`
+        UPDATE [ItemMaster]
+        SET [Costing] = @Costing, [MRP] = @MRP
+        WHERE [ItemCode] = @ItemCode AND [SubCode] = @SubCode
+      `);
+
+    res.status(200).json({
+      success: true,
+      message: `Item ${itemCode} updated in Item Master (Costing: ₹${costing}, MRP: ₹${mrp})`
+    });
+  } catch (error) {
+    console.error('Error updating item price:', error);
+    res.status(500).json({ success: false, message: 'Server error updating item price: ' + error.message });
   }
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../utils/auth';
 import { 
   Box, 
@@ -54,6 +54,7 @@ import * as XLSX from 'xlsx';
 import { ensureNumericWorksheet } from '../utils/excelHelper';
 
 const ItemMaster = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const filterParamItemCode = searchParams.get('itemCode');
   const filterParamSubCode = searchParams.get('subCode');
@@ -727,7 +728,7 @@ const ItemMaster = () => {
             <Button 
               variant="contained" 
               startIcon={<CalculateIcon />}
-              onClick={() => setCostingModalOpen(true)}
+              onClick={() => navigate('/dashboard/costing-calculator')}
               sx={{ 
                 bgcolor: '#be123c', 
                 '&:hover': { bgcolor: '#9f1239' }, 
@@ -1184,7 +1185,7 @@ const ItemMaster = () => {
                 </Typography>
                 <Button 
                   size="small" 
-                  onClick={() => setCostingModalOpen(true)}
+                  onClick={() => navigate('/dashboard/costing-calculator')}
                   sx={{ textTransform: 'none', fontSize: '0.75rem', color: '#be123c', p: 0, minWidth: 'auto', fontWeight: 600 }}
                 >
                   Open Full Calculator
@@ -1552,13 +1553,6 @@ const ItemMaster = () => {
           <Button onClick={() => setShowImportResults(false)} variant="contained">Close</Button>
         </DialogActions>
       </Dialog>
-
-      {/* Item Costing Calculator Modal */}
-      <ItemCostingCalculatorModal
-        open={costingModalOpen}
-        onClose={() => setCostingModalOpen(false)}
-        onItemsUpdated={() => fetchItems()}
-      />
 
     </Box>
   );
