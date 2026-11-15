@@ -407,7 +407,7 @@ const BankReconciliation = () => {
       format: 'a4'
     });
 
-    const companyName = companyProfile?.CompanyName || 'FactoryFlow Enterprise';
+    const companyName = companyProfile?.CompanyName || 'FRM-BBP Enterprise';
     const bankName = selectedLedger?.LedgerName || 'Bank Account';
     const periodStr = `${fromDate ? formatDisplayDate(fromDate) : 'Start'} to ${toDate ? formatDisplayDate(toDate) : 'Current'}`;
 
@@ -699,7 +699,7 @@ const BankReconciliation = () => {
                 Upload Bank Statement (Excel or PDF)
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 650 }}>
-                Upload your bank statement spreadsheet (<strong>.xlsx, .xls, .csv</strong>) or digital e-statement (<strong>.pdf</strong>). FactoryFlow will parse the transactions and automatically match them against your ledger vouchers.
+                Upload your bank statement spreadsheet (<strong>.xlsx, .xls, .csv</strong>) or digital e-statement (<strong>.pdf</strong>). FRM-BBP will parse the transactions and automatically match them against your ledger vouchers.
               </Typography>
               <Box sx={{ mt: 1.5 }}>
                 <label htmlFor="bank-statement-upload">

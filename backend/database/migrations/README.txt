@@ -5,7 +5,7 @@
 HOW TO MAKE DATABASE SCHEMA & DATA CHANGES ON LIVE PRODUCTION:
 --------------------------------------------------------------
 Whenever you need to add a new table, add a new column, alter data, or create
-an index, DO NOT replace the live "factoryflow.db" file!
+an index, DO NOT replace the live "FRM-BBP.db" file!
 
 Instead, simply create a new SQL file in this folder with a sequential number:
 

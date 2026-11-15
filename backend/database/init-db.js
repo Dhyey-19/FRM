@@ -4,10 +4,10 @@ const initSqlJs = require('sql.js');
 
 /**
  * Initializes the local SQLite database from schema.sql using sql.js.
- * Creates backend/database/factoryflow.db with all 24 tables,
+ * Creates backend/database/FRM-BBP.db with all tables,
  * primary keys, unique constraints, and foreign key references.
  */
-async function initDatabase(targetFile = 'factoryflow.db', force = false) {
+async function initDatabase(targetFile = 'FRM-BBP.db', force = false) {
   const dbDir = __dirname;
   const dbPath = path.join(dbDir, targetFile);
   const schemaPath = path.join(dbDir, 'schema.sql');
@@ -46,7 +46,7 @@ async function initDatabase(targetFile = 'factoryflow.db', force = false) {
 
 if (require.main === module) {
   const isForce = process.argv.includes('--force');
-  initDatabase('factoryflow.db', isForce)
+  initDatabase('FRM-BBP.db', isForce)
     .then(() => {
       console.log('[InitDB] Database check/initialization complete!');
       process.exit(0);

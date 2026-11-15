@@ -41,12 +41,14 @@ for (const dir of backendDirs) {
 fs.copyFileSync(path.join(rootDir, 'backend', 'server.js'), path.join(publishDir, 'backend', 'server.js'));
 
 // Verify database exists
-const dbFile = path.join(publishDir, 'backend', 'database', 'factoryflow.db');
+const primaryDbFile = path.join(publishDir, 'backend', 'database', 'FRM-BBP.db');
+const legacyDbFile = path.join(publishDir, 'backend', 'database', 'factoryflow.db');
+const dbFile = fs.existsSync(primaryDbFile) ? primaryDbFile : (fs.existsSync(legacyDbFile) ? legacyDbFile : primaryDbFile);
 if (fs.existsSync(dbFile)) {
   const size = fs.statSync(dbFile).size;
-  console.log(`      ✓ factoryflow.db verified (${(size / 1024).toFixed(1)} KB) with dummy data.`);
+  console.log(`      ✓ ${path.basename(dbFile)} verified (${(size / 1024).toFixed(1)} KB) with dummy data.`);
 } else {
-  console.warn('      ⚠ Warning: factoryflow.db not found in backend/database!');
+  console.warn('      ⚠ Warning: Database file not found in backend/database!');
 }
 
 // 5. Create app.js, package.json, .env, and .htaccess in publish/
@@ -83,7 +85,7 @@ fs.writeFileSync(path.join(publishDir, 'package.json'), JSON.stringify(pkgJsonCo
 const envContent = `PORT=5000
 NODE_ENV=production
 DB_TYPE=sqlite
-SQLITE_DB_PATH=backend/database/factoryflow.db
+SQLITE_DB_PATH=backend/database/FRM-BBP.db
 `;
 fs.writeFileSync(path.join(publishDir, '.env'), envContent);
 
@@ -125,11 +127,11 @@ TWO PACKAGES ARE GENERATED IN dist/:
 ------------------------------------
 1. FRM-GoDaddy-FullInstall.zip
    -> USE THIS ONLY FOR THE INITIAL / FIRST-TIME DEPLOYMENT.
-   -> Includes initial factoryflow.db with starter dummy data.
+   -> Includes initial FRM-BBP.db with starter dummy data.
 
 2. FRM-GoDaddy-UpdateOnly.zip (SAFE FOR LIVE SITES)
    -> USE THIS TO UPDATE AN ALREADY-RUNNING SYSTEM WITH LIVE CLIENT DATA!
-   -> DOES NOT contain factoryflow.db, so extracting it on GoDaddy can
+   -> DOES NOT contain FRM-BBP.db, so extracting it on GoDaddy can
       NEVER overwrite, wipe, or corrupt your client's live data!
    -> Automatically applies any new database migrations (new tables, new columns)
       from backend/database/migrations/ when the server restarts.
@@ -160,13 +162,13 @@ HOW TO MANAGE DATABASE SCHEMA CHANGES ON LIVE GO-DADDY:
 2. Run 'npm run publish' on your local computer.
 3. Upload and extract 'FRM-GoDaddy-UpdateOnly.zip' into your GoDaddy folder.
 4. Click "Restart" in cPanel Node.js App.
-5. The built-in migrator automatically runs the new SQL on the live factoryflow.db
+5. The built-in migrator automatically runs the new SQL on the live FRM-BBP.db
    without losing a single live invoice, ledger, or user record!
 
 HOW TO BACK UP OR VIEW LIVE CLIENT DATA LOCALLY:
 ------------------------------------------------
 1. In cPanel File Manager, navigate to backend/database/.
-2. Right-click 'factoryflow.db' and click "Download".
+2. Right-click 'FRM-BBP.db' and click "Download".
 3. You now have a complete, exact offline copy of your client's live data!
 =====================================================================
 `;
@@ -178,11 +180,11 @@ if (!fs.existsSync(distDir)) {
   fs.mkdirSync(distDir, { recursive: true });
 }
 
-// 6A. Full Install ZIP (includes factoryflow.db)
+// 6A. Full Install ZIP (includes FRM-BBP.db)
 const fullZipPath = path.join(distDir, 'FRM-GoDaddy-FullInstall.zip');
 if (fs.existsSync(fullZipPath)) fs.unlinkSync(fullZipPath);
 
-// 6B. Update Only ZIP (excludes factoryflow.db to protect live client data)
+// 6B. Update Only ZIP (excludes FRM-BBP.db to protect live client data)
 const updateZipPath = path.join(distDir, 'FRM-GoDaddy-UpdateOnly.zip');
 if (fs.existsSync(updateZipPath)) fs.unlinkSync(updateZipPath);
 
@@ -197,7 +199,7 @@ try {
   if (fs.existsSync(tempDbStaging)) fs.rmSync(tempDbStaging, { recursive: true, force: true });
   fs.mkdirSync(tempDbStaging, { recursive: true });
 
-  const dbFiles = fs.readdirSync(dbDir).filter(f => f.startsWith('factoryflow.db'));
+  const dbFiles = fs.readdirSync(dbDir).filter(f => f.endsWith('.db'));
   for (const f of dbFiles) {
     fs.renameSync(path.join(dbDir, f), path.join(tempDbStaging, f));
   }

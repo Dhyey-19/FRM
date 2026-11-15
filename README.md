@@ -29,7 +29,7 @@ git clone https://github.com/Dhyey-19/FRM.git
 cd FRM
 npm install
 ```
-> **Note**: Running `npm install` automatically initializes a clean local database file (`backend/database/factoryflow.db`) with the complete schema and default system configuration via the `postinstall` hook.
+> **Note**: Running `npm install` automatically initializes a clean local database file (`backend/database/FRM-BBP.db`) with the complete schema and default system configuration via the `postinstall` hook.
 
 ### 2. Configure Environment (Optional)
 Copy `.env.example` to `.env` if custom ports or paths are needed:
@@ -68,7 +68,7 @@ A default administrator account is automatically seeded upon first database init
 
 ## Database Schema & Initialization
 
-The software operates on an embedded, zero-configuration SQLite database (`backend/database/factoryflow.db`) powered by WebAssembly (`sql.js`).
+The software operates on an embedded, zero-configuration SQLite database (`backend/database/FRM-BBP.db`) powered by WebAssembly (`sql.js`).
 
 - **Database Schema**: Maintained in [`backend/database/schema.sql`](backend/database/schema.sql).
 - **Manual Database Reset**: To recreate a clean database at any time, run:

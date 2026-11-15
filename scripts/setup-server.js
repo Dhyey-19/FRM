@@ -85,7 +85,7 @@ function writeEnvFile(cfg) {
     `HTTPS_PORT=${formatEnvValue(cfg.httpsPort)}`,
     '',
     '# SQLite fallback path if DB_TYPE=sqlite',
-    `SQLITE_DB_PATH=backend/database/factoryflow.db`
+    `SQLITE_DB_PATH=backend/database/FRM-BBP.db`
   ];
 
   if (cfg.emailUser) {

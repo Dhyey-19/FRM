@@ -399,7 +399,7 @@ async function seedDummyData(dbFilePath) {
 }
 
 if (require.main === module) {
-  const targetDb = path.join(__dirname, 'factoryflow.db');
+  const targetDb = path.join(__dirname, 'FRM-BBP.db');
   seedDummyData(targetDb)
     .then(() => console.log('[Seed] Done!'))
     .catch(err => {
