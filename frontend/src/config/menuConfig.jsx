@@ -25,7 +25,8 @@ import {
   CalendarMonth as CalendarMonthIcon,
   LocalShipping as ShippingIcon,
   TaskAlt as TaskAltIcon,
-  TrendingUp as TrendingUpIcon
+  TrendingUp as TrendingUpIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -62,6 +63,7 @@ export const MENU_STRUCTURE = [
       { title: 'Unit Master', path: '/dashboard/units', icon: <UnitIcon /> },
       { title: 'Item Type', path: '/dashboard/item-types', icon: <ItemIcon /> },
       { title: 'Item Master', path: '/dashboard/items', icon: <ItemIcon /> },
+      { title: 'Costing Calculator', path: '/dashboard/costing-calculator', icon: <CalculateIcon /> },
       { title: 'BOM', path: '/dashboard/bom', icon: <BOMIcon /> },
       { title: 'Departments', path: '/dashboard/departments', icon: <DepartmentIcon /> },
     ]

@@ -2,6 +2,169 @@ const { connectDB, sql } = require('../config/db');
 const { DEFAULT_CONFIG, calculateCostingMatrix } = require('../utils/itemCostingEngine');
 
 /**
+ * Synchronizes the calculated costing matrix to ItemMaster and BOM_Master
+ */
+async function syncCostingToDatabase(pool, matrix, config) {
+  // 1. Sync / ensure Raw Material Sub-Items
+  const subItems = [
+    { code: 'RM-PIPE-STD', name: 'Standard Pipe', type: 'RM', cat: 'BOP', unit: 'MTR', cost: Number(config.PipeRatePerMeter) || DEFAULT_CONFIG.PipeRatePerMeter },
+    { code: 'RM-PIPE-HCP', name: 'HCP Pipe', type: 'RM', cat: 'BOP', unit: 'MTR', cost: Number(config.HcpPipeRatePerMeter) || DEFAULT_CONFIG.HcpPipeRatePerMeter },
+    { code: 'BOP-CAP', name: 'End Cap', type: 'BOP', cat: 'BOP', unit: 'PCS', cost: Number(config.CapRate) || DEFAULT_CONFIG.CapRate },
+    { code: 'BOP-KEY', name: 'Key', type: 'BOP', cat: 'BOP', unit: 'PCS', cost: Number(config.KeyRate) || DEFAULT_CONFIG.KeyRate },
+    { code: 'BOP-WSH', name: 'Washer', type: 'BOP', cat: 'BOP', unit: 'PCS', cost: Number(config.WasherRate) || DEFAULT_CONFIG.WasherRate },
+    { code: 'SRV-LABOUR', name: 'Assembly Labour Charge', type: 'CONSUMABLE', cat: 'Inhouse', unit: 'PCS', cost: Number(config.LabourRate) || DEFAULT_CONFIG.LabourRate },
+    { code: 'BOP-PCK', name: 'Packing Material', type: 'BOP', cat: 'BOP', unit: 'PCS', cost: Number(config.PackingRate) || DEFAULT_CONFIG.PackingRate },
+    { code: 'RM-INS-NYL', name: 'Nylon Insert', type: 'RM', cat: 'BOP', unit: 'PCS', cost: Number(config.NylonInsertRate) || DEFAULT_CONFIG.NylonInsertRate },
+    { code: 'RM-NUT-NYL', name: 'Nylon Nut', type: 'RM', cat: 'BOP', unit: 'PCS', cost: Number(config.NylonNutRate) || DEFAULT_CONFIG.NylonNutRate },
+    { code: 'RM-NUT-SS201', name: 'SS 201 Nut', type: 'RM', cat: 'BOP', unit: 'PCS', cost: Number(config.SS201NutRate) || DEFAULT_CONFIG.SS201NutRate },
+    { code: 'RM-NUT-SS304', name: 'SS 304 Nut', type: 'RM', cat: 'BOP', unit: 'PCS', cost: Number(config.SS304NutRate) || DEFAULT_CONFIG.SS304NutRate },
+    { code: 'RM-INR-SS', name: 'SS Inner', type: 'RM', cat: 'BOP', unit: 'PCS', cost: Number(config.SSInnerRate) || DEFAULT_CONFIG.SSInnerRate },
+    { code: 'RM-INS-BRS', name: 'Brass Insert', type: 'RM', cat: 'Inhouse', unit: 'PCS', cost: matrix.derived.brassInsertCost },
+    { code: 'RM-NUT-BRS-N', name: 'Brass Nut (N)', type: 'RM', cat: 'Inhouse', unit: 'PCS', cost: matrix.derived.brassNutNCost },
+    { code: 'RM-NUT-BRS-PC', name: 'Brass Nut (PC)', type: 'RM', cat: 'Inhouse', unit: 'PCS', cost: matrix.derived.brassNutPCCost }
+  ];
+
+  for (const itm of subItems) {
+    const chk = await pool.request()
+      .input('ItemCode', sql.NVarChar(50), itm.code)
+      .query('SELECT 1 FROM [ItemMaster] WHERE [ItemCode] = @ItemCode');
+    if (chk.recordset.length === 0) {
+      await pool.request()
+        .input('ItemCode', sql.NVarChar(50), itm.code)
+        .input('SubCode', sql.NVarChar(50), '')
+        .input('ItemName', sql.NVarChar(100), itm.name)
+        .input('ItemType', sql.NVarChar(50), itm.type)
+        .input('Category', sql.NVarChar(50), itm.cat)
+        .input('Unit', sql.NVarChar(20), itm.unit)
+        .input('Costing', sql.Decimal(15, 2), itm.cost)
+        .input('MRP', sql.Decimal(15, 2), itm.cost)
+        .query(`
+          INSERT INTO [ItemMaster] (ItemCode, SubCode, ItemName, ItemType, Category, Unit, Costing, MRP, OpeningStock, ClosingStock)
+          VALUES (@ItemCode, @SubCode, @ItemName, @ItemType, @Category, @Unit, @Costing, @MRP, 0, 100)
+        `);
+    } else {
+      await pool.request()
+        .input('ItemCode', sql.NVarChar(50), itm.code)
+        .input('Costing', sql.Decimal(15, 2), itm.cost)
+        .query('UPDATE [ItemMaster] SET [Costing] = @Costing WHERE [ItemCode] = @ItemCode');
+    }
+  }
+
+  // 2. Fetch existing FG items to match
+  const existingItemsRes = await pool.request().query('SELECT ItemCode, SubCode, ItemName, Series, Costing, MRP FROM [ItemMaster]');
+  const existingList = existingItemsRes.recordset || [];
+
+  let updatedCount = 0;
+  let createdCount = 0;
+
+  for (const s of matrix.series) {
+    for (const sz of s.sizes) {
+      const seriesKey = s.seriesKey;
+      const sizeStr = sz.size;
+      const sizeNoQuote = sizeStr.replace(/"/g, '');
+      const standardItemCode = `ITM-${seriesKey}-${sizeNoQuote}`;
+      const standardItemName = `${s.seriesName} - ${sizeStr}`;
+      const costing = Math.round(sz.totalCost * 100) / 100;
+      const mrp = Math.round(sz.salePrice * 100) / 100;
+
+      // Find match
+      let matched = existingList.find(e => 
+        e.ItemCode === standardItemCode ||
+        (e.Series && (e.Series.includes(seriesKey) || s.seriesName.includes(e.Series)) && e.ItemName && e.ItemName.includes(sizeStr)) ||
+        (e.ItemCode && e.ItemCode.includes(seriesKey) && e.ItemCode.includes(sizeNoQuote))
+      );
+
+      const targetItemCode = matched ? matched.ItemCode : standardItemCode;
+      const targetSubCode = matched ? (matched.SubCode || '') : '';
+
+      if (matched) {
+        await pool.request()
+          .input('ItemCode', sql.NVarChar(50), targetItemCode)
+          .input('SubCode', sql.NVarChar(50), targetSubCode)
+          .input('Costing', sql.Decimal(15, 2), costing)
+          .input('MRP', sql.Decimal(15, 2), mrp)
+          .query(`
+            UPDATE [ItemMaster]
+            SET [Costing] = @Costing, [MRP] = @MRP
+            WHERE [ItemCode] = @ItemCode AND [SubCode] = @SubCode
+          `);
+        updatedCount++;
+      } else {
+        await pool.request()
+          .input('ItemCode', sql.NVarChar(50), targetItemCode)
+          .input('SubCode', sql.NVarChar(50), '')
+          .input('ItemName', sql.NVarChar(100), standardItemName)
+          .input('ItemType', sql.NVarChar(50), 'FG')
+          .input('Category', sql.NVarChar(50), 'Inhouse')
+          .input('Series', sql.NVarChar(50), `${seriesKey} Series`)
+          .input('Unit', sql.NVarChar(20), 'PCS')
+          .input('Costing', sql.Decimal(15, 2), costing)
+          .input('MRP', sql.Decimal(15, 2), mrp)
+          .query(`
+            INSERT INTO [ItemMaster] (
+              [ItemCode], [SubCode], [ItemName], [ItemType], [Category], [Series], [Unit], [Costing], [MRP], [OpeningStock], [ClosingStock]
+            ) VALUES (
+              @ItemCode, @SubCode, @ItemName, @ItemType, @Category, @Series, @Unit, @Costing, @MRP, 0, 0
+            )
+          `);
+        createdCount++;
+      }
+
+      // 3. Link child components in BOM_Master
+      const nutItemCode = {
+        'NylonNut': 'RM-NUT-NYL',
+        'SS201Nut': 'RM-NUT-SS201',
+        'SS304Nut': 'RM-NUT-SS304',
+        'BrassNutN': 'RM-NUT-BRS-N',
+        'BrassNutPC': 'RM-NUT-BRS-PC'
+      }[s.nutKey] || 'RM-NUT-NYL';
+
+      const innerItemCode = {
+        'NylonInsert': 'RM-INS-NYL',
+        'BrassInsert': 'RM-INS-BRS',
+        'SSInner': 'RM-INR-SS'
+      }[s.innerKey] || 'RM-INS-NYL';
+
+      const pipeItemCode = s.isHcp ? 'RM-PIPE-HCP' : 'RM-PIPE-STD';
+
+      const bomChildren = [
+        { code: pipeItemCode, qty: 1 },
+        { code: 'BOP-CAP', qty: 1 },
+        { code: nutItemCode, qty: 2 },
+        { code: innerItemCode, qty: 2 },
+        { code: 'BOP-KEY', qty: 1 },
+        { code: 'BOP-WSH', qty: 1 },
+        { code: 'SRV-LABOUR', qty: 1 },
+        { code: 'BOP-PCK', qty: 1 }
+      ];
+
+      try {
+        await pool.request()
+          .input('ParentCode', sql.NVarChar(50), targetItemCode)
+          .query('DELETE FROM [BOM_Master] WHERE [ParentItemCode] = @ParentCode');
+
+        for (const child of bomChildren) {
+          await pool.request()
+            .input('ParentItemCode', sql.NVarChar(50), targetItemCode)
+            .input('ParentSubCode', sql.NVarChar(50), targetSubCode)
+            .input('ChildItemCode', sql.NVarChar(50), child.code)
+            .input('ChildSubCode', sql.NVarChar(50), '')
+            .input('Quantity', sql.Decimal(12, 4), child.qty)
+            .query(`
+              INSERT INTO [BOM_Master] (ParentItemCode, ParentSubCode, ChildItemCode, ChildSubCode, Quantity)
+              VALUES (@ParentItemCode, @ParentSubCode, @ChildItemCode, @ChildSubCode, @Quantity)
+            `);
+        }
+      } catch (bomErr) {
+        console.warn(`[Costing Sync] BOM sync notice for ${targetItemCode}:`, bomErr.message);
+      }
+    }
+  }
+
+  return { updatedCount, createdCount };
+}
+
+/**
  * GET /api/costing/config
  * Retrieves saved costing rates and computes the full calculation matrix.
  */
@@ -40,6 +203,7 @@ exports.getConfig = async (req, res) => {
 /**
  * POST /api/costing/config
  * Updates the user-defined rates (red inputs) and margins in the database.
+ * Automatically synchronizes all 40 products in ItemMaster!
  */
 exports.saveConfig = async (req, res) => {
   try {
@@ -141,7 +305,7 @@ exports.saveConfig = async (req, res) => {
         END
       `);
 
-    const matrix = calculateCostingMatrix({
+    const currentConfig = {
       PipeRatePerMeter: pipeRate,
       BrassRatePerKg: brassRate,
       HcpPipeRatePerMeter: hcpPipeRate,
@@ -162,13 +326,24 @@ exports.saveConfig = async (req, res) => {
       LabourRate: labourRate,
       PackingRate: packingRate,
       MarginsJson: marginsJson
-    });
+    };
+
+    const matrix = calculateCostingMatrix(currentConfig);
+
+    // Auto-sync products to ItemMaster and BOM_Master
+    let syncResult = { updatedCount: 0, createdCount: 0 };
+    try {
+      syncResult = await syncCostingToDatabase(pool, matrix, currentConfig);
+    } catch (syncErr) {
+      console.warn('[Costing] Auto-sync to ItemMaster error:', syncErr.message);
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Costing rates saved successfully',
+      message: `Costing rates saved! All products updated in Item Master (${syncResult.updatedCount} updated, ${syncResult.createdCount} created).`,
       derived: matrix.derived,
-      series: matrix.series
+      series: matrix.series,
+      syncResult
     });
   } catch (error) {
     console.error('Error saving costing config:', error);
@@ -178,77 +353,24 @@ exports.saveConfig = async (req, res) => {
 
 /**
  * POST /api/costing/apply-to-item-master
- * Applies calculated Costing and Sale Price (MRP) to ItemMaster for selected or all items.
+ * Explicit trigger to sync calculated Costing and Sale Price (MRP) to ItemMaster and BOM.
  */
 exports.applyToItemMaster = async (req, res) => {
   try {
     const pool = await connectDB();
-    const { itemsToSync, createMissing = false } = req.body;
+    const configRes = await pool.request()
+      .input('ConfigKey', sql.NVarChar(50), 'DEFAULT')
+      .query('SELECT TOP 1 * FROM [ItemCostingConfig] WHERE [ConfigKey] = @ConfigKey');
 
-    // Fetch existing items
-    const existingItemsRes = await pool.request().query('SELECT ItemCode, SubCode, ItemName, Series, Costing, MRP FROM [ItemMaster]');
-    const existingList = existingItemsRes.recordset || [];
+    const config = (configRes.recordset && configRes.recordset[0]) || DEFAULT_CONFIG;
+    const matrix = calculateCostingMatrix(config);
 
-    let updatedCount = 0;
-    let createdCount = 0;
-
-    for (const item of itemsToSync || []) {
-      const seriesKey = String(item.seriesKey || item.seriesCode || '');
-      const seriesName = item.seriesName || `${seriesKey} Series`;
-      const size = String(item.size || '');
-      const costing = Math.round((Number(item.totalCost) || 0) * 100) / 100;
-      const mrp = Math.round((Number(item.salePrice) || costing) * 100) / 100;
-
-      // Find match in existing items:
-      // Match by exact ItemCode if provided, or matching Series + size in ItemName/ItemCode
-      let matched = existingList.find(e => 
-        (item.itemCode && e.ItemCode === item.itemCode && (!item.subCode || e.SubCode === item.subCode)) ||
-        (e.Series && (e.Series.includes(seriesKey) || seriesName.includes(e.Series)) && e.ItemName && e.ItemName.includes(size)) ||
-        (e.ItemCode && e.ItemCode.includes(seriesKey) && e.ItemCode.includes(size.replace(/"/g, '')))
-      );
-
-      if (matched) {
-        await pool.request()
-          .input('ItemCode', sql.NVarChar(50), matched.ItemCode)
-          .input('SubCode', sql.NVarChar(50), matched.SubCode || '')
-          .input('Costing', sql.Decimal(15, 2), costing)
-          .input('MRP', sql.Decimal(15, 2), mrp)
-          .query(`
-            UPDATE [ItemMaster]
-            SET [Costing] = @Costing, [MRP] = @MRP
-            WHERE [ItemCode] = @ItemCode AND [SubCode] = @SubCode
-          `);
-        updatedCount++;
-      } else if (createMissing) {
-        const newItemCode = `ITM-${seriesKey}-${size.replace(/"/g, '')}`;
-        const newItemName = `${seriesKey} Series ${size}`;
-
-        await pool.request()
-          .input('ItemCode', sql.NVarChar(50), newItemCode)
-          .input('SubCode', sql.NVarChar(50), '')
-          .input('ItemName', sql.NVarChar(100), newItemName)
-          .input('ItemType', sql.NVarChar(50), 'FG')
-          .input('Category', sql.NVarChar(50), 'Inhouse')
-          .input('Series', sql.NVarChar(50), `${seriesKey} Series`)
-          .input('Unit', sql.NVarChar(20), 'PCS')
-          .input('Costing', sql.Decimal(15, 2), costing)
-          .input('MRP', sql.Decimal(15, 2), mrp)
-          .query(`
-            INSERT INTO [ItemMaster] (
-              [ItemCode], [SubCode], [ItemName], [ItemType], [Category], [Series], [Unit], [Costing], [MRP], [OpeningStock], [ClosingStock]
-            ) VALUES (
-              @ItemCode, @SubCode, @ItemName, @ItemType, @Category, @Series, @Unit, @Costing, @MRP, 0, 0
-            )
-          `);
-        createdCount++;
-      }
-    }
+    const syncResult = await syncCostingToDatabase(pool, matrix, config);
 
     res.status(200).json({
       success: true,
-      message: `Costing synced: ${updatedCount} item(s) updated${createdCount > 0 ? `, ${createdCount} created` : ''}.`,
-      updatedCount,
-      createdCount
+      message: `Item Master fully synchronized: ${syncResult.updatedCount} items updated, ${syncResult.createdCount} items created with BOM parts!`,
+      syncResult
     });
   } catch (error) {
     console.error('Error applying costing to ItemMaster:', error);

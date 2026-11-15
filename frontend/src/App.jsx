@@ -13,6 +13,7 @@ import UnitMaster from './pages/UnitMaster';
 import DepartmentMaster from './pages/DepartmentMaster';
 import BOMMaster from './pages/BOMMaster';
 import ItemTypeMaster from './pages/ItemTypeMaster';
+import ItemCostingPage from './pages/ItemCostingPage';
 import AccountGroupMaster from './pages/AccountGroupMaster';
 import CompanyProfile from './pages/CompanyProfile';
 import PaymentQR from './pages/PaymentQR';
@@ -156,6 +157,7 @@ function App() {
             <Route path="departments" element={<DepartmentMaster />} />
             <Route path="item-types" element={<ItemTypeMaster />} />
             <Route path="items" element={<ItemMaster />} />
+            <Route path="costing-calculator" element={<ItemCostingPage />} />
             <Route path="bom" element={<BOMMaster />} />
             <Route path="account-groups" element={<AccountGroupMaster />} />
             <Route path="ledgers" element={<LedgerMaster />} />

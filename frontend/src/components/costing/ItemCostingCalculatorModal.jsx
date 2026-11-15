@@ -150,7 +150,8 @@ const ItemCostingCalculatorModal = ({ open, onClose, onItemsUpdated }) => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setToast({ show: true, message: 'Costing rates & margins saved to database successfully!', severity: 'success' });
+        setToast({ show: true, message: data.message || 'Costing rates saved & Item Master updated automatically!', severity: 'success' });
+        if (onItemsUpdated) onItemsUpdated();
       } else {
         setToast({ show: true, message: data.message || 'Failed to save rates', severity: 'error' });
       }
