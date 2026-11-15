@@ -314,7 +314,7 @@ async function main() {
     }
 
     console.log('\nStep 5: Windows Shortcuts & Boot Auto-Start');
-    if (await prompt.askYesNo('Create Desktop Shortcut ("FRM - Factory Flow")?', true)) {
+    if (await prompt.askYesNo('Create Desktop Shortcut ("FRM-BBP")?', true)) {
       execSync('node scripts/create-desktop-shortcut.js', { cwd: PROJECT_ROOT, stdio: 'inherit', shell: true });
     }
     if (await prompt.askYesNo('Enable Auto-Start when Server PC boots & logs in?', true)) {

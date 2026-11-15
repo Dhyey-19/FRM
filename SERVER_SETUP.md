@@ -1,7 +1,7 @@
-# FRM Server Setup & Multi-Device Deployment Guide
+# FRM-BBP Server Setup & Multi-Device Deployment Guide
 
-FRM runs on **one central Windows Server PC** connected to **Microsoft SQL Server 2022 Express**.  
-All client devices (**Windows, macOS, Android, and iOS**) access FRM through the server over your office Wi-Fi / LAN (or VPN) with **zero source code or database stored on client devices**.
+FRM-BBP runs on **one central Windows Server PC** connected to **Microsoft SQL Server 2022 Express**.  
+All client devices (**Windows, macOS, Android, and iOS**) access FRM-BBP through the server over your office Wi-Fi / LAN (or VPN) with **zero source code or database stored on client devices**.
 
 ---
 
@@ -13,7 +13,7 @@ On your development computer, run:
 npm run package:server
 ```
 
-This creates **`dist\FRM-Server-Package.zip`** containing:
+This creates **`dist\FRM-BBP.zip`** containing:
 - **Compiled & minified frontend** (`public/` — no React `.jsx` source files)
 - **Compiled & minified backend** (`backend/server.js`, `backend/database/backup.js` — no readable `controllers/`, `routes/`, `config/`, `middlewares/`, `services/` files)
 - **Database schema/migrations** (`backend/database/mssql_init_FRM_DB.sql`, `migrations/`)
@@ -45,7 +45,7 @@ This creates **`dist\FRM-Server-Package.zip`** containing:
 
 ## Step 3: Install & Configure on the Server PC
 
-1. Copy **`FRM-Server-Package.zip`** to the Server PC (USB / network folder) and extract it to e.g. **`C:\FRM`**.
+1. Copy **`FRM-BBP.zip`** to the Server PC (USB / network folder) and extract it to e.g. **`C:\FRM-BBP`**.
 2. **Right-click `Setup-Server.bat` -> Run as administrator**.
 3. Follow the prompts:
    - Press **Enter** for `localhost`, `1433`, `FRM_DB`, `sa`, `5000`, `5443`.
@@ -63,7 +63,7 @@ This creates **`dist\FRM-Server-Package.zip`** containing:
 
 ## Step 4: Start Server & Access on Windows, Mac, Android & iOS
 
-Double-click **`Start-FRM.bat`** (or the Desktop icon **`FRM - Factory Flow`**). Keep that window open or minimized. The console prints your exact LAN addresses:
+Double-click **`Start-FRM.bat`** (or the Desktop icon **`FRM-BBP`**). Keep that window open or minimized. The console prints your exact LAN addresses:
 
 | Client Device | How to Access / Install |
 | :--- | :--- |
@@ -82,8 +82,8 @@ Double-click **`Start-FRM.bat`** (or the Desktop icon **`FRM - Factory Flow`**).
 ## Step 5: How to Update the Server Later (No Git, No Source Code, No Manual Overwrite)
 
 Whenever you build an updated release on your development PC:
-1. Run `npm run package:server` on your dev PC to generate the new **`dist\FRM-Server-Package.zip`**.
-2. Open FRM from **any** browser logged in as Admin -> go to **Settings -> App Updates**.
-3. Click **Choose .zip File**, pick `FRM-Server-Package.zip`, and click **Install Update**.
+1. Run `npm run package:server` on your dev PC to generate the new **`dist\FRM-BBP.zip`**.
+2. Open FRM-BBP from **any** browser logged in as Admin -> go to **Settings -> App Updates**.
+3. Click **Choose .zip File**, pick `FRM-BBP.zip`, and click **Install Update**.
 
-FRM automatically unpacks the compiled frontend & backend bundles, preserves `.env`, SSL certs, and backups, applies any new MS SQL database migrations safely in transactions, and restarts the server cleanly in ~2 seconds.
+FRM-BBP automatically unpacks the compiled frontend & backend bundles, preserves `.env`, SSL certs, and backups, applies any new MS SQL database migrations safely in transactions, and restarts the server cleanly in ~2 seconds.

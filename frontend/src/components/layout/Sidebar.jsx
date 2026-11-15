@@ -122,7 +122,7 @@ const Sidebar = ({
         {isCollapsed && !isMobile ? (
           <img 
             src={activeUser.companyLogo || user.companyLogo || appLogo} 
-            alt="FRM" 
+            alt="FRM-BBP" 
             style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid white' }} 
           />
         ) : (
@@ -130,11 +130,11 @@ const Sidebar = ({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 0.5 }}>
               <img 
                 src={activeUser.companyLogo || user.companyLogo || appLogo} 
-                alt="FRM" 
+                alt="FRM-BBP" 
                 style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid white', flexShrink: 0 }} 
               />
               <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: 1.2, whiteSpace: 'nowrap', color: '#ffffff' }}>
-                FRM
+                FRM-BBP
               </Typography>
             </Box>
             {isMobile && (

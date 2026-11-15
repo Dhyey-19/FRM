@@ -1,8 +1,8 @@
 {
-  "name": "frm",
+  "name": "frm-bbp",
   "version": "20261104.0.0",
-  "description": "FRM - Factory Resource Manager",
-  "author": "FRM",
+  "description": "FRM-BBP - Factory Resource Manager",
+  "author": "FRM-BBP",
   "workspaces": [
     "frontend",
     "backend"

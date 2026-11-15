@@ -1,9 +1,9 @@
 @echo off
-title FRM - First-Time Server Setup
+title FRM-BBP - First-Time Server Setup
 cd /d "%~dp0"
 
 echo =====================================================================
-echo         FRM (FACTORY RESOURCE MANAGER) - SERVER SETUP WIZARD
+echo         FRM-BBP (FACTORY RESOURCE MANAGER) - SERVER SETUP WIZARD
 echo =====================================================================
 echo.
 

@@ -1,7 +1,7 @@
 @echo off
-title FRM - Database Backup
+title FRM-BBP - Database Backup
 echo ============================================================
-echo           FRM Database Backup Utility (MS SQL Server)
+echo           FRM-BBP Database Backup Utility (MS SQL Server)
 echo ============================================================
 echo.
 

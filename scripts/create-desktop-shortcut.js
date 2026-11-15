@@ -6,7 +6,7 @@ function createShortcut() {
   const projectRoot = path.resolve(__dirname, '..');
   const targetBat = path.join(projectRoot, 'Start-FRM.bat');
   const desktopDir = path.join(process.env.USERPROFILE || 'C:\\', 'Desktop');
-  const shortcutPath = path.join(desktopDir, 'FRM - Factory Flow.lnk');
+  const shortcutPath = path.join(desktopDir, 'FRM-BBP.lnk');
 
   const vbsPath = path.join(projectRoot, 'temp_shortcut.vbs');
   const vbsContent = [
@@ -15,7 +15,7 @@ function createShortcut() {
     'Set oLink = oWS.CreateShortcut(sLinkFile)',
     `oLink.TargetPath = "${targetBat.replace(/\\/g, '\\\\')}"`,
     `oLink.WorkingDirectory = "${projectRoot.replace(/\\/g, '\\\\')}"`,
-    'oLink.Description = "Launch FRM Factory Resource Manager"',
+    'oLink.Description = "Launch FRM-BBP Factory Resource Manager"',
     'oLink.Save'
   ].join('\r\n');
 

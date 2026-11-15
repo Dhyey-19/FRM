@@ -10,9 +10,9 @@ function enableAutoStart() {
   // This allows Start-FRM.bat to start SQL Server service without UAC prompts when PC turns on / logs in.
   let taskCreated = false;
   try {
-    const taskCmd = `schtasks /create /tn "FRM_Server_AutoStart" /tr "\\"${targetBat}\\"" /sc onlogon /rl HIGHEST /f`;
+    const taskCmd = `schtasks /create /tn "FRM_BBP_Server_AutoStart" /tr "\\"${targetBat}\\"" /sc onlogon /rl HIGHEST /f`;
     execSync(taskCmd, { stdio: 'pipe' });
-    console.log(`✓ Windows Task Scheduler job "FRM_Server_AutoStart" registered (Highest Privileges).`);
+    console.log(`✓ Windows Task Scheduler job "FRM_BBP_Server_AutoStart" registered (Highest Privileges).`);
     taskCreated = true;
   } catch (tErr) {
     // schtasks might require elevation if not already running as admin
@@ -29,7 +29,7 @@ function enableAutoStart() {
   );
 
   if (fs.existsSync(startupDir)) {
-    const shortcutPath = path.join(startupDir, 'FRM_Server_AutoStart.lnk');
+    const shortcutPath = path.join(startupDir, 'FRM_BBP_Server_AutoStart.lnk');
     const vbsPath = path.join(projectRoot, 'temp_autostart.vbs');
     const vbsContent = [
       'Set oWS = WScript.CreateObject("WScript.Shell")',
@@ -37,7 +37,7 @@ function enableAutoStart() {
       'Set oLink = oWS.CreateShortcut(sLinkFile)',
       `oLink.TargetPath = "${targetBat.replace(/\\/g, '\\\\')}"`,
       `oLink.WorkingDirectory = "${projectRoot.replace(/\\/g, '\\\\')}"`,
-      'oLink.Description = "AutoStart FRM Server on Windows Boot"',
+      'oLink.Description = "AutoStart FRM-BBP Server on Windows Boot"',
       'oLink.Save'
     ].join('\r\n');
 

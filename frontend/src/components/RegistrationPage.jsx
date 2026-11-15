@@ -140,7 +140,7 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
         </div>
         <h2 className="auth-title">Application Registration</h2>
         <p style={{ textAlign: 'center', color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>
-          This is the first time FRM (Factory Resource Manager) is running on this device. Please register the application to activate it.
+          This is the first time FRM-BBP (Factory Resource Manager) is running on this device. Please register the application to activate it.
         </p>
 
         <form onSubmit={handleRegister}>
@@ -203,7 +203,7 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
               type="text"
               id="appName"
               name="appName"
-              value="FRM - Factory Resource Manager"
+              value="FRM-BBP - Factory Resource Manager"
               disabled
               style={{ 
                 backgroundColor: '#f8fafc', 

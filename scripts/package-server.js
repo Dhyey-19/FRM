@@ -5,8 +5,8 @@ const { execSync } = require('child_process');
 
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
-const packageDir = path.join(distDir, 'FRM-Server-Package');
-const zipPath = path.join(distDir, 'FRM-Server-Package.zip');
+const packageDir = path.join(distDir, 'FRM-BBP');
+const zipPath = path.join(distDir, 'FRM-BBP.zip');
 
 const RUNTIME_DEPENDENCIES = [
   'cors',
@@ -60,7 +60,7 @@ async function bundleNodeEntry(entryFile, outFile) {
 
 async function main() {
   console.log('=====================================================================');
-  console.log('   BUILDING FRM SERVER DEPLOYMENT PACKAGE (COMPILED - NO SOURCE)     ');
+  console.log('   BUILDING FRM-BBP SERVER DEPLOYMENT PACKAGE (COMPILED - NO SOURCE) ');
   console.log('=====================================================================\n');
 
   // 1. Build minified frontend production bundle
@@ -143,9 +143,9 @@ async function main() {
   }
 
   const serverPkg = {
-    name: 'frm-server',
+    name: 'frm-bbp-server',
     version: rootPkg.version || '1.0.0',
-    description: 'FRM - Factory Resource Manager (Compiled Server Package)',
+    description: 'FRM-BBP - Factory Resource Manager (Compiled Server Package)',
     main: 'backend/server.js',
     scripts: {
       start: 'node backend/server.js',
@@ -164,8 +164,8 @@ async function main() {
   };
   fs.writeFileSync(path.join(packageDir, 'version.json'), JSON.stringify(versionMeta, null, 2) + '\n', 'utf8');
 
-  // 5. Compress into dist/FRM-Server-Package.zip
-  console.log('[5/5] Creating ZIP archive dist/FRM-Server-Package.zip...');
+  // 5. Compress into dist/FRM-BBP.zip
+  console.log('[5/5] Creating ZIP archive dist/FRM-BBP.zip...');
   if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
 
   if (process.platform === 'win32') {

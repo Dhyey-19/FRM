@@ -657,7 +657,7 @@ const DashboardLayout = () => {
                     Install App
                   </Button>
 
-                  <Tooltip title="Install FRM App">
+                  <Tooltip title="Install FRM-BBP App">
                     <IconButton
                       size="small"
                       onClick={handleInstallClick}
@@ -693,7 +693,7 @@ const DashboardLayout = () => {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <InstallIcon sx={{ color: '#F88A01' }} /> Install FRM App
+          <InstallIcon sx={{ color: '#F88A01' }} /> Install FRM-BBP App
         </DialogTitle>
         <DialogContent dividers>
           {isIOS ? (
@@ -702,13 +702,13 @@ const DashboardLayout = () => {
                 <PhoneIphone sx={{ fontSize: 18, color: '#2563eb' }} /> iPhone / iPad (Safari) Instructions:
               </Typography>
               <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
-                Follow these simple steps to install FRM on your home screen:
+                Follow these simple steps to install FRM-BBP on your home screen:
               </Typography>
               <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
                 <li>Open this page in <strong>Safari</strong> browser.</li>
                 <li>Tap the <strong>Share</strong> button (<strong>⎋</strong> box with arrow pointing up) at the bottom.</li>
                 <li>Scroll down and tap <strong>"Add to Home Screen"</strong> (<strong>➕</strong>).</li>
-                <li>Tap <strong>Add</strong> in the top right. The FRM icon will appear on your home screen!</li>
+                <li>Tap <strong>Add</strong> in the top right. The FRM-BBP icon will appear on your home screen!</li>
               </Box>
             </Box>
           ) : isAndroid ? (
@@ -717,13 +717,13 @@ const DashboardLayout = () => {
                 <PhoneAndroid sx={{ fontSize: 18, color: '#10b981' }} /> Android (Chrome) Instructions:
               </Typography>
               <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
-                To install FRM on your phone over local Wi-Fi:
+                To install FRM-BBP on your phone over local Wi-Fi:
               </Typography>
               <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
                 <li>Tap the <strong>three dots menu (⋮)</strong> in the top-right corner of Chrome.</li>
                 <li>Tap <strong>"Add to Home screen"</strong> or <strong>"Create shortcut"</strong> (below <em>Install app</em>).</li>
                 <li>Tap <strong>Add</strong> / <strong>Install</strong>.</li>
-                <li>FRM will now open directly from your home screen like a native mobile app!</li>
+                <li>FRM-BBP will now open directly from your home screen like a native mobile app!</li>
               </Box>
               <Box sx={{ mt: 2, p: 1.5, bgcolor: '#eff6ff', borderRadius: 1.5, border: '1px solid #bfdbfe' }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: '#1e40af', display: 'block', mb: 0.5 }}>
@@ -741,8 +741,8 @@ const DashboardLayout = () => {
               </Typography>
               <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#1e293b', fontSize: '0.88rem', '& li': { mb: 1 } }}>
                 <li>Click the <strong>Install icon</strong> in your browser's address bar (right side of URL).</li>
-                <li>Or click browser menu (<strong>⋮</strong>) → <strong>"Install FRM - Factory Resource Manager"</strong>.</li>
-                <li>Click <strong>Install</strong> to launch FRM in its own dedicated window!</li>
+                <li>Or click browser menu (<strong>⋮</strong>) → <strong>"Install FRM-BBP - Factory Resource Manager"</strong>.</li>
+                <li>Click <strong>Install</strong> to launch FRM-BBP in its own dedicated window!</li>
               </Box>
             </Box>
           )}

@@ -1,9 +1,9 @@
 @echo off
-title FRM - Create Desktop Shortcut
+title FRM-BBP - Create Desktop Shortcut
 cd /d "%~dp0"
 
 echo =====================================================================
-echo                CREATE FRM DESKTOP SHORTCUT
+echo                CREATE FRM-BBP DESKTOP SHORTCUT
 echo =====================================================================
 echo.
 

@@ -302,7 +302,7 @@ export const AppUpdatePanel = ({ onSuccess, onError }) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.zip')) {
-      if (onError) onError('Please select a valid .zip update package (FRM-Server-Package.zip).');
+      if (onError) onError('Please select a valid .zip update package (FRM-BBP.zip).');
       e.target.value = '';
       return;
     }
@@ -358,7 +358,7 @@ export const AppUpdatePanel = ({ onSuccess, onError }) => {
           Application & Database Package Update
         </Typography>
         <Typography variant="body2" sx={{ color: '#64748b' }}>
-          Upload a compiled update package (<code>FRM-Server-Package.zip</code>) directly from this browser. No Git, GitHub, or manual file copying needed.
+          Upload a compiled update package (<code>FRM-BBP.zip</code>) directly from this browser. No Git, GitHub, or manual file copying needed.
         </Typography>
       </Box>
 

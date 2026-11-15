@@ -1,9 +1,9 @@
 @echo off
-title FRM - Factory Flow Server
+title FRM-BBP Server
 cd /d "%~dp0"
 
 echo =====================================================================
-echo           FRM (FACTORY RESOURCE MANAGER) SERVER LAUNCHER
+echo           FRM-BBP (FACTORY RESOURCE MANAGER) SERVER LAUNCHER
 echo =====================================================================
 echo.
 
