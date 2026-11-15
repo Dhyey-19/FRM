@@ -345,58 +345,38 @@ const getInventoryAndWIPValuation = async (pool) => {
   const openingStockValue = Math.round((stockResult.recordset[0]?.totalOpeningStockValue || 0) * 100) / 100;
   const mainClosingStockValue = Math.round((stockResult.recordset[0]?.totalClosingStockValue || 0) * 100) / 100;
 
-  // In-process stock valuation from DepartmentStock using Stock Transfer rates & valuation
+  // In-process stock valuation from DepartmentStock using Department Master Costing
   const deptStockResult = await pool.request().query(`
-    WITH TransferRates AS (
-      SELECT 
-        ds.DeptID,
-        ds.ItemCode,
-        COALESCE(
-          (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-          (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-          (SELECT TOP 1 st.Rate FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-          im.Costing,
-          0
-        ) AS TransferRate,
-        COALESCE(
-          (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.ToDeptID = ds.DeptID AND st.InItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-          (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE st.FromDeptID = ds.DeptID AND st.OutItemCode = ds.ItemCode AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-          (SELECT TOP 1 st.Unit FROM StockTransfer st WHERE (st.InItemCode = ds.ItemCode OR st.OutItemCode = ds.ItemCode) AND st.Rate > 0 ORDER BY st.MoveDate DESC, st.MoveID DESC),
-          im.Unit
-        ) AS ValuationUnit
-      FROM DepartmentStock ds
-      JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
-    )
     SELECT 
       dm.DeptID,
       dm.DeptName,
       ds.ItemCode,
+      ISNULL(ds.SubCode, '') AS SubCode,
       im.ItemName,
-      im.Costing AS MasterCosting,
-      tr.TransferRate AS Costing,
-      tr.TransferRate AS Rate,
-      tr.ValuationUnit AS Unit,
+      ISNULL(im.Costing, 0) AS MasterCosting,
+      ISNULL(dm.Costing, 0) AS Costing,
+      ISNULL(dm.Costing, 0) AS Rate,
+      im.Unit AS Unit,
       ISNULL(ds.Pcs, 0) AS Pcs,
       ISNULL(ds.Weight, 0) AS Weight,
       (CASE 
-        WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
-        WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
+        WHEN UPPER(im.Unit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+        WHEN UPPER(im.Unit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
         WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
         ELSE ISNULL(ds.Pcs, 0)
       END) AS EffectiveQty,
       ROUND(
         (CASE 
-          WHEN UPPER(tr.ValuationUnit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
-          WHEN UPPER(tr.ValuationUnit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
+          WHEN UPPER(im.Unit) IN ('KG', 'KGS') AND ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
+          WHEN UPPER(im.Unit) NOT IN ('KG', 'KGS') AND ISNULL(ds.Pcs, 0) != 0 THEN ISNULL(ds.Pcs, 0)
           WHEN ISNULL(ds.Weight, 0) != 0 THEN ISNULL(ds.Weight, 0)
           ELSE ISNULL(ds.Pcs, 0)
-        END) * tr.TransferRate,
+        END) * ISNULL(dm.Costing, 0),
         2
       ) AS Valuation
     FROM DepartmentStock ds
     JOIN DepartmentMaster dm ON ds.DeptID = dm.DeptID
-    JOIN ItemMaster im ON ds.ItemCode = im.ItemCode
-    JOIN TransferRates tr ON ds.DeptID = tr.DeptID AND ds.ItemCode = tr.ItemCode
+    JOIN ItemMaster im ON ds.ItemCode = im.ItemCode AND ISNULL(ds.SubCode, '') = ISNULL(im.SubCode, '')
     WHERE (ISNULL(ds.Pcs, 0) > 0 OR ISNULL(ds.Weight, 0) > 0)
       AND LOWER(dm.DeptName) != 'stock'
     ORDER BY dm.DeptName ASC, im.ItemName ASC
@@ -440,11 +420,12 @@ const getInventoryAndWIPValuation = async (pool) => {
 
   // Stock Transfer Process Loss
   const lossResult = await pool.request().query(`
-    SELECT ISNULL(SUM(TransferLoss), 0) AS totalStockTransferLoss
+    SELECT ISNULL(SUM(t.LossValuation), 0) AS totalStockTransferLoss
     FROM (
-      SELECT TransferID, MAX(ISNULL(LossAmount, 0)) AS TransferLoss
-      FROM StockTransfer
-      GROUP BY TransferID
+      SELECT st.TransferID, MAX(ISNULL(st.LossWeight, 0) * ISNULL(dm.Costing, 0)) AS LossValuation
+      FROM StockTransfer st
+      LEFT JOIN DepartmentMaster dm ON st.FromDeptID = dm.DeptID
+      GROUP BY st.TransferID
     ) t
   `);
   const stockTransferLoss = Math.round((lossResult.recordset[0]?.totalStockTransferLoss || 0) * 100) / 100;

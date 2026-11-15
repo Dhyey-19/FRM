@@ -24,6 +24,7 @@ BEGIN
     CREATE TABLE [dbo].[DepartmentMaster] (
         [DeptID] INT IDENTITY(1,1) PRIMARY KEY,
         [DeptName] NVARCHAR(20) NOT NULL,
+        [Costing] DECIMAL(15, 2) NOT NULL DEFAULT 0,
         [IsSystem] INT NOT NULL DEFAULT 0
     );
 END
@@ -190,8 +191,8 @@ BEGIN
         [Location] NVARCHAR(100),
         [Series] NVARCHAR(50),
         [StdWeight] DECIMAL(12, 3),
-        [Costing] DECIMAL(10, 2) DEFAULT 0,
-        [MRP] DECIMAL(10, 2) DEFAULT 0,
+        [Costing] DECIMAL(15, 2) DEFAULT 0,
+        [MRP] DECIMAL(15, 2) DEFAULT 0,
         [Unit] NVARCHAR(20) NOT NULL,
         [OpeningStock] DECIMAL(12, 3),
         [ClosingStock] DECIMAL(12, 3),
@@ -534,10 +535,6 @@ BEGIN
         [Remarks] NVARCHAR(255),
         [CreatedBy] NVARCHAR(50),
         [UpdatedBy] NVARCHAR(50),
-        [Rate] DECIMAL(10, 2) DEFAULT 0,
-        [Amount] DECIMAL(12, 2) DEFAULT 0,
-        [LossRate] DECIMAL(10, 2) DEFAULT 0,
-        [LossAmount] DECIMAL(12, 2) DEFAULT 0,
         [Unit] NVARCHAR(20),
         [ManualChallanNo] NVARCHAR(50),
         [OutSubCode] NVARCHAR(50) DEFAULT '',

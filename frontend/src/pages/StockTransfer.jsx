@@ -28,9 +28,7 @@ const emptyItemRow = {
   SubCode: '',
   Pcs: '',
   Weight: '',
-  Unit: '',
-  Rate: '',
-  Amount: ''
+  Unit: ''
 };
 
 const emptyRow = {
@@ -38,17 +36,13 @@ const emptyRow = {
   OutPcs: '',
   OutWeight: '',
   Unit: '',
-  Rate: '',
-  Amount: '',
   InItemCode: '',
   InPcs: '',
   InWeight: '',
   ScrapItemCode: '',
   ScrapPcs: '',
   ScrapWeight: '',
-  LossWeight: '0.00',
-  LossRate: '0.00',
-  LossAmount: '0.00'
+  LossWeight: '0.00'
 };
 
 const StockTransfer = ({ user }) => {
@@ -103,8 +97,6 @@ const StockTransfer = ({ user }) => {
   const [inItems, setInItems] = useState([{ ...emptyItemRow }]);
   const [scrapItems, setScrapItems] = useState([]);
   const [lossWeight, setLossWeight] = useState('0.000');
-  const [lossRate, setLossRate] = useState('0.00');
-  const [lossAmount, setLossAmount] = useState('0.00');
   
   // Deletion States
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -240,8 +232,6 @@ const StockTransfer = ({ user }) => {
     setInItems([{ ...emptyItemRow }]);
     setScrapItems([]);
     setLossWeight('0.000');
-    setLossRate('0.00');
-    setLossAmount('0.00');
     setOpenDialog(true);
   };
 
@@ -261,20 +251,13 @@ const StockTransfer = ({ user }) => {
     const ins = [];
     const scraps = [];
     let totalLoss = 0;
-    let savedLossRate = '0.00';
-    let savedLossAmount = '0.00';
 
     const detailsArray = group.details || [group];
     detailsArray.forEach(d => {
-      const fmtRate = d.Rate !== null && d.Rate !== undefined ? d.Rate.toString() : '';
-      const fmtAmt = d.Amount !== null && d.Amount !== undefined ? d.Amount.toString() : '';
-
-      if (d.OutItemCode) outs.push({ ItemCode: d.OutItemCode, SubCode: d.OutSubCode || '', Pcs: d.OutPcs !== null ? d.OutPcs.toString() : '', Weight: d.OutWeight !== null ? d.OutWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
-      if (d.InItemCode) ins.push({ ItemCode: d.InItemCode, SubCode: d.InSubCode || '', Pcs: d.InPcs !== null ? d.InPcs.toString() : '', Weight: d.InWeight !== null ? d.InWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
-      if (d.ScrapItemCode) scraps.push({ ItemCode: d.ScrapItemCode, SubCode: d.ScrapSubCode || '', Pcs: d.ScrapPcs !== null ? d.ScrapPcs.toString() : '', Weight: d.ScrapWeight !== null ? d.ScrapWeight.toString() : '', Unit: d.Unit || '', Rate: fmtRate, Amount: fmtAmt });
+      if (d.OutItemCode) outs.push({ ItemCode: d.OutItemCode, SubCode: d.OutSubCode || '', Pcs: d.OutPcs !== null ? d.OutPcs.toString() : '', Weight: d.OutWeight !== null ? d.OutWeight.toString() : '', Unit: d.Unit || '' });
+      if (d.InItemCode) ins.push({ ItemCode: d.InItemCode, SubCode: d.InSubCode || '', Pcs: d.InPcs !== null ? d.InPcs.toString() : '', Weight: d.InWeight !== null ? d.InWeight.toString() : '', Unit: d.Unit || '' });
+      if (d.ScrapItemCode) scraps.push({ ItemCode: d.ScrapItemCode, SubCode: d.ScrapSubCode || '', Pcs: d.ScrapPcs !== null ? d.ScrapPcs.toString() : '', Weight: d.ScrapWeight !== null ? d.ScrapWeight.toString() : '', Unit: d.Unit || '' });
       if (d.LossWeight) totalLoss += parseFloat(d.LossWeight) || 0;
-      if (d.LossRate) savedLossRate = (parseFloat(d.LossRate) || 0).toFixed(2);
-      if (d.LossAmount) savedLossAmount = (parseFloat(d.LossAmount) || 0).toFixed(2);
     });
 
     if (outs.length === 0) outs.push({ ...emptyItemRow });
@@ -284,8 +267,6 @@ const StockTransfer = ({ user }) => {
     setInItems(ins);
     setScrapItems(scraps);
     setLossWeight(totalLoss.toFixed(3));
-    setLossRate(savedLossRate);
-    setLossAmount(savedLossAmount);
     
     setOpenDialog(true);
   };
@@ -300,18 +281,6 @@ const StockTransfer = ({ user }) => {
     return found ? found.Unit : '';
   };
 
-  const calculateRowAmount = (row) => {
-    const rate = parseFloat(row.Rate) || 0;
-    const unit = (row.Unit || '').trim().toUpperCase();
-    if (unit === 'KG' || unit === 'KGS') {
-      const wt = parseFloat(row.Weight) || 0;
-      return (wt * rate).toFixed(2);
-    } else {
-      const pcs = parseFloat(row.Pcs) || 0;
-      return (pcs * rate).toFixed(2);
-    }
-  };
-
   useEffect(() => {
     const totalOut = outItems.reduce((sum, item) => sum + (parseFloat(item.Weight) || 0), 0);
     const totalIn = inItems.reduce((sum, item) => sum + (parseFloat(item.Weight) || 0), 0);
@@ -319,30 +288,60 @@ const StockTransfer = ({ user }) => {
     const diff = totalOut - totalIn - totalScrap;
     const computedLossWt = Math.max(0, diff).toFixed(3);
     setLossWeight(computedLossWt);
-
-    // If lossRate is 0 or empty, default it to the first Out item's Rate
-    let currentLossRate = parseFloat(lossRate) || 0;
-    if (currentLossRate === 0 && outItems.length > 0 && outItems[0].Rate) {
-      currentLossRate = parseFloat(outItems[0].Rate) || 0;
-      setLossRate(currentLossRate > 0 ? currentLossRate.toFixed(2) : '0.00');
-    }
-    const computedLossAmt = (parseFloat(computedLossWt) * currentLossRate).toFixed(2);
-    setLossAmount(computedLossAmt);
   }, [outItems, inItems, scrapItems]);
 
-  const handleLossRateChange = (val) => {
-    setLossRate(val);
-    const wt = parseFloat(lossWeight) || 0;
-    const r = parseFloat(val) || 0;
-    setLossAmount((wt * r).toFixed(2));
+  const handleOutChange = (index, field, value) => {
+    const prevVal = outItems[index][field];
+    const newArr = [...outItems];
+    newArr[index][field] = value;
+    setOutItems(newArr);
+
+    // Auto-sync to In items if In row exists and field was either empty or matched the previous Out value
+    if (['Pcs', 'Weight', 'Unit'].includes(field)) {
+      setInItems(prevIn => {
+        const newIn = [...prevIn];
+        if (index < newIn.length) {
+          const currentInVal = newIn[index][field];
+          if (!currentInVal || currentInVal === prevVal) {
+            newIn[index] = { ...newIn[index], [field]: value };
+          }
+        }
+        return newIn;
+      });
+    }
+  };
+
+  const handleOutItemSelect = (index, item) => {
+    const prevOut = outItems[index];
+    const newArr = [...outItems];
+    newArr[index].ItemCode = item ? item.ItemCode : '';
+    newArr[index].SubCode = item ? (item.SubCode || '') : '';
+    if (item && item.Unit) {
+      newArr[index].Unit = item.Unit;
+    }
+    setOutItems(newArr);
+
+    // Auto-sync to In items if In item is empty or was matching previous Out item
+    setInItems(prevIn => {
+      const newIn = [...prevIn];
+      if (index < newIn.length) {
+        const targetIn = newIn[index];
+        if (!targetIn.ItemCode || (prevOut && targetIn.ItemCode === prevOut.ItemCode)) {
+          newIn[index] = {
+            ...targetIn,
+            ItemCode: item ? item.ItemCode : '',
+            SubCode: item ? (item.SubCode || '') : '',
+            Unit: item?.Unit || targetIn.Unit || ''
+          };
+        }
+      }
+      return newIn;
+    });
   };
 
   const handleArrayChange = (setter, itemsArray, index, field, value) => {
     const newArr = [...itemsArray];
     newArr[index][field] = value;
-    if (['Pcs', 'Weight', 'Rate', 'Unit'].includes(field)) {
-      newArr[index].Amount = calculateRowAmount(newArr[index]);
-    }
     setter(newArr);
   };
 
@@ -353,14 +352,21 @@ const StockTransfer = ({ user }) => {
     if (item && item.Unit && !newArr[index].Unit) {
       newArr[index].Unit = item.Unit;
     }
-    if (item && item.Costing && (!newArr[index].Rate || newArr[index].Rate === '0' || newArr[index].Rate === '0.00')) {
-      newArr[index].Rate = item.Costing.toString();
-    }
-    newArr[index].Amount = calculateRowAmount(newArr[index]);
     setter(newArr);
   };
 
-  const addArrayRow = (setter, itemsArray) => setter([...itemsArray, { ...emptyItemRow }]);
+  const addArrayRow = (setter, itemsArray) => {
+    setter([...itemsArray, { ...emptyItemRow }]);
+    if (setter === setOutItems) {
+      setInItems(prevIn => {
+        if (prevIn.length <= itemsArray.length) {
+          return [...prevIn, { ...emptyItemRow }];
+        }
+        return prevIn;
+      });
+    }
+  };
+
   const removeArrayRow = (setter, itemsArray, index) => {
     if (itemsArray.length > 1 || setter === setScrapItems) {
       const newArr = [...itemsArray];
@@ -400,9 +406,7 @@ const StockTransfer = ({ user }) => {
       outItems: validOuts,
       inItems: validIns,
       scrapItems: validScraps,
-      LossWeight: lossWeight,
-      LossRate: lossRate,
-      LossAmount: lossAmount
+      LossWeight: lossWeight
     };
 
     try {
@@ -427,13 +431,11 @@ const StockTransfer = ({ user }) => {
           const getInName = code => items.find(i => i.ItemCode === code)?.ItemName || code;
           
           const detailsList = [];
-          validOuts.forEach(r => detailsList.push({ OutItemCode: r.ItemCode, OutItemName: getOutName(r.ItemCode), OutPcs: r.Pcs, OutWeight: r.Weight, Unit: r.Unit, Rate: r.Rate, Amount: r.Amount }));
-          validIns.forEach(r => detailsList.push({ InItemCode: r.ItemCode, InItemName: getInName(r.ItemCode), InPcs: r.Pcs, InWeight: r.Weight, Unit: r.Unit, Rate: r.Rate, Amount: r.Amount }));
-          validScraps.forEach(r => detailsList.push({ ScrapItemCode: r.ItemCode, ScrapItemName: getInName(r.ItemCode), ScrapPcs: r.Pcs, ScrapWeight: r.Weight, Unit: r.Unit, Rate: r.Rate, Amount: r.Amount }));
+          validOuts.forEach(r => detailsList.push({ OutItemCode: r.ItemCode, OutItemName: getOutName(r.ItemCode), OutPcs: r.Pcs, OutWeight: r.Weight, Unit: r.Unit }));
+          validIns.forEach(r => detailsList.push({ InItemCode: r.ItemCode, InItemName: getInName(r.ItemCode), InPcs: r.Pcs, InWeight: r.Weight, Unit: r.Unit }));
+          validScraps.forEach(r => detailsList.push({ ScrapItemCode: r.ItemCode, ScrapItemName: getInName(r.ItemCode), ScrapPcs: r.Pcs, ScrapWeight: r.Weight, Unit: r.Unit }));
           if (detailsList.length > 0) {
             detailsList[0].LossWeight = lossWeight;
-            detailsList[0].LossRate = lossRate;
-            detailsList[0].LossAmount = lossAmount;
           }
 
           const groupData = {
@@ -528,53 +530,42 @@ const StockTransfer = ({ user }) => {
     yPos += 10;
 
     // Table
-    const tableCols = ['Type', 'Item Name', 'Pcs', 'Weight', 'Unit', 'Rate', 'Amount'];
+    const tableCols = ['Type', 'Item Name', 'Pcs', 'Weight', 'Unit'];
     const tableRows = [];
-    let totalOutPcs = 0, totalOutWt = 0, totalOutAmt = 0;
-    let totalInPcs = 0, totalInWt = 0, totalInAmt = 0;
-    let totalScrapPcs = 0, totalScrapWt = 0, totalScrapAmt = 0;
-    let totalLossWt = 0, totalLossRt = 0, totalLossAmt = 0;
+    let totalOutPcs = 0, totalOutWt = 0;
+    let totalInPcs = 0, totalInWt = 0;
+    let totalScrapPcs = 0, totalScrapWt = 0;
+    let totalLossWt = 0;
 
     group.details.forEach(d => {
-      const rate = parseFloat(d.Rate) || 0;
-      const amount = parseFloat(d.Amount) || 0;
       if (d.OutItemCode) {
-        tableRows.push(['OUT', d.OutItemName || d.OutItemCode, d.OutPcs || '0', d.OutWeight || '0.00', d.Unit || '', rate > 0 ? rate.toFixed(2) : '', amount > 0 ? amount.toFixed(2) : '']);
+        tableRows.push(['OUT', d.OutItemName || d.OutItemCode, d.OutPcs || '0', d.OutWeight || '0.00', d.Unit || '']);
         totalOutPcs += parseFloat(d.OutPcs) || 0;
         totalOutWt += parseFloat(d.OutWeight) || 0;
-        totalOutAmt += amount;
       }
       if (d.InItemCode) {
-        tableRows.push(['IN', d.InItemName || d.InItemCode, d.InPcs || '0', d.InWeight || '0.00', d.Unit || '', rate > 0 ? rate.toFixed(2) : '', amount > 0 ? amount.toFixed(2) : '']);
+        tableRows.push(['IN', d.InItemName || d.InItemCode, d.InPcs || '0', d.InWeight || '0.00', d.Unit || '']);
         totalInPcs += parseFloat(d.InPcs) || 0;
         totalInWt += parseFloat(d.InWeight) || 0;
-        totalInAmt += amount;
       }
       if (d.ScrapItemCode) {
-        tableRows.push(['SCRAP', d.ScrapItemName || d.ScrapItemCode, d.ScrapPcs || '0', d.ScrapWeight || '0.00', d.Unit || '', rate > 0 ? rate.toFixed(2) : '', amount > 0 ? amount.toFixed(2) : '']);
+        tableRows.push(['SCRAP', d.ScrapItemName || d.ScrapItemCode, d.ScrapPcs || '0', d.ScrapWeight || '0.00', d.Unit || '']);
         totalScrapPcs += parseFloat(d.ScrapPcs) || 0;
         totalScrapWt += parseFloat(d.ScrapWeight) || 0;
-        totalScrapAmt += amount;
       }
       if (d.LossWeight) {
         totalLossWt += parseFloat(d.LossWeight) || 0;
-      }
-      if (d.LossRate) {
-        totalLossRt = parseFloat(d.LossRate) || 0;
-      }
-      if (d.LossAmount) {
-        totalLossAmt += parseFloat(d.LossAmount) || 0;
       }
     });
 
     const fmt = (val) => (parseFloat(val) || 0).toFixed(2);
     
     // Add Summary Rows
-    tableRows.push(['', '', '', '', '', '', '']); // empty separator
-    tableRows.push(['TOTAL OUT', '', fmt(totalOutPcs), fmt(totalOutWt), '', '', fmt(totalOutAmt)]);
-    tableRows.push(['TOTAL IN', '', fmt(totalInPcs), fmt(totalInWt), '', '', fmt(totalInAmt)]);
-    tableRows.push(['TOTAL SCRAP', '', fmt(totalScrapPcs), fmt(totalScrapWt), '', '', fmt(totalScrapAmt)]);
-    tableRows.push(['BATCH LOSS', '', '', fmt(totalLossWt), '', totalLossRt > 0 ? fmt(totalLossRt) : '', fmt(totalLossAmt)]);
+    tableRows.push(['', '', '', '', '']); // empty separator
+    tableRows.push(['TOTAL OUT', '', fmt(totalOutPcs), fmt(totalOutWt), '']);
+    tableRows.push(['TOTAL IN', '', fmt(totalInPcs), fmt(totalInWt), '']);
+    tableRows.push(['TOTAL SCRAP', '', fmt(totalScrapPcs), fmt(totalScrapWt), '']);
+    tableRows.push(['BATCH LOSS', '', '', fmt(totalLossWt), 'KGS']);
 
     autoTable(doc, {
       startY: yPos,
@@ -587,9 +578,7 @@ const StockTransfer = ({ user }) => {
         0: { fontStyle: 'bold' },
         2: { halign: 'right' },
         3: { halign: 'right' },
-        4: { halign: 'center' },
-        5: { halign: 'right' },
-        6: { halign: 'right' }
+        4: { halign: 'center' }
       },
       willDrawCell: (data) => {
         if (data.row.index >= tableRows.length - 4) {
@@ -781,7 +770,7 @@ const StockTransfer = ({ user }) => {
         </Toolbar>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 1000 }}>
+          <Table size="small" sx={{ minWidth: 800 }}>
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
@@ -789,8 +778,6 @@ const StockTransfer = ({ user }) => {
                 <TableCell sx={{ fontWeight: 600 }} align="right">Pcs</TableCell>
                 <TableCell sx={{ fontWeight: 600 }} align="right">Weight</TableCell>
                 <TableCell sx={{ fontWeight: 600 }} align="center">Unit</TableCell>
-                <TableCell sx={{ fontWeight: 600 }} align="right">Rate</TableCell>
-                <TableCell sx={{ fontWeight: 600 }} align="right">Amount</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -801,14 +788,11 @@ const StockTransfer = ({ user }) => {
                 const isNewRoute = currentRouteKey !== prevRouteKey;
 
                 const batchLoss = group.details.reduce((sum, d) => sum + (parseFloat(d.LossWeight) || 0), 0);
-                const firstDetail = group.details && group.details.length > 0 ? group.details[0] : group;
-                const batchLossRt = parseFloat(firstDetail.LossRate) || 0;
-                const batchLossAmt = parseFloat(firstDetail.LossAmount) || 0;
                 return (
                 <React.Fragment key={group.TransferID}>
                   {isNewRoute && (
                     <TableRow sx={{ backgroundColor: '#0f3b66' }}>
-                      <TableCell colSpan={7} sx={{ py: 1.2, px: 2 }}>
+                      <TableCell colSpan={5} sx={{ py: 1.2, px: 2 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                             <Chip label="FROM" size="small" sx={{ bgcolor: '#38bdf8', color: '#0f172a', fontWeight: 800, fontSize: '0.72rem', height: 22 }} />
@@ -827,7 +811,7 @@ const StockTransfer = ({ user }) => {
                     </TableRow>
                   )}
                   <TableRow sx={{ backgroundColor: '#e0f2fe' }}>
-                    <TableCell colSpan={7} sx={{ py: 1.2 }}>
+                    <TableCell colSpan={5} sx={{ py: 1.2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'center', flexWrap: 'wrap' }}>
                           <Chip 
@@ -883,8 +867,6 @@ const StockTransfer = ({ user }) => {
                           <TableCell align="right">{row.OutPcs || 0}</TableCell>
                           <TableCell align="right">{row.OutWeight || 0}</TableCell>
                           <TableCell align="center">{row.Unit || '-'}</TableCell>
-                          <TableCell align="right">{row.Rate ? parseFloat(row.Rate).toFixed(2) : '-'}</TableCell>
-                          <TableCell align="right">{row.Amount ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
                         </TableRow>
                       )}
                       {row.InItemCode && (
@@ -894,8 +876,6 @@ const StockTransfer = ({ user }) => {
                           <TableCell align="right">{row.InPcs || 0}</TableCell>
                           <TableCell align="right">{row.InWeight || 0}</TableCell>
                           <TableCell align="center">{row.Unit || '-'}</TableCell>
-                          <TableCell align="right">{row.Rate ? parseFloat(row.Rate).toFixed(2) : '-'}</TableCell>
-                          <TableCell align="right">{row.Amount ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
                         </TableRow>
                       )}
                       {row.ScrapItemCode && (
@@ -905,24 +885,21 @@ const StockTransfer = ({ user }) => {
                           <TableCell align="right">{row.ScrapPcs || 0}</TableCell>
                           <TableCell align="right">{row.ScrapWeight || 0}</TableCell>
                           <TableCell align="center">{row.Unit || '-'}</TableCell>
-                          <TableCell align="right">{row.Rate ? parseFloat(row.Rate).toFixed(2) : '-'}</TableCell>
-                          <TableCell align="right">{row.Amount ? parseFloat(row.Amount).toFixed(2) : '-'}</TableCell>
                         </TableRow>
                       )}
                     </React.Fragment>
                   ))}
                   <TableRow sx={{ backgroundColor: '#f8fafc' }}>
-                    <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold', color: '#0f172a' }}>Batch Loss:</TableCell>
+                    <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold', color: '#0f172a' }}>Batch Loss:</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0f172a' }}>-</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0f172a' }}>{batchLoss.toFixed(3)} Wt</TableCell>
                     <TableCell align="center">KGS</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold', color: '#0f172a' }}>{batchLossRt > 0 ? `@ ₹${batchLossRt.toFixed(2)}` : '-'}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{batchLossAmt > 0 ? `₹${batchLossAmt.toFixed(2)}` : '-'}</TableCell>
                   </TableRow>
                 </React.Fragment>
               )})}
               {groupedArray.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>No stock transfers found.</TableCell>
+                  <TableCell colSpan={5} align="center" sx={{ py: 3 }}>No stock transfers found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1038,12 +1015,10 @@ const StockTransfer = ({ user }) => {
               <TableHead>
                 <TableRow>
                   <TableCell align="center" sx={{ fontWeight: 700, width: 65 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 220 }}>Item</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Pcs</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 135 }}>Weight</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 105 }}>Unit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 135 }}>Rate</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 145 }}>Amount</TableCell>
+                  <TableCell sx={{ fontWeight: 700, minWidth: 260 }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 140 }}>Pcs</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 150 }}>Weight</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Unit</TableCell>
                   <TableCell sx={{ width: 45 }}></TableCell>
                 </TableRow>
               </TableHead>
@@ -1052,7 +1027,7 @@ const StockTransfer = ({ user }) => {
                 {outItems.map((row, index) => (
                   <TableRow key={`out-${index}`} sx={{ '& td': { py: 0.5, px: 0.5, borderBottom: '1px solid #f1f5f9' } }}>
                     <TableCell align="center" sx={{ fontWeight: 600, color: '#d32f2f', bgcolor: '#fce4e4' }}>OUT</TableCell>
-                    <TableCell sx={{ width: 220, maxWidth: 240 }}>
+                    <TableCell sx={{ minWidth: 260 }}>
                       <Autocomplete
                         options={availableOutItems}
                         isOptionEqualToValue={(option, value) => option.ItemCode === value.ItemCode && (option.SubCode || '') === (value.SubCode || '')}
@@ -1062,31 +1037,29 @@ const StockTransfer = ({ user }) => {
                           return `${option.ItemCode}${subStr} - ${option.ItemName} (${option.Pcs || 0} Pcs | ${option.Weight || 0} Wt)`;
                         }}
                         value={availableOutItems.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || items.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || null}
-                        onChange={(e, newValue) => handleArrayItemSelect(setOutItems, outItems, index, newValue)}
+                        onChange={(e, newValue) => handleOutItemSelect(index, newValue)}
                         renderInput={(params) => <TextField {...params} placeholder="Out Item" size="small" />}
                         fullWidth
                         slotProps={{ paper: { sx: { minWidth: '100%', maxWidth: 350 } } }}
                       />
                     </TableCell>
-                    <TableCell sx={{ width: 120 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleArrayChange(setOutItems, outItems, index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 135 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleArrayChange(setOutItems, outItems, index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 105 }}>
+                    <TableCell sx={{ width: 140 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleOutChange(index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
+                    <TableCell sx={{ width: 150 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleOutChange(index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
+                    <TableCell sx={{ width: 120 }}>
                       <Autocomplete
                         options={unitOptions}
                         freeSolo
                         value={row.Unit || ''}
-                        onChange={(e, newValue) => handleArrayChange(setOutItems, outItems, index, 'Unit', newValue || '')}
+                        onChange={(e, newValue) => handleOutChange(index, 'Unit', newValue || '')}
                         onInputChange={(e, newInputValue) => {
                           if (e && e.type === 'change') {
-                            handleArrayChange(setOutItems, outItems, index, 'Unit', newInputValue);
+                            handleOutChange(index, 'Unit', newInputValue);
                           }
                         }}
                         renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
                         fullWidth
                       />
                     </TableCell>
-                    <TableCell sx={{ width: 135 }}><TextField type="number" size="small" value={row.Rate} onChange={(e) => handleArrayChange(setOutItems, outItems, index, 'Rate', e.target.value)} placeholder="0.00" inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 145 }}><TextField type="number" size="small" value={row.Amount} onChange={(e) => handleArrayChange(setOutItems, outItems, index, 'Amount', e.target.value)} placeholder="0.00" inputProps={{ style: { textAlign: 'right' } }} InputProps={{ readOnly: true, sx: { bgcolor: '#f8fafc', fontWeight: 600 } }} fullWidth /></TableCell>
                     <TableCell align="center" sx={{ width: 45 }}>
                       <IconButton color="error" size="small" onClick={() => removeArrayRow(setOutItems, outItems, index)} disabled={!hasDeletePermission() || outItems.length === 1}>
                         <DeleteIcon fontSize="small" />
@@ -1095,7 +1068,7 @@ const StockTransfer = ({ user }) => {
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={8} sx={{ py: 1, borderBottom: '2px solid #e0e0e0' }}>
+                  <TableCell colSpan={6} sx={{ py: 1, borderBottom: '2px solid #e0e0e0' }}>
                     <Button size="small" color="error" onClick={() => addArrayRow(setOutItems, outItems)}>+ Add Out Row</Button>
                   </TableCell>
                 </TableRow>
@@ -1104,7 +1077,7 @@ const StockTransfer = ({ user }) => {
                 {inItems.map((row, index) => (
                   <TableRow key={`in-${index}`} sx={{ '& td': { py: 0.5, px: 0.5, borderBottom: '1px solid #f1f5f9' } }}>
                     <TableCell align="center" sx={{ fontWeight: 600, color: '#2e7d32', bgcolor: '#e8f5e9' }}>IN</TableCell>
-                    <TableCell sx={{ width: 220, maxWidth: 240 }}>
+                    <TableCell sx={{ minWidth: 260 }}>
                       <Autocomplete
                         options={items}
                         getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
@@ -1115,9 +1088,9 @@ const StockTransfer = ({ user }) => {
                         slotProps={{ paper: { sx: { minWidth: '100%', maxWidth: 350 } } }}
                       />
                     </TableCell>
-                    <TableCell sx={{ width: 120 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 135 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 105 }}>
+                    <TableCell sx={{ width: 140 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
+                    <TableCell sx={{ width: 150 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
+                    <TableCell sx={{ width: 120 }}>
                       <Autocomplete
                         options={unitOptions}
                         freeSolo
@@ -1132,8 +1105,6 @@ const StockTransfer = ({ user }) => {
                         fullWidth
                       />
                     </TableCell>
-                    <TableCell sx={{ width: 135 }}><TextField type="number" size="small" value={row.Rate} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Rate', e.target.value)} placeholder="0.00" inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 145 }}><TextField type="number" size="small" value={row.Amount} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Amount', e.target.value)} placeholder="0.00" inputProps={{ style: { textAlign: 'right' } }} InputProps={{ readOnly: true, sx: { bgcolor: '#f8fafc', fontWeight: 600 } }} fullWidth /></TableCell>
                     <TableCell align="center" sx={{ width: 45 }}>
                       <IconButton color="error" size="small" onClick={() => removeArrayRow(setInItems, inItems, index)} disabled={!hasDeletePermission() || inItems.length === 1}>
                         <DeleteIcon fontSize="small" />
@@ -1142,7 +1113,7 @@ const StockTransfer = ({ user }) => {
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={8} sx={{ py: 1, borderBottom: '2px solid #e0e0e0' }}>
+                  <TableCell colSpan={6} sx={{ py: 1, borderBottom: '2px solid #e0e0e0' }}>
                     <Button size="small" color="success" onClick={() => addArrayRow(setInItems, inItems)}>+ Add In Row</Button>
                   </TableCell>
                 </TableRow>
@@ -1151,7 +1122,7 @@ const StockTransfer = ({ user }) => {
                 {scrapItems.map((row, index) => (
                   <TableRow key={`scrap-${index}`} sx={{ '& td': { py: 0.5, px: 0.5, borderBottom: '1px solid #f1f5f9' } }}>
                     <TableCell align="center" sx={{ fontWeight: 600, color: '#ed6c02', bgcolor: '#fff3e0' }}>SCRAP</TableCell>
-                    <TableCell sx={{ width: 220, maxWidth: 240 }}>
+                    <TableCell sx={{ minWidth: 260 }}>
                       <Autocomplete
                         options={items.filter(i => (i.ItemType && i.ItemType.toLowerCase() === 'scrap') || (i.ItemName && i.ItemName.toLowerCase().includes('scrap')))}
                         getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
@@ -1162,9 +1133,9 @@ const StockTransfer = ({ user }) => {
                         slotProps={{ paper: { sx: { minWidth: '100%', maxWidth: 350 } } }}
                       />
                     </TableCell>
-                    <TableCell sx={{ width: 120 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 135 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 105 }}>
+                    <TableCell sx={{ width: 140 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
+                    <TableCell sx={{ width: 150 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
+                    <TableCell sx={{ width: 120 }}>
                       <Autocomplete
                         options={unitOptions}
                         freeSolo
@@ -1179,8 +1150,6 @@ const StockTransfer = ({ user }) => {
                         fullWidth
                       />
                     </TableCell>
-                    <TableCell sx={{ width: 135 }}><TextField type="number" size="small" value={row.Rate} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Rate', e.target.value)} placeholder="0.00" inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 145 }}><TextField type="number" size="small" value={row.Amount} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Amount', e.target.value)} placeholder="0.00" inputProps={{ style: { textAlign: 'right' } }} InputProps={{ readOnly: true, sx: { bgcolor: '#f8fafc', fontWeight: 600 } }} fullWidth /></TableCell>
                     <TableCell align="center" sx={{ width: 45 }}>
                       <IconButton color="error" size="small" onClick={() => removeArrayRow(setScrapItems, scrapItems, index)} disabled={!hasDeletePermission()}>
                         <DeleteIcon fontSize="small" />
@@ -1189,25 +1158,19 @@ const StockTransfer = ({ user }) => {
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={8} sx={{ py: 1, borderBottom: '2px solid #e0e0e0' }}>
+                  <TableCell colSpan={6} sx={{ py: 1, borderBottom: '2px solid #e0e0e0' }}>
                     <Button size="small" color="warning" onClick={() => addArrayRow(setScrapItems, scrapItems)}>+ Add Scrap Row</Button>
                   </TableCell>
                 </TableRow>
 
-                {/* LOSS WEIGHT & AMOUNT SUM */}
+                {/* LOSS WEIGHT */}
                 <TableRow sx={{ backgroundColor: '#f0f0f0' }}>
                   <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>Batch Loss:</TableCell>
                   <TableCell></TableCell>
-                  <TableCell sx={{ width: 135 }}>
+                  <TableCell sx={{ width: 150 }}>
                     <TextField label="Loss Wt" type="number" size="small" value={lossWeight} InputProps={{ readOnly: true, sx: { fontWeight: 'bold', bgcolor: '#fff' } }} inputProps={{ style: { textAlign: 'right' } }} fullWidth />
                   </TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600, color: 'text.secondary', width: 105 }}>KGS</TableCell>
-                  <TableCell sx={{ width: 135 }}>
-                    <TextField label="Loss Rate" type="number" size="small" value={lossRate} onChange={(e) => handleLossRateChange(e.target.value)} sx={{ bgcolor: '#fff' }} inputProps={{ style: { textAlign: 'right' } }} fullWidth />
-                  </TableCell>
-                  <TableCell sx={{ width: 145 }}>
-                    <TextField label="Loss Amount" type="number" size="small" value={lossAmount} InputProps={{ readOnly: true, sx: { fontWeight: 'bold', bgcolor: '#fff', color: '#d32f2f' } }} inputProps={{ style: { textAlign: 'right' } }} fullWidth />
-                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, color: 'text.secondary', width: 120 }}>KGS</TableCell>
                   <TableCell sx={{ width: 45 }}></TableCell>
                 </TableRow>
               </TableBody>

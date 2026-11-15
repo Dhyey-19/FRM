@@ -806,13 +806,13 @@ const ItemMaster = () => {
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Unit</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }} align="right">
                   <TableSortLabel
                     active={sortConfig.key === 'Costing'}
                     direction={sortConfig.key === 'Costing' ? sortConfig.direction : 'asc'}
                     onClick={() => handleSort('Costing')}
                   >
-                    Costing
+                    Costing (₹)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
@@ -877,7 +877,9 @@ const ItemMaster = () => {
                       <TableCell>{row.Series || '-'}</TableCell>
                       <TableCell>{row.StdWeight != null && row.StdWeight !== '' ? Number(row.StdWeight).toFixed(3) : '-'}</TableCell>
                       <TableCell>{row.Unit}</TableCell>
-                      <TableCell>{row.Costing || 0}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 500 }}>
+                        {row.Costing != null && row.Costing !== '' ? Number(row.Costing).toFixed(2) : '0.00'}
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 600, color: isLowStock ? '#ef4444' : 'inherit' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <span>{row.ClosingStock || 0}</span>
@@ -1147,8 +1149,8 @@ const ItemMaster = () => {
             {/* Weights and Pricing */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Std Weight (Kg)" name="StdWeight" type="number" inputProps={{ step: "0.001" }} value={formData.StdWeight} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="MRP (₹)" name="MRP" type="number" value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="Costing (₹)" name="Costing" type="number" value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="MRP (₹)" name="MRP" type="number" inputProps={{ step: "0.01" }} value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="Costing (₹)" name="Costing" type="number" inputProps={{ step: "0.01" }} value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
             </Box>
 
             {/* Stock Quantities */}

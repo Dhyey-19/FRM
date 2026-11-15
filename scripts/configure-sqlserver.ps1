@@ -36,3 +36,4 @@ if (Test-Path $sqlBaseReg) {
 }
 
 Write-Host "[OK] SQL Server auto-start and TCP port 1433 configured." -ForegroundColor Green
+

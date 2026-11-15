@@ -53,7 +53,8 @@ const DepartmentMaster = () => {
   const [deptToDelete, setDeptToDelete] = useState(null);
 
   const [formData, setFormData] = useState({
-    DeptName: ''
+    DeptName: '',
+    Costing: ''
   });
 
   const fetchDepartments = async () => {
@@ -99,10 +100,11 @@ const DepartmentMaster = () => {
     if (mode === 'edit' && dept) {
       setSelectedDeptId(dept.DeptID);
       setFormData({
-        DeptName: dept.DeptName
+        DeptName: dept.DeptName,
+        Costing: dept.Costing != null && dept.Costing !== '' ? dept.Costing : ''
       });
     } else {
-      setFormData({ DeptName: '' });
+      setFormData({ DeptName: '', Costing: '' });
     }
     setOpenDialog(true);
   };
@@ -124,7 +126,8 @@ const DepartmentMaster = () => {
       const method = dialogMode === 'add' ? 'POST' : 'PUT';
       
       const payload = {
-        DeptName: formData.DeptName
+        DeptName: formData.DeptName,
+        Costing: parseFloat(formData.Costing) || 0
       };
 
       const response = await fetch(url, {
@@ -175,7 +178,8 @@ const DepartmentMaster = () => {
   const handleExport = () => {
     const exportData = filteredDepartments.map((d, index) => ({
       'Sr. No.': index + 1,
-      'Department Name': d.DeptName
+      'Department Name': d.DeptName,
+      'Costing': Number(d.Costing) || 0
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     ensureNumericWorksheet(worksheet);
@@ -199,7 +203,8 @@ const DepartmentMaster = () => {
 
         if (data.length > 0) {
           const mappedData = data.map(row => ({
-            DeptName: row['Department Name'] || row.DeptName || row.DepartmentName || row.Department || ''
+            DeptName: row['Department Name'] || row.DeptName || row.DepartmentName || row.Department || '',
+            Costing: parseFloat(row.Costing !== undefined ? row.Costing : row['Costing']) || 0
           })).filter(r => r.DeptName && String(r.DeptName).trim());
 
           if (mappedData.length === 0) {
@@ -301,8 +306,9 @@ const DepartmentMaster = () => {
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Department Name</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Edit</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600 }}>Delete</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600, width: 160 }}>Costing (₹)</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: 100 }}>Edit</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: 100 }}>Delete</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -312,6 +318,9 @@ const DepartmentMaster = () => {
                   return (
                     <TableRow hover tabIndex={-1} key={row.DeptID}>
                       <TableCell sx={{ fontWeight: 500 }}>{row.DeptName}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                        ₹{Number(row.Costing || 0).toFixed(2)}
+                      </TableCell>
                       <TableCell align="center">
                         <IconButton 
                           color="primary" 
@@ -339,7 +348,7 @@ const DepartmentMaster = () => {
                 })}
               {filteredDepartments.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
                     No departments found.
                   </TableCell>
                 </TableRow>
@@ -366,7 +375,8 @@ const DepartmentMaster = () => {
             <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>
           )}
           <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField label="Department Name" name="DeptName" value={formData.DeptName} onChange={handleInputChange} fullWidth size="small" />
+            <TextField label="Department Name" name="DeptName" value={formData.DeptName} onChange={handleInputChange} fullWidth size="small" required />
+            <TextField label="Costing (₹)" name="Costing" type="number" inputProps={{ step: "0.01" }} value={formData.Costing} onChange={handleInputChange} fullWidth size="small" helperText="Department costing per unit (Pcs / Kg) for stock valuation" />
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
