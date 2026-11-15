@@ -185,7 +185,14 @@ const StockReportContent = () => {
       const response = await fetch(endpoint);
       if (!response.ok) throw new Error('Failed to fetch stock report');
       const result = await response.json();
-      setData(Array.isArray(result) ? result : []);
+      const mapped = Array.isArray(result) ? result.map(r => {
+        if (reportType === 'item') {
+          const val = Math.round(((parseFloat(r.ClosingStock) || 0) * (parseFloat(r.Costing) || 0)) * 100) / 100;
+          return { ...r, Valuation: val };
+        }
+        return r;
+      }) : [];
+      setData(mapped);
     } catch (error) {
       console.error('Error fetching stock report:', error);
     } finally {
@@ -453,7 +460,8 @@ const StockReportContent = () => {
     if (reportType === 'item') {
       const totalOpening = sortedData.reduce((sum, row) => sum + (parseFloat(row.OpeningStock) || 0), 0);
       const totalClosing = sortedData.reduce((sum, row) => sum + (parseFloat(row.ClosingStock) || 0), 0);
-      return { totalOpening, totalClosing };
+      const totalValuation = Math.round(sortedData.reduce((sum, row) => sum + ((parseFloat(row.ClosingStock) || 0) * (parseFloat(row.Costing) || 0)), 0) * 100) / 100;
+      return { totalOpening, totalClosing, totalValuation };
     }
     if (reportType === 'department') {
       const totalPcs = sortedData.reduce((sum, row) => sum + (parseFloat(row.Pcs) || 0), 0);
@@ -468,7 +476,8 @@ const StockReportContent = () => {
       const totalInWt = Math.round(sortedData.reduce((sum, r) => sum + (parseFloat(r.InNetWt) || 0), 0) * 1000) / 1000;
       const totalBalQty = sortedData.reduce((sum, r) => sum + (parseFloat(r.BalQty) || 0), 0);
       const totalBalWt = Math.round(sortedData.reduce((sum, r) => sum + (parseFloat(r.BalNetWt) || 0), 0) * 1000) / 1000;
-      return { totalOutQty, totalOutWt, totalInQty, totalInWt, totalBalQty, totalBalWt };
+      const totalValuation = Math.round(sortedData.reduce((sum, r) => sum + (parseFloat(r.Valuation) || 0), 0) * 100) / 100;
+      return { totalOutQty, totalOutWt, totalInQty, totalInWt, totalBalQty, totalBalWt, totalValuation };
     }
     return {};
   }, [sortedData, reportType]);
@@ -565,7 +574,7 @@ const StockReportContent = () => {
         ]);
       }
     } else if (reportType === 'item') {
-      head = [['Code', 'Sub Code', 'Name', 'Type', 'Series', 'Unit', 'MRP', 'Costing', 'Opening', 'Closing']];
+      head = [['Code', 'Sub Code', 'Name', 'Type', 'Series', 'Unit', 'MRP', 'Costing', 'Opening', 'Closing', 'Valuation (Rs.)']];
       sortedData.forEach(row => {
         tableData.push([
           row.ItemCode, 
@@ -577,14 +586,16 @@ const StockReportContent = () => {
           Number(row.MRP || 0).toFixed(2), 
           Number(row.Costing || 0).toFixed(2), 
           row.OpeningStock || 0, 
-          row.ClosingStock || 0
+          row.ClosingStock || 0,
+          Number(row.Valuation || ((Number(row.ClosingStock || 0) * Number(row.Costing || 0)))).toFixed(2)
         ]);
       });
       if (sortedData.length > 0) {
         tableData.push([
           { content: 'Total:', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 59, 102] } },
           { content: totals.totalOpening, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
-          { content: totals.totalClosing, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } }
+          { content: totals.totalClosing, styles: { fontStyle: 'bold', textColor: [211, 47, 47] } },
+          { content: Number(totals.totalValuation || 0).toFixed(2), styles: { fontStyle: 'bold', textColor: [194, 65, 12] } }
         ]);
       }
     } else if (reportType === 'department') {
@@ -612,7 +623,7 @@ const StockReportContent = () => {
       }
     } else {
       // Job Work Stock
-      head = [['Job Worker (Vendor)', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt']];
+      head = [['Job Worker (Vendor)', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt', 'Costing (Rs.)', 'Valuation (Rs.)']];
       sortedData.forEach(row => {
         tableData.push([
           row.LedgerName,
@@ -624,7 +635,9 @@ const StockReportContent = () => {
           Number(row.InQty || 0),
           Number(row.InNetWt || 0).toFixed(3),
           Number(row.BalQty || 0),
-          Number(row.BalNetWt || 0).toFixed(3)
+          Number(row.BalNetWt || 0).toFixed(3),
+          Number(row.Costing || 0).toFixed(2),
+          Number(row.Valuation || 0).toFixed(2)
         ]);
       });
       if (sortedData.length > 0) {
@@ -635,7 +648,9 @@ const StockReportContent = () => {
           { content: Number(totals.totalInQty || 0), styles: { fontStyle: 'bold', textColor: [22, 163, 74] } },
           { content: Number(totals.totalInWt || 0).toFixed(3), styles: { fontStyle: 'bold' } },
           { content: Number(totals.totalBalQty || 0), styles: { fontStyle: 'bold', textColor: [185, 28, 28] } },
-          { content: Number(totals.totalBalWt || 0).toFixed(3), styles: { fontStyle: 'bold', textColor: [185, 28, 28] } }
+          { content: Number(totals.totalBalWt || 0).toFixed(3), styles: { fontStyle: 'bold', textColor: [185, 28, 28] } },
+          { content: '-', styles: { fontStyle: 'bold', halign: 'right' } },
+          { content: Number(totals.totalValuation || 0).toFixed(2), styles: { fontStyle: 'bold', textColor: [194, 65, 12] } }
         ]);
       }
     }
@@ -739,14 +754,16 @@ const StockReportContent = () => {
           'MRP': Number(row.MRP) || 0,
           'Costing': Number(row.Costing) || 0,
           'Opening Stock': Number(row.OpeningStock) || 0,
-          'Closing Stock': Number(row.ClosingStock) || 0
+          'Closing Stock': Number(row.ClosingStock) || 0,
+          'Valuation (Rs.)': Number(row.Valuation || ((Number(row.ClosingStock || 0) * Number(row.Costing || 0))))
         });
       });
       if (sortedData.length > 0) {
         flatData.push({
           'Code': '', 'Sub Code': '', 'Item Name': '', 'Type': '', 'Series': '', 'Unit': '', 'MRP': null, 'Costing': 'Total:',
           'Opening Stock': Number(totals.totalOpening) || 0,
-          'Closing Stock': Number(totals.totalClosing) || 0
+          'Closing Stock': Number(totals.totalClosing) || 0,
+          'Valuation (Rs.)': Number(totals.totalValuation || 0)
         });
       }
     } else if (reportType === 'department') {
@@ -784,7 +801,9 @@ const StockReportContent = () => {
           'Received Qty': Number(row.InQty || 0),
           'Received Wt (KG)': Number(row.InNetWt || 0),
           'Outstanding Qty': Number(row.BalQty || 0),
-          'Outstanding Wt (KG)': Number(row.BalNetWt || 0)
+          'Outstanding Wt (KG)': Number(row.BalNetWt || 0),
+          'Costing (Rs.)': Number(row.Costing || 0),
+          'Valuation (Rs.)': Number(row.Valuation || 0)
         });
       });
       if (sortedData.length > 0) {
@@ -798,7 +817,9 @@ const StockReportContent = () => {
           'Received Qty': Number(totals.totalInQty) || 0,
           'Received Wt (KG)': Number(totals.totalInWt) || 0,
           'Outstanding Qty': Number(totals.totalBalQty) || 0,
-          'Outstanding Wt (KG)': Number(totals.totalBalWt) || 0
+          'Outstanding Wt (KG)': Number(totals.totalBalWt) || 0,
+          'Costing (Rs.)': null,
+          'Valuation (Rs.)': Number(totals.totalValuation || 0)
         });
       }
     }
@@ -1593,26 +1614,28 @@ const StockReportContent = () => {
                         
                       </TableCell>
                       <SortableTableCell label="Item Code" property="ItemCode" width="11%" />
-                      <SortableTableCell label="Item Name" property="ItemName" width="22%" />
-                      <SortableTableCell label="Type / Series" property="ItemType" width="11%" />
+                      <SortableTableCell label="Item Name" property="ItemName" width="20%" />
+                      <SortableTableCell label="Type / Series" property="ItemType" width="10%" />
                       <SortableTableCell label="Unit" property="Unit" width="6%" align="center" />
-                      <SortableTableCell label="Main Stock" property="MainStock" align="right" width="10%" />
-                      <SortableTableCell label="Dept Stock" property="DeptStock" align="right" width="10%" />
-                      <SortableTableCell label="Jobwork Stock" property="JwStock" align="right" width="10%" />
-                      <SortableTableCell label="Combined Stock" property="TotalStock" align="right" width="11%" />
-                      <SortableTableCell label="Total Wt (KG)" property="TotalWeight" align="right" width="9%" />
+                      <SortableTableCell label="Main Stock" property="MainStock" align="right" width="9%" />
+                      <SortableTableCell label="Dept Stock" property="DeptStock" align="right" width="9%" />
+                      <SortableTableCell label="Jobwork Stock" property="JwStock" align="right" width="9%" />
+                      <SortableTableCell label="Combined Stock" property="TotalStock" align="right" width="10%" />
+                      <SortableTableCell label="Total Wt (KG)" property="TotalWeight" align="right" width="8%" />
+                      <SortableTableCell label="Valuation (₹)" property="Valuation" align="right" width="10%" />
                     </>
                   ) : reportType === 'item' ? (
                     <>
-                      <SortableTableCell label="Code" property="ItemCode" width="10%" />
-                      <SortableTableCell label="Item Name" property="ItemName" width="20%" />
-                      <SortableTableCell label="Type" property="ItemType" width="10%" />
-                      <SortableTableCell label="Series" property="Series" width="10%" />
-                      <SortableTableCell label="Unit" property="Unit" width="10%" />
-                      <SortableTableCell label="MRP" property="MRP" align="right" width="10%" />
-                      <SortableTableCell label="Costing" property="Costing" align="right" width="10%" />
-                      <SortableTableCell label="Opening" property="OpeningStock" align="right" width="10%" />
-                      <SortableTableCell label="Closing" property="ClosingStock" align="right" width="10%" />
+                      <SortableTableCell label="Code" property="ItemCode" width="9%" />
+                      <SortableTableCell label="Item Name" property="ItemName" width="18%" />
+                      <SortableTableCell label="Type" property="ItemType" width="9%" />
+                      <SortableTableCell label="Series" property="Series" width="9%" />
+                      <SortableTableCell label="Unit" property="Unit" width="7%" />
+                      <SortableTableCell label="MRP" property="MRP" align="right" width="9%" />
+                      <SortableTableCell label="Costing" property="Costing" align="right" width="9%" />
+                      <SortableTableCell label="Opening" property="OpeningStock" align="right" width="9%" />
+                      <SortableTableCell label="Closing" property="ClosingStock" align="right" width="9%" />
+                      <SortableTableCell label="Valuation (₹)" property="Valuation" align="right" width="12%" />
                     </>
                   ) : reportType === 'department' ? (
                     <>
@@ -1623,20 +1646,22 @@ const StockReportContent = () => {
                       <SortableTableCell label="Costing" property="Costing" align="right" width="10%" />
                       <SortableTableCell label="Pcs" property="Pcs" align="right" width="10%" />
                       <SortableTableCell label="Weight" property="Weight" align="right" width="10%" />
-                      <SortableTableCell label="Valuation" property="Valuation" align="right" width="10%" />
+                      <SortableTableCell label="Valuation (₹)" property="Valuation" align="right" width="10%" />
                     </>
                   ) : (
                     // Job Work Stock Columns
                     <>
-                      <SortableTableCell label="Job Worker (Vendor)" property="LedgerName" width="22%" />
-                      <SortableTableCell label="Item Code" property="ItemCode" width="12%" />
-                      <SortableTableCell label="Item Name" property="ItemName" width="22%" />
-                      <SortableTableCell label="Sent Qty" property="OutQty" align="right" width="9%" />
-                      <SortableTableCell label="Sent Wt" property="OutNetWt" align="right" width="9%" />
-                      <SortableTableCell label="Ret Qty" property="InQty" align="right" width="8%" />
-                      <SortableTableCell label="Ret Wt" property="InNetWt" align="right" width="8%" />
-                      <SortableTableCell label="Outs Qty" property="BalQty" align="right" width="10%" />
-                      <SortableTableCell label="Outs Wt" property="BalNetWt" align="right" width="10%" />
+                      <SortableTableCell label="Job Worker (Vendor)" property="LedgerName" width="20%" />
+                      <SortableTableCell label="Item Code" property="ItemCode" width="11%" />
+                      <SortableTableCell label="Item Name" property="ItemName" width="18%" />
+                      <SortableTableCell label="Sent Qty" property="OutQty" align="right" width="8%" />
+                      <SortableTableCell label="Sent Wt" property="OutNetWt" align="right" width="8%" />
+                      <SortableTableCell label="Ret Qty" property="InQty" align="right" width="7%" />
+                      <SortableTableCell label="Ret Wt" property="InNetWt" align="right" width="7%" />
+                      <SortableTableCell label="Outs Qty" property="BalQty" align="right" width="8%" />
+                      <SortableTableCell label="Outs Wt" property="BalNetWt" align="right" width="8%" />
+                      <SortableTableCell label="Costing (₹)" property="Costing" align="right" width="7%" />
+                      <SortableTableCell label="Valuation (₹)" property="Valuation" align="right" width="9%" />
                     </>
                   )}
                 </TableRow>
@@ -1813,6 +1838,10 @@ const StockReportContent = () => {
                               <TableCell align="right" sx={{ color: '#475569', fontSize: '0.8rem' }}>
                                 {Number(row.TotalWeight || 0).toFixed(3)}
                               </TableCell>
+                              {/* Valuation */}
+                              <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c', fontSize: '0.84rem' }}>
+                                ₹{Number(row.Valuation || 0).toFixed(2)}
+                              </TableCell>
                             </>
                           ) : reportType === 'item' ? (
                             <>
@@ -1849,6 +1878,9 @@ const StockReportContent = () => {
                                 }}
                               >
                                 {row.ClosingStock || 0}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c' }}>
+                                ₹{Number(row.Valuation || ((Number(row.ClosingStock || 0) * Number(row.Costing || 0)))).toFixed(2)}
                               </TableCell>
                             </>
                           ) : reportType === 'department' ? (
@@ -1959,6 +1991,12 @@ const StockReportContent = () => {
                               >
                                 {Number(row.BalNetWt || 0).toFixed(3)}
                               </TableCell>
+                              <TableCell align="right">
+                                ₹{Number(row.Costing || 0).toFixed(2)}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c' }}>
+                                ₹{Number(row.Valuation || 0).toFixed(2)}
+                              </TableCell>
                             </>
                           )}
                         </TableRow>
@@ -1966,7 +2004,7 @@ const StockReportContent = () => {
                         {/* Collapsible Sub-Row for Combined Stock Details */}
                         {reportType === 'combined' && hasSubBreakdown && (
                           <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                            <TableCell colSpan={10} sx={{ py: 0, px: 3, borderBottom: isExpanded ? '1px solid #cbd5e1' : 'none' }}>
+                            <TableCell colSpan={11} sx={{ py: 0, px: 3, borderBottom: isExpanded ? '1px solid #cbd5e1' : 'none' }}>
                               <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                 <Box sx={{ py: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                   
@@ -2070,12 +2108,16 @@ const StockReportContent = () => {
                         <TableCell align="right" sx={{ fontWeight: 800, color: '#334155' }}>
                           {Number(totals.totalWeight || 0).toFixed(3)}
                         </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 900, color: '#c2410c' }}>
+                          ₹{Number(totals.totalValuation || 0).toFixed(2)}
+                        </TableCell>
                       </>
                     ) : reportType === 'item' ? (
                       <>
                         <TableCell colSpan={7} sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0F3B66' }}>Total:</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{Number(totals.totalOpening || 0).toLocaleString()}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>{Number(totals.totalClosing || 0).toLocaleString()}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 900, color: '#c2410c' }}>₹{Number(totals.totalValuation || 0).toFixed(2)}</TableCell>
                       </>
                     ) : reportType === 'department' ? (
                       <>
@@ -2094,6 +2136,8 @@ const StockReportContent = () => {
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#15803d' }}>{Number(totals.totalInWt || 0).toFixed(3)}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#b91c1c' }}>{Number(totals.totalBalQty || 0).toLocaleString()}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: '#b91c1c' }}>{Number(totals.totalBalWt || 0).toFixed(3)}</TableCell>
+                        <TableCell align="right">-</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 900, color: '#c2410c' }}>₹{Number(totals.totalValuation || 0).toFixed(2)}</TableCell>
                       </>
                     )}
                   </TableRow>

@@ -24,7 +24,8 @@ import {
   Badge as BadgeIcon,
   CalendarMonth as CalendarMonthIcon,
   LocalShipping as ShippingIcon,
-  TaskAlt as TaskAltIcon
+  TaskAlt as TaskAltIcon,
+  TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 
 export const MENU_STRUCTURE = [
@@ -70,6 +71,8 @@ export const MENU_STRUCTURE = [
     id: 'transactions',
     icon: <TransactionIcon />,
     children: [
+      { title: 'Sales CRM / Leads', path: '/dashboard/crm', icon: <TrendingUpIcon /> },
+      { title: 'Sales Funnel Dashboard', path: '/dashboard/sales-dashboard', icon: <ReportsIcon /> },
       { title: 'Purchase Order', path: '/dashboard/purchase-orders', icon: <POIcon /> },
       { title: 'Performa Invoice', path: '/dashboard/performa-invoices', icon: <PIIcon /> },
       { title: 'Purchase', path: '/dashboard/inwards', icon: <ListIcon /> },
@@ -133,6 +136,7 @@ export const MENU_STRUCTURE = [
       {
         groupTitle: 'Purchase & Sales Log',
         children: [
+          { title: 'Sales Funnel Dashboard', path: '/dashboard/sales-dashboard', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Pending PO Report', path: '/dashboard/reports/pending-po', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Inward Log', path: '/dashboard/reports/inward', icon: <ReportsIcon fontSize="small" /> },
           { title: 'Outward Log', path: '/dashboard/reports/outward', icon: <ReportsIcon fontSize="small" /> },

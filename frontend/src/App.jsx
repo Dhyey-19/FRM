@@ -59,6 +59,7 @@ import AttendanceManager from './pages/AttendanceManager';
 import SystemMaintenance from './pages/SystemMaintenance';
 import Settings from './pages/Settings';
 import TaskManager from './pages/TaskManager';
+import CRM from './pages/CRM';
 import ErrorBoundary from './components/common/ErrorBoundary';
 function AuthApp() {
   const [currentPage, setCurrentPage] = useState('login');
@@ -166,6 +167,9 @@ function App() {
             <Route path="purchase-order" element={<Navigate to="/dashboard/purchase-orders" replace />} />
             <Route path="performa-invoices" element={<PerformaInvoice />} />
             <Route path="performa-invoice" element={<Navigate to="/dashboard/performa-invoices" replace />} />
+            <Route path="crm" element={<CRM />} />
+            <Route path="sales-crm" element={<Navigate to="/dashboard/crm" replace />} />
+            <Route path="sales-dashboard" element={<CRM initialTab={1} />} />
             <Route path="outwards" element={<OutwardEntry />} />
             <Route path="sales" element={<Navigate to="/dashboard/outwards" replace />} />
             <Route path="subcontract" element={<Subcontract />} />

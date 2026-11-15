@@ -607,12 +607,22 @@ exports.getJobworkStockReport = async (req, res) => {
         d.ITEMCODE AS ItemCode,
         ISNULL(d.SUBCODE, '') AS SubCode,
         i.ItemName,
+        i.Unit,
+        ISNULL(i.Costing, 0) AS Costing,
         SUM(d.QUANTITY) AS OutQty,
         SUM(d.NETWT) AS OutNetWt,
         ISNULL(inwards.InQty, 0) AS InQty,
         ISNULL(inwards.InNetWt, 0) AS InNetWt,
         (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) AS BalQty,
-        (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) AS BalNetWt
+        (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) AS BalNetWt,
+        ROUND(
+          (CASE 
+            WHEN UPPER(i.Unit) IN ('KG', 'KGS') AND (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) != 0 
+              THEN (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0))
+            ELSE (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0))
+          END) * ISNULL(i.Costing, 0),
+          2
+        ) AS Valuation
       FROM JobworkOutDetail d
       INNER JOIN JobworkOutHeader h ON d.JWOUTWARDID = h.ID
       LEFT JOIN LedgerMaster l ON h.LEDGERID = l.Id
@@ -628,7 +638,7 @@ exports.getJobworkStockReport = async (req, res) => {
         INNER JOIN JobworkInHeader jwh ON jwd.JWINWARDID = jwh.ID
         GROUP BY jwh.LEDGERID, jwd.OUTITEMCODE, ISNULL(jwd.OUTSUBCODE, '')
       ) inwards ON l.Id = inwards.LEDGERID AND d.ITEMCODE = inwards.OUTITEMCODE AND ISNULL(d.SUBCODE, '') = inwards.OUTSUBCODE
-      GROUP BY l.Id, l.LedgerName, d.ITEMCODE, ISNULL(d.SUBCODE, ''), i.ItemName, inwards.InQty, inwards.InNetWt
+      GROUP BY l.Id, l.LedgerName, d.ITEMCODE, ISNULL(d.SUBCODE, ''), i.ItemName, i.Costing, i.Unit, inwards.InQty, inwards.InNetWt
       HAVING (SUM(d.QUANTITY) - ISNULL(inwards.InQty, 0)) > 0 OR (SUM(d.NETWT) - ISNULL(inwards.InNetWt, 0)) > 0
       ORDER BY l.LedgerName, i.ItemName, d.ITEMCODE, ISNULL(d.SUBCODE, '')
     `);

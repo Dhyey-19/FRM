@@ -87,11 +87,29 @@ const JobworkStockReport = () => {
           </span>
         )
       },
+      {
+        field: 'Costing',
+        headerName: 'Costing (₹)',
+        width: 110,
+        type: 'number',
+        valueGetter: (value, row) => Number(row?.Costing || 0).toFixed(2)
+      },
+      {
+        field: 'Valuation',
+        headerName: 'Valuation (₹)',
+        width: 135,
+        type: 'number',
+        renderCell: (params) => (
+          <span style={{ fontWeight: 'bold', color: '#c2410c' }}>
+            ₹{Number(params.value || 0).toFixed(2)}
+          </span>
+        )
+      }
     ];
   }, [stockRecords]);
 
   const handleExportPDF = (action = 'download') => {
-    const doc = new jsPDF('portrait');
+    const doc = new jsPDF('landscape');
     
     // Add Company Header
     doc.setFontSize(20);
@@ -109,7 +127,7 @@ const JobworkStockReport = () => {
     // Line separator
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    doc.line(14, 40, 196, 40); // portrait width is 210
+    doc.line(14, 40, 280, 40);
 
     const tableData = stockRecords.map(row => [
       row.LedgerName || '',
@@ -121,11 +139,13 @@ const JobworkStockReport = () => {
       row.InQty,
       row.InNetWt,
       row.BalQty,
-      row.BalNetWt
+      row.BalNetWt,
+      Number(row.Costing || 0).toFixed(2),
+      Number(row.Valuation || 0).toFixed(2)
     ]);
     
     autoTable(doc, {
-      head: [['Job Worker', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt']],
+      head: [['Job Worker', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt', 'Costing (Rs.)', 'Valuation (Rs.)']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -133,12 +153,14 @@ const JobworkStockReport = () => {
       headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [245, 247, 249] },
       columnStyles: {
-        3: { halign: 'right' },
         4: { halign: 'right' },
         5: { halign: 'right' },
         6: { halign: 'right' },
-        7: { halign: 'right', fontStyle: 'bold' },
-        8: { halign: 'right', fontStyle: 'bold' }
+        7: { halign: 'right' },
+        8: { halign: 'right', fontStyle: 'bold' },
+        9: { halign: 'right', fontStyle: 'bold' },
+        10: { halign: 'right' },
+        11: { halign: 'right', fontStyle: 'bold', textColor: [194, 65, 12] }
       },
       margin: { top: 45 }
     });
@@ -185,7 +207,9 @@ const JobworkStockReport = () => {
       'Ret Qty': Number(row.InQty) || 0,
       'Ret Wt': Number(row.InNetWt) || 0,
       'Outs Qty': Number(row.BalQty) || 0,
-      'Outs Wt': Number(row.BalNetWt) || 0
+      'Outs Wt': Number(row.BalNetWt) || 0,
+      'Costing (Rs.)': Number(row.Costing) || 0,
+      'Valuation (Rs.)': Number(row.Valuation) || 0
     }));
     
     const worksheet = XLSX.utils.json_to_sheet(exportData);
