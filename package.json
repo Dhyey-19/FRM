@@ -1,6 +1,6 @@
 {
   "name": "frm-bbp",
-  "version": "20261104.0.0",
+  "version": "20261115.0.0",
   "description": "FRM-BBP",
   "author": "FRM-BBP",
   "workspaces": [
@@ -15,10 +15,10 @@
     "tunnel": "npx localtunnel --port 5000",
     "cert": "node scripts/generate-cert.js",
     "update-version": "node scripts/update-version.js",
-    "dev": "concurrently -k \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "dev": "node scripts/update-version.js && concurrently -k \"npm run dev -w frontend\" \"npm run dev -w backend\"",
     "db:init": "node backend/database/init-db.js",
     "postinstall": "node backend/database/init-db.js",
-    "build:frontend": "npm run build --prefix frontend",
+    "build:frontend": "node scripts/update-version.js && npm run build --prefix frontend",
     "build": "npm run build:frontend"
   },
   "dependencies": {

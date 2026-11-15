@@ -41,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MENU_STRUCTURE } from '../../config/menuConfig';
+import { APP_VERSION } from '../../config/version';
 
 const Sidebar = ({ 
   user, 
@@ -389,6 +390,55 @@ const Sidebar = ({
             return MENU_STRUCTURE.map(renderSection);
           })()}
         </List>
+
+        {/* Version Footer */}
+        <Box sx={{
+          mt: 'auto',
+          px: isCollapsed && !isMobile ? 1 : 2,
+          py: 1.2,
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isCollapsed && !isMobile ? 'center' : 'space-between',
+          bgcolor: 'rgba(0,0,0,0.25)',
+          flexShrink: 0
+        }}>
+          {isCollapsed && !isMobile ? (
+            <Tooltip title={`FRM-BBP v${APP_VERSION}`} placement="right">
+              <Box sx={{ 
+                px: 0.8, 
+                py: 0.2, 
+                borderRadius: 1, 
+                bgcolor: 'rgba(248, 138, 1, 0.15)', 
+                border: '1px solid rgba(248, 138, 1, 0.3)' 
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '10px', color: '#F88A01', fontWeight: 800 }}>
+                  v{APP_VERSION.slice(-2)}
+                </Typography>
+              </Box>
+            </Tooltip>
+          ) : (
+            <>
+              <Typography variant="caption" sx={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px' }}>
+                FRM-BBP
+              </Typography>
+              <Tooltip title="Software Release Version" placement="top">
+                <Box sx={{ 
+                  px: 1, 
+                  py: 0.2, 
+                  borderRadius: 1, 
+                  bgcolor: 'rgba(248, 138, 1, 0.15)', 
+                  border: '1px solid rgba(248, 138, 1, 0.3)',
+                  cursor: 'default'
+                }}>
+                  <Typography variant="caption" sx={{ fontSize: '10.5px', color: '#F88A01', fontWeight: 700 }}>
+                    v{APP_VERSION}
+                  </Typography>
+                </Box>
+              </Tooltip>
+            </>
+          )}
+        </Box>
       </Box>
   );
 

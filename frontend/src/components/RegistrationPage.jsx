@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Cpu, KeyRound, ArrowRight, WifiOff, Mail } from 'lucide-react';
 import logo from '../assets/app_logo.jpeg';
+import { APP_VERSION } from '../config/version';
 
 const RegistrationPage = ({ onRegisterSuccess }) => {
   const [randomNumber, setRandomNumber] = useState('');
@@ -288,6 +289,10 @@ const RegistrationPage = ({ onRegisterSuccess }) => {
         
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: '#94a3b8' }}>
           Please share the Device Verification Number with your administrator to receive your Activation Key.
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '11px', color: '#94a3b8', letterSpacing: '0.5px', fontWeight: 500 }}>
+          FRM-BBP • v{APP_VERSION}
         </div>
       </div>
     </div>

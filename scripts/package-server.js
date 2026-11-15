@@ -2,6 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { builtinModules } = require('module');
 const { execSync } = require('child_process');
+const { updateVersion } = require('./update-version');
+
+// Ensure version is updated to current date
+updateVersion();
 
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
@@ -158,7 +162,8 @@ async function main() {
   // Record clean build version metadata (no Git history required)
   const buildDate = new Date().toISOString().slice(0, 10);
   const versionMeta = {
-    version: rootPkg.version || '1.0.0',
+    version: rootPkg.version ? rootPkg.version.split('.')[0] : '20261115',
+    semver: rootPkg.version || '20261115.0.0',
     buildDate,
     builtAt: new Date().toISOString()
   };

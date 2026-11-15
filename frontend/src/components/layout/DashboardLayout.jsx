@@ -13,12 +13,14 @@ import {
   Button,
   useMediaQuery,
   Badge,
+  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions
 } from '@mui/material';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { APP_VERSION } from '../../config/version';
 import { 
   ArrowBack, 
   ArrowForward, 
@@ -489,11 +491,11 @@ const DashboardLayout = () => {
               >
                 <img 
                   src={user.companyLogo || appLogo} 
-                  alt="FRM" 
+                  alt="FRM-BBP" 
                   style={{ width: 26, height: 26, borderRadius: '50%' }} 
                 />
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: 0.5 }}>
-                  FRM
+                  FRM-BBP
                 </Typography>
               </Box>
 
@@ -577,6 +579,25 @@ const DashboardLayout = () => {
 
             {/* Top Bar Right Actions: Global Alerts Bell & PWA Install Button */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Tooltip title={`FRM-BBP Version ${APP_VERSION} (Click to open System Maintenance)`}>
+                <Chip
+                  label={`v${APP_VERSION}`}
+                  size="small"
+                  onClick={() => navigate('/dashboard/system-maintenance')}
+                  sx={{
+                    display: { xs: 'none', md: 'inline-flex' },
+                    cursor: 'pointer',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    bgcolor: '#f1f5f9',
+                    color: '#0F3B66',
+                    border: '1px solid #cbd5e1',
+                    height: 28,
+                    '&:hover': { bgcolor: '#fff7ed', borderColor: '#F88A01', color: '#ea580c' }
+                  }}
+                />
+              </Tooltip>
+
               <Tooltip title="Application & Database Update">
                 <IconButton 
                   size="small" 

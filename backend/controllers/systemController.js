@@ -50,11 +50,14 @@ function getVersionInfo() {
   const pkgJson = readJsonSafe(path.join(PROJECT_ROOT, 'package.json')) || {};
   const versionJson = readJsonSafe(path.join(PROJECT_ROOT, VERSION_FILE_NAME)) || {};
 
-  const appVersion = versionJson.version || pkgJson.version || '1.0.0';
+  const rawVersion = versionJson.version || pkgJson.version || '20261115';
+  const match = String(rawVersion).match(/^(\d{8})/);
+  const appVersion = match ? match[1] : rawVersion;
   const buildDate = versionJson.buildDate || (versionJson.builtAt ? versionJson.builtAt.slice(0, 10) : 'Production Build');
 
   return {
     appVersion,
+    rawVersion,
     buildDate,
     builtAt: versionJson.builtAt || null,
     isBundledServer: !fs.existsSync(path.join(BACKEND_ROOT, 'controllers'))

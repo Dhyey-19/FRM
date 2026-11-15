@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Lock, LogIn, Eye, EyeOff } from 'lucide-react';
 import logo from '../assets/app_logo.jpeg';
+import { APP_VERSION } from '../config/version';
 
 const LoginPage = ({ onNavigate }) => {
   const navigate = useNavigate();
@@ -131,6 +132,10 @@ const LoginPage = ({ onNavigate }) => {
 
       <div className="auth-links">
         Don't have an account? <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('signup'); }}>Sign up</a>
+      </div>
+
+      <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '11px', color: '#94a3b8', letterSpacing: '0.5px', fontWeight: 500 }}>
+        FRM-BBP • v{APP_VERSION}
       </div>
     </div>
   );

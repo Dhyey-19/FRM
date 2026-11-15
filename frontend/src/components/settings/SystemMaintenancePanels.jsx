@@ -34,6 +34,7 @@ import {
   Code as CodeIcon,
   Security as SecurityIcon
 } from '@mui/icons-material';
+import { APP_VERSION } from '../../config/version';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -95,7 +96,7 @@ export const SystemStatusCards = ({ status, backupsCount = 0 }) => (
               App Version
             </Typography>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-              {status?.appVersion ? `v${status.appVersion}` : 'Production'}
+              {status?.appVersion ? `v${String(status.appVersion).split('.')[0]}` : `v${APP_VERSION}`}
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b' }}>
               {status?.buildDate || 'Production Build'}
