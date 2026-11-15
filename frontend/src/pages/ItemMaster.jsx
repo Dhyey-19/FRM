@@ -43,10 +43,13 @@ import {
   FileUpload as ImportIcon,
   FilterList as FilterListIcon,
   RestartAlt as ResetIcon,
+  Calculate as CalculateIcon,
   WarningAmber,
   HourglassEmpty
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
+import ItemCostingCalculatorModal from '../components/costing/ItemCostingCalculatorModal';
+import { SERIES_DEFINITIONS, SIZES, calculateCosting, DEFAULT_CONFIG } from '../utils/itemCostingEngine';
 import * as XLSX from 'xlsx';
 import { ensureNumericWorksheet } from '../utils/excelHelper';
 
@@ -97,6 +100,11 @@ const ItemMaster = () => {
   const [importResults, setImportResults] = useState({ added: [], updated: [], failed: [] });
   const [showImportResults, setShowImportResults] = useState(false);
   const [resultTab, setResultTab] = useState(0);
+
+  // Costing Calculator Modal State
+  const [costingModalOpen, setCostingModalOpen] = useState(false);
+  const [quickCostingSize, setQuickCostingSize] = useState('12"');
+  const [quickCostingMargin, setQuickCostingMargin] = useState(0);
 
   const [formData, setFormData] = useState({
     Category: 'Inhouse',
@@ -217,7 +225,8 @@ const ItemMaster = () => {
   };
 
   // Filter items based on search and dropdowns
-  const uniqueSeries = ['All', ...new Set(items.map(i => i.Series).filter(Boolean))];
+  const standardSeriesList = SERIES_DEFINITIONS.map(s => s.seriesName);
+  const uniqueSeries = ['All', ...new Set([...standardSeriesList, ...items.map(i => i.Series).filter(Boolean)])];
 
   const filteredItems = items.filter(item => {
     const searchLower = searchTerm.toLowerCase();
@@ -717,6 +726,20 @@ const ItemMaster = () => {
             </Button>
             <Button 
               variant="contained" 
+              startIcon={<CalculateIcon />}
+              onClick={() => setCostingModalOpen(true)}
+              sx={{ 
+                bgcolor: '#be123c', 
+                '&:hover': { bgcolor: '#9f1239' }, 
+                textTransform: 'none', 
+                fontWeight: 600, 
+                boxShadow: 0 
+              }}
+            >
+              Costing Calculator
+            </Button>
+            <Button 
+              variant="contained" 
               startIcon={<AddIcon />}
               onClick={() => handleOpenDialog('add')} 
               disabled={!hasAddPermission()}
@@ -1149,9 +1172,75 @@ const ItemMaster = () => {
             {/* Weights and Pricing */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <TextField label="Std Weight (Kg)" name="StdWeight" type="number" inputProps={{ step: "0.001" }} value={formData.StdWeight} onChange={handleInputChange} fullWidth size="small" />
-              <TextField label="MRP (₹)" name="MRP" type="number" inputProps={{ step: "0.01" }} value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
+              <TextField label="MRP (₹) [Sale Price]" name="MRP" type="number" inputProps={{ step: "0.01" }} value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Costing (₹)" name="Costing" type="number" inputProps={{ step: "0.01" }} value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
             </Box>
+
+            {/* Automated Costing & Sale Price Calculator Helper */}
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#fff1f2', borderColor: '#fecdd3' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#be123c', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <CalculateIcon sx={{ fontSize: 16 }} /> Costing Formula Helper (From Raw Rates)
+                </Typography>
+                <Button 
+                  size="small" 
+                  onClick={() => setCostingModalOpen(true)}
+                  sx={{ textTransform: 'none', fontSize: '0.75rem', color: '#be123c', p: 0, minWidth: 'auto', fontWeight: 600 }}
+                >
+                  Open Full Calculator
+                </Button>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                <FormControl size="small" sx={{ width: 110 }}>
+                  <InputLabel>Size</InputLabel>
+                  <Select
+                    value={quickCostingSize}
+                    label="Size"
+                    onChange={(e) => setQuickCostingSize(e.target.value)}
+                  >
+                    {SIZES.map(s => (
+                      <MenuItem key={s.size} value={s.size}>{s.size}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  size="small"
+                  label="Margin (₹)"
+                  type="number"
+                  value={quickCostingMargin}
+                  onChange={(e) => setQuickCostingMargin(e.target.value)}
+                  sx={{ width: 120, bgcolor: '#ffffff' }}
+                  InputProps={{ startAdornment: <InputAdornment position="start">₹</InputAdornment> }}
+                />
+
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => {
+                    const match = SERIES_DEFINITIONS.find(s => 
+                      formData.Series && (formData.Series.includes(s.seriesKey) || s.seriesName.includes(formData.Series))
+                    ) || SERIES_DEFINITIONS[0];
+
+                    const calc = calculateCosting(DEFAULT_CONFIG, {
+                      [match.seriesKey]: { [quickCostingSize]: Number(quickCostingMargin) || 0 }
+                    });
+                    const sData = calc.series.find(s => s.seriesKey === match.seriesKey);
+                    const szData = sData?.sizes.find(sz => sz.size === quickCostingSize);
+                    if (szData) {
+                      setFormData(prev => ({
+                        ...prev,
+                        Costing: szData.totalCost.toFixed(2),
+                        MRP: szData.salePrice.toFixed(2)
+                      }));
+                    }
+                  }}
+                  sx={{ bgcolor: '#be123c', '&:hover': { bgcolor: '#9f1239' }, textTransform: 'none', fontWeight: 600 }}
+                >
+                  Auto-Calculate Cost & Sale Price
+                </Button>
+              </Box>
+            </Paper>
 
             {/* Stock Quantities */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
@@ -1463,6 +1552,13 @@ const ItemMaster = () => {
           <Button onClick={() => setShowImportResults(false)} variant="contained">Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Item Costing Calculator Modal */}
+      <ItemCostingCalculatorModal
+        open={costingModalOpen}
+        onClose={() => setCostingModalOpen(false)}
+        onItemsUpdated={() => fetchItems()}
+      />
 
     </Box>
   );

@@ -38,6 +38,7 @@ const attendanceRoutes = require('./routes/attendanceRoutes');
 const systemRoutes = require('./routes/systemRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const crmRoutes = require('./routes/crmRoutes');
+const costingRoutes = require('./routes/costingRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -81,6 +82,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/crm', crmRoutes);
+app.use('/api/costing', costingRoutes);
 
 // Test Route
 app.get('/api/health', (req, res) => {

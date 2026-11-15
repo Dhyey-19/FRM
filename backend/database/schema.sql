@@ -641,3 +641,30 @@ CREATE INDEX IF NOT EXISTS "IX_AttendanceMonthlySummary_BiometricCode" ON "Atten
 CREATE INDEX IF NOT EXISTS "IX_AttendanceDailyLog_SummaryId" ON "AttendanceDailyLog" ("SummaryId");
 CREATE INDEX IF NOT EXISTS "IX_AttendanceDailyLog_MonthYear_BiometricCode" ON "AttendanceDailyLog" ("MonthYear", "BiometricCode");
 
+-- Table: ItemCostingConfig
+CREATE TABLE IF NOT EXISTS "ItemCostingConfig" (
+    "Id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "ConfigKey" TEXT NOT NULL UNIQUE,
+    "PipeRatePerMeter" REAL DEFAULT 23.0,
+    "BrassRatePerKg" REAL DEFAULT 950.0,
+    "HcpPipeRatePerMeter" REAL DEFAULT 27.0,
+    "NylonInsertRate" REAL DEFAULT 1.5,
+    "NylonNutRate" REAL DEFAULT 2.5,
+    "SS201NutRate" REAL DEFAULT 5.25,
+    "SS304NutRate" REAL DEFAULT 8.0,
+    "SSInnerRate" REAL DEFAULT 2.5,
+    "BrassInsertConv" REAL DEFAULT 300.0,
+    "BrassInsertWeight" REAL DEFAULT 0.004,
+    "BrassNutNConv" REAL DEFAULT 230.0,
+    "BrassNutNWeight" REAL DEFAULT 0.011,
+    "BrassNutPCConv" REAL DEFAULT 350.0,
+    "BrassNutPCWeight" REAL DEFAULT 0.012,
+    "CapRate" REAL DEFAULT 2.5,
+    "KeyRate" REAL DEFAULT 1.0,
+    "WasherRate" REAL DEFAULT 0.8,
+    "LabourRate" REAL DEFAULT 2.0,
+    "PackingRate" REAL DEFAULT 1.0,
+    "MarginsJson" TEXT,
+    "UpdatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
