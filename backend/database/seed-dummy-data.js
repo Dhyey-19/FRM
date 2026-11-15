@@ -352,13 +352,12 @@ async function seedDummyData(dbFilePath) {
     INSERT INTO "StockTransfer" (
       "MoveID", "TransferID", "MoveDate", "FromDeptID", "ToDeptID", "OutItemCode", "OutPcs",
       "OutWeight", "InItemCode", "InPcs", "InWeight", "ScrapItemCode", "ScrapPcs", "ScrapWeight",
-      "LossWeight", "Remarks", "CreatedBy", "UpdatedBy", "Rate", "Amount", "LossRate",
-      "LossAmount", "Unit", "ManualChallanNo"
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      "LossWeight", "Remarks", "CreatedBy", "UpdatedBy", "Unit", "ManualChallanNo"
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   [
-    [1, 'ST-26-001', '2026-10-10', 1, 3, 'RM-BR01', 50.000, 207.500, 'SF-SP01', 450.000, 171.000, 'SCRAP-BR', 0.000, 34.200, 2.300, 'Spindle rod turning movement', 'operator', 'admin', 480.00, 99600.00, 0.00, 0.00, 'PCS', 'CH-1001'],
-    [2, 'ST-26-002', '2026-10-19', 5, 6, 'FG-BV01', 50.000, 26.000, 'FG-BV01', 50.000, 26.000, null, 0.000, 0.000, 0.000, 'Transfer tested goods to Finished Goods store', 'operator', 'manager', 320.00, 16000.00, 0.00, 0.00, 'PCS', 'CH-1002']
+    [1, 'ST-26-001', '2026-10-10', 1, 3, 'RM-BR01', 50.000, 207.500, 'SF-SP01', 450.000, 171.000, 'SCRAP-BR', 0.000, 34.200, 2.300, 'Spindle rod turning movement', 'operator', 'admin', 'PCS', 'CH-1001'],
+    [2, 'ST-26-002', '2026-10-19', 5, 6, 'FG-BV01', 50.000, 26.000, 'FG-BV01', 50.000, 26.000, null, 0.000, 0.000, 0.000, 'Transfer tested goods to Finished Goods store', 'operator', 'manager', 'PCS', 'CH-1002']
   ].forEach(row => insertStockTransfer.run(...row));
 
   // --- 24. VoucherEntry ---

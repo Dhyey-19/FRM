@@ -952,9 +952,9 @@ GO
 
 -- Data for table: StockTransfer (2 rows)
 SET IDENTITY_INSERT [dbo].[StockTransfer] ON;
-INSERT INTO [dbo].[StockTransfer] ([MoveID], [TransferID], [MoveDate], [FromDeptID], [ToDeptID], [OutItemCode], [OutPcs], [OutWeight], [InItemCode], [InPcs], [InWeight], [ScrapItemCode], [ScrapPcs], [ScrapWeight], [LossWeight], [Remarks], [CreatedBy], [UpdatedBy], [Rate], [Amount], [LossRate], [LossAmount], [Unit], [ManualChallanNo], [OutSubCode], [InSubCode], [ScrapSubCode]) VALUES
-    (1, N'ST-26-001', N'2026-10-10', 1, 3, N'RM-BR01', 50, 207.5, N'SF-SP01', 450, 171, N'SCRAP-BR', 0, 34.2, 2.3, N'Spindle rod turning movement', N'operator', N'admin', 480, 99600, 0, 0, N'PCS', N'CH-1001', N'', N'', N''),
-    (2, N'ST-26-002', N'2026-10-19', 5, 6, N'FG-BV01', 50, 26, N'FG-BV01', 50, 26, NULL, 0, 0, 0, N'Transfer tested goods to Finished Goods store', N'operator', N'manager', 320, 16000, 0, 0, N'PCS', N'CH-1002', N'', N'', N'');
+INSERT INTO [dbo].[StockTransfer] ([MoveID], [TransferID], [MoveDate], [FromDeptID], [ToDeptID], [OutItemCode], [OutPcs], [OutWeight], [InItemCode], [InPcs], [InWeight], [ScrapItemCode], [ScrapPcs], [ScrapWeight], [LossWeight], [Remarks], [CreatedBy], [UpdatedBy], [Unit], [ManualChallanNo], [OutSubCode], [InSubCode], [ScrapSubCode]) VALUES
+    (1, N'ST-26-001', N'2026-10-10', 1, 3, N'RM-BR01', 50, 207.5, N'SF-SP01', 450, 171, N'SCRAP-BR', 0, 34.2, 2.3, N'Spindle rod turning movement', N'operator', N'admin', N'PCS', N'CH-1001', N'', N'', N''),
+    (2, N'ST-26-002', N'2026-10-19', 5, 6, N'FG-BV01', 50, 26, N'FG-BV01', 50, 26, NULL, 0, 0, 0, N'Transfer tested goods to Finished Goods store', N'operator', N'manager', N'PCS', N'CH-1002', N'', N'', N'');
 SET IDENTITY_INSERT [dbo].[StockTransfer] OFF;
 GO
 
