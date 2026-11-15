@@ -20,7 +20,9 @@ import {
   Snackbar,
   Alert,
   ToggleButtonGroup,
-  ToggleButton
+  ToggleButton,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { 
   Notifications as NotificationsIcon,
@@ -36,7 +38,10 @@ import {
   Close as CloseIcon,
   TaskAlt as ClosedIcon,
   Assignment as TaskIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  TrendingUp as TrendingUpIcon,
+  Delete as DeleteIcon,
+  DeleteSweep as DeleteSweepIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -53,6 +58,8 @@ const NotificationLogs = () => {
     overduePod: 0,
     shortfall: 0,
     dispatchReady: 0,
+    tasks: 0,
+    crm: 0,
     critical: 0,
     warning: 0
   });
@@ -66,6 +73,16 @@ const NotificationLogs = () => {
   const [selectedNotif, setSelectedNotif] = useState(null);
   const [confirmInput, setConfirmInput] = useState('');
   const [closingInProgress, setClosingInProgress] = useState(false);
+
+  // Delete Single Dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedDeleteNotif, setSelectedDeleteNotif] = useState(null);
+  const [deletingInProgress, setDeletingInProgress] = useState(false);
+
+  // Delete All Dialog state
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [deleteAllScopeAll, setDeleteAllScopeAll] = useState(false);
+  const [deletingAllInProgress, setDeletingAllInProgress] = useState(false);
 
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -123,10 +140,9 @@ const NotificationLogs = () => {
         setCloseDialogOpen(false);
         setSelectedNotif(null);
         setConfirmInput('');
-        // Refresh notifications to reflect closed status and timestamp
         await fetchLogs();
       } else {
-        const errData = await response.json();
+        const errData = await response.json().catch(() => ({}));
         setSnackbar({ open: true, message: errData.message || 'Failed to close notification.', severity: 'error' });
       }
     } catch (err) {
@@ -134,6 +150,88 @@ const NotificationLogs = () => {
       setSnackbar({ open: true, message: 'Server connection error.', severity: 'error' });
     } finally {
       setClosingInProgress(false);
+    }
+  };
+
+  // Open Delete Single dialog
+  const handleOpenDeleteDialog = (item, e) => {
+    if (e) e.stopPropagation();
+    setSelectedDeleteNotif(item);
+    setDeleteDialogOpen(true);
+  };
+
+  // Confirm Delete Single notification
+  const handleConfirmDeleteSingle = async () => {
+    if (!selectedDeleteNotif) return;
+    setDeletingInProgress(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/dashboard/notifications/${encodeURIComponent(selectedDeleteNotif.id)}`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: selectedDeleteNotif.type,
+            title: selectedDeleteNotif.title,
+            message: selectedDeleteNotif.message
+          })
+        }
+      );
+
+      if (response.ok) {
+        setSnackbar({ open: true, message: `Notification "${selectedDeleteNotif.title}" deleted.`, severity: 'success' });
+        setDeleteDialogOpen(false);
+        setSelectedDeleteNotif(null);
+        await fetchLogs();
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        setSnackbar({ open: true, message: errData.message || 'Failed to delete notification.', severity: 'error' });
+      }
+    } catch (err) {
+      console.error('Error deleting notification:', err);
+      setSnackbar({ open: true, message: 'Server connection error.', severity: 'error' });
+    } finally {
+      setDeletingInProgress(false);
+    }
+  };
+
+  // Open Delete All dialog
+  const handleOpenDeleteAllDialog = () => {
+    setDeleteAllScopeAll(false);
+    setDeleteAllDialogOpen(true);
+  };
+
+  // Confirm Delete All notifications
+  const handleConfirmDeleteAll = async () => {
+    setDeletingAllInProgress(true);
+    try {
+      const payload = deleteAllScopeAll
+        ? { scope: 'all' }
+        : { ids: filteredNotifications.map(n => n.id) };
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/dashboard/notifications/delete-all`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setSnackbar({ open: true, message: result.message || 'Notifications deleted successfully.', severity: 'success' });
+        setDeleteAllDialogOpen(false);
+        await fetchLogs();
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        setSnackbar({ open: true, message: errData.message || 'Failed to delete notifications.', severity: 'error' });
+      }
+    } catch (err) {
+      console.error('Error deleting notifications:', err);
+      setSnackbar({ open: true, message: 'Server error.', severity: 'error' });
+    } finally {
+      setDeletingAllInProgress(false);
     }
   };
 
@@ -147,6 +245,7 @@ const NotificationLogs = () => {
 
   const categoryCounts = {
     all: statusFilteredList.length,
+    crm: statusFilteredList.filter(n => (n.type || '').startsWith('crm_')).length,
     tasks: statusFilteredList.filter(n => n.type === 'task_notification').length,
     reorder: statusFilteredList.filter(n => n.type === 'reorder').length,
     overdue_pod: statusFilteredList.filter(n => n.type === 'overdue_pod').length,
@@ -165,6 +264,7 @@ const NotificationLogs = () => {
 
   const filteredNotifications = statusFilteredList.filter(item => {
     // Type tab filter
+    if (currentTab === 'crm' && !(item.type || '').startsWith('crm_')) return false;
     if (currentTab === 'task_notification' && item.type !== 'task_notification') return false;
     if (currentTab === 'reorder' && item.type !== 'reorder') return false;
     if (currentTab === 'overdue_pod' && item.type !== 'overdue_pod') return false;
@@ -179,7 +279,7 @@ const NotificationLogs = () => {
       const matchTitle = (item.title || '').toLowerCase().includes(term);
       const matchMsg = (item.message || '').toLowerCase().includes(term);
       const matchItem = (item.itemName || '').toLowerCase().includes(term) || (item.itemCode || '').toLowerCase().includes(term);
-      const matchParty = (item.partyName || item.vendorName || '').toLowerCase().includes(term);
+      const matchParty = (item.partyName || item.vendorName || item.customer || '').toLowerCase().includes(term);
       const matchOutward = (item.outwardNo || '').toLowerCase().includes(term);
       return matchTitle || matchMsg || matchItem || matchParty || matchOutward;
     }
@@ -206,6 +306,20 @@ const NotificationLogs = () => {
     }
   };
 
+  const getTabLabelName = () => {
+    switch (currentTab) {
+      case 'crm': return 'CRM Alerts';
+      case 'task_notification': return 'Task Alerts';
+      case 'reorder': return 'Low Stock Alerts';
+      case 'overdue_pod': return 'Overdue POD Alerts';
+      case 'shortfall': return 'PO Shortfall Alerts';
+      case 'dispatch_ready': return 'Ready to Dispatch Alerts';
+      case 'receivables': return 'Overdue Receivables';
+      case 'payables': return 'Overdue Payables';
+      default: return 'All Alerts';
+    }
+  };
+
   return (
     <Box>
       {/* Header */}
@@ -215,11 +329,11 @@ const NotificationLogs = () => {
             <NotificationsIcon sx={{ fontSize: 36, color: '#0F3B66' }} /> Notification & Alert Logs
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b', mt: 0.4 }}>
-            Real-time activity log tracking low stock reorder thresholds, overdue receivables, and payment obligations.
+            Real-time activity log tracking CRM leads & follow-ups, low stock reorders, overdue receivables, and payment obligations.
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <Button
             variant="outlined"
             onClick={() => navigate('/dashboard')}
@@ -274,6 +388,14 @@ const NotificationLogs = () => {
             }}
           >
             <Tab label={`All (${categoryCounts.all || 0})`} value="all" />
+            {categoryCounts.crm > 0 && (
+              <Tab 
+                label={`CRM Alerts (${categoryCounts.crm})`} 
+                value="crm"
+                icon={<TrendingUpIcon sx={{ fontSize: 16 }} />}
+                iconPosition="start"
+              />
+            )}
             {categoryCounts.tasks > 0 && (
               <Tab label={`Task Alerts (${categoryCounts.tasks})`} value="task_notification" />
             )}
@@ -298,10 +420,10 @@ const NotificationLogs = () => {
           </Tabs>
         </Box>
 
-        {/* Status Filter & Search Toolbar */}
+        {/* Status Filter & Search & Delete All Toolbar */}
         <Box sx={{ px: { xs: 1.5, sm: 3 }, py: 1.5, bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           {/* Status Toggle Buttons (Open / Closed / All) */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
             <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Status Filter:
             </Typography>
@@ -342,23 +464,47 @@ const NotificationLogs = () => {
             </ToggleButtonGroup>
           </Box>
 
-          {/* Search Box */}
-          <Box sx={{ width: { xs: '100%', sm: 260 } }}>
-            <TextField
+          {/* Right Toolbar: Delete All Button & Search Box */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: { xs: '100%', md: 'auto' }, flexWrap: 'wrap' }}>
+            {/* Delete All Option */}
+            <Button
+              variant="outlined"
+              color="error"
               size="small"
-              fullWidth
-              placeholder="Search notifications..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{ 
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" fontSize="small" />
-                  </InputAdornment>
-                ) 
+              startIcon={<DeleteSweepIcon />}
+              onClick={handleOpenDeleteAllDialog}
+              disabled={filteredNotifications.length === 0}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                borderRadius: 1.5,
+                px: 1.5,
+                borderColor: '#fca5a5',
+                bgcolor: '#ffffff',
+                '&:hover': { bgcolor: '#fef2f2', borderColor: '#ef4444' }
               }}
-              sx={{ bgcolor: '#ffffff', borderRadius: 1.5 }}
-            />
+            >
+              Delete All ({filteredNotifications.length})
+            </Button>
+
+            {/* Search Box */}
+            <Box sx={{ width: { xs: '100%', sm: 240 } }}>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Search notifications..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{ 
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" fontSize="small" />
+                    </InputAdornment>
+                  ) 
+                }}
+                sx={{ bgcolor: '#ffffff', borderRadius: 1.5 }}
+              />
+            </Box>
           </Box>
         </Box>
 
@@ -378,7 +524,7 @@ const NotificationLogs = () => {
                 {searchTerm 
                   ? 'No notifications match your search query.' 
                   : (statusFilter === 'open' 
-                      ? 'There are currently no open notifications. All items, PODs, and payments are up to date!' 
+                      ? 'There are currently no open notifications. All items, CRM inquiries, PODs, and payments are up to date!' 
                       : 'No notifications in this view.')}
               </Typography>
             </Box>
@@ -387,6 +533,7 @@ const NotificationLogs = () => {
               {filteredNotifications.map((item) => {
                 const isCritical = item.severity === 'critical';
                 const isReorder = item.type === 'reorder';
+                const isCrm = (item.type || '').startsWith('crm_');
                 const isClosed = (item.status || '').toLowerCase() === 'closed';
                 
                 return (
@@ -396,8 +543,8 @@ const NotificationLogs = () => {
                       p: 2.5, 
                       borderRadius: 2.5, 
                       border: '1px solid',
-                      borderColor: isClosed ? '#cbd5e1' : (isCritical ? '#fecaca' : (isReorder ? '#fed7aa' : '#e2e8f0')),
-                      bgcolor: isClosed ? '#f8fafc' : (isCritical ? '#fffbfa' : (isReorder ? '#fffdfa' : '#ffffff')),
+                      borderColor: isClosed ? '#cbd5e1' : (isCritical ? '#fecaca' : (isCrm ? '#bfdbfe' : (isReorder ? '#fed7aa' : '#e2e8f0'))),
+                      bgcolor: isClosed ? '#f8fafc' : (isCritical ? '#fffbfa' : (isCrm ? '#f8fafc' : (isReorder ? '#fffdfa' : '#ffffff'))),
                       transition: 'all 0.2s ease',
                       opacity: isClosed ? 0.85 : 1,
                       '&:hover': {
@@ -410,8 +557,20 @@ const NotificationLogs = () => {
                       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flex: 1, minWidth: 280 }}>
                         <Avatar 
                           sx={{ 
-                            bgcolor: isClosed ? '#e2e8f0' : (isCritical ? '#fee2e2' : (isReorder ? '#ffedd5' : '#eff6ff')), 
-                            color: isClosed ? '#64748b' : (isCritical ? '#ef4444' : (isReorder ? '#ea580c' : '#2563eb')), 
+                            bgcolor: isClosed 
+                              ? '#e2e8f0' 
+                              : (isCritical 
+                                ? '#fee2e2' 
+                                : (isCrm 
+                                  ? (item.type === 'crm_today' ? '#ffedd5' : '#eff6ff') 
+                                  : (isReorder ? '#ffedd5' : '#eff6ff'))), 
+                            color: isClosed 
+                              ? '#64748b' 
+                              : (isCritical 
+                                ? '#ef4444' 
+                                : (isCrm 
+                                  ? (item.type === 'crm_today' ? '#ea580c' : '#2563eb') 
+                                  : (isReorder ? '#ea580c' : '#2563eb'))), 
                             width: 44, 
                             height: 44, 
                             borderRadius: 2,
@@ -420,6 +579,8 @@ const NotificationLogs = () => {
                         >
                           {isClosed ? (
                             <ClosedIcon />
+                          ) : isCrm ? (
+                            <TrendingUpIcon />
                           ) : item.type === 'task_notification' ? (
                             <TaskIcon />
                           ) : isReorder ? (
@@ -443,20 +604,20 @@ const NotificationLogs = () => {
                                 height: 22, 
                                 fontSize: '0.72rem', 
                                 fontWeight: 700,
-                                bgcolor: isClosed ? '#e2e8f0' : (isCritical ? '#fee2e2' : (isReorder ? '#ffedd5' : '#eff6ff')),
-                                color: isClosed ? '#475569' : (isCritical ? '#dc2626' : (isReorder ? '#c2410c' : '#1d4ed8'))
+                                bgcolor: isClosed ? '#e2e8f0' : (isCritical ? '#fee2e2' : (isCrm ? '#e0f2fe' : (isReorder ? '#ffedd5' : '#eff6ff'))),
+                                color: isClosed ? '#475569' : (isCritical ? '#dc2626' : (isCrm ? '#0369a1' : (isReorder ? '#c2410c' : '#1d4ed8')))
                               }} 
                             />
                             
                             {!isClosed && (
                               <Chip 
-                                label={isCritical ? 'CRITICAL' : 'WARNING'} 
+                                label={isCritical ? 'CRITICAL' : (item.severity === 'info' ? 'INFO' : 'WARNING')} 
                                 size="small" 
                                 sx={{ 
                                   height: 20, 
                                   fontSize: '0.65rem', 
                                   fontWeight: 800,
-                                  bgcolor: isCritical ? '#dc2626' : '#f59e0b',
+                                  bgcolor: isCritical ? '#dc2626' : (item.severity === 'info' ? '#6366f1' : '#f59e0b'),
                                   color: '#ffffff'
                                 }} 
                               />
@@ -520,6 +681,37 @@ const NotificationLogs = () => {
                             </Box>
                           )}
 
+                          {/* CRM Details */}
+                          {isCrm && !isClosed && (
+                            <Box sx={{ display: 'flex', gap: 2, mt: 1.5, pt: 1, borderTop: '1px dashed #e2e8f0', flexWrap: 'wrap', alignItems: 'center' }}>
+                              {item.customer && (
+                                <Typography variant="caption" sx={{ color: '#0F3B66', fontWeight: 700 }}>
+                                  Customer: <strong>{item.customer}</strong>
+                                </Typography>
+                              )}
+                              {item.stage && (
+                                <Typography variant="caption" sx={{ color: '#475569' }}>
+                                  Stage: <strong>{item.stage}</strong>
+                                </Typography>
+                              )}
+                              {Number(item.dealValue) > 0 && (
+                                <Typography variant="caption" sx={{ color: '#16a34a', fontWeight: 700 }}>
+                                  Deal Value: ₹{Number(item.dealValue).toLocaleString('en-IN')}
+                                </Typography>
+                              )}
+                              {item.followUpDate && (
+                                <Typography variant="caption" sx={{ color: item.type === 'crm_overdue' ? '#dc2626' : '#ea580c', fontWeight: 600 }}>
+                                  Follow-up: {item.followUpDate} {item.overdueDays ? `(${item.overdueDays}d overdue)` : ''}
+                                </Typography>
+                              )}
+                              {item.nextAction && (
+                                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                  Next Action: <em>{item.nextAction}</em>
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+
                           {/* Reorder Details */}
                           {isReorder && !isClosed && (
                             <Box sx={{ display: 'flex', gap: 2, mt: 1.5, pt: 1, borderTop: '1px dashed #e2e8f0', flexWrap: 'wrap' }}>
@@ -562,7 +754,7 @@ const NotificationLogs = () => {
                         </Box>
                       </Box>
 
-                      {/* Right Action Buttons: View Link + Close Notification */}
+                      {/* Right Action Buttons: View Link + Close + Delete */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', alignSelf: { xs: 'stretch', sm: 'center' } }}>
                         {item.actionLink && (
                           <Button 
@@ -580,7 +772,13 @@ const NotificationLogs = () => {
                               '&:hover': { bgcolor: '#F88A01' }
                             }}
                           >
-                            {isReorder ? 'Manage Item' : (item.type === 'overdue_pod' ? 'Enter POD' : (item.type === 'task_notification' ? 'View Task' : 'View Invoices'))}
+                            {isCrm 
+                              ? 'View in CRM' 
+                              : (isReorder 
+                                ? 'Manage Item' 
+                                : (item.type === 'overdue_pod' 
+                                  ? 'Enter POD' 
+                                  : (item.type === 'task_notification' ? 'View Task' : 'View Invoices')))}
                           </Button>
                         )}
 
@@ -588,19 +786,19 @@ const NotificationLogs = () => {
                           <Button 
                             variant="outlined" 
                             size="small"
-                            color="error"
+                            color="warning"
                             startIcon={<CloseIcon fontSize="small" />}
                             onClick={(e) => handleOpenCloseDialog(item, e)}
                             sx={{ 
-                              borderColor: '#fca5a5',
-                              color: '#dc2626', 
+                              borderColor: '#fed7aa',
+                              color: '#ea580c', 
                               textTransform: 'none', 
                               fontWeight: 700,
                               borderRadius: 2,
-                              px: 1.8,
+                              px: 1.5,
                               '&:hover': { 
-                                borderColor: '#dc2626',
-                                bgcolor: '#fef2f2' 
+                                borderColor: '#ea580c',
+                                bgcolor: '#fff7ed' 
                               }
                             }}
                           >
@@ -615,6 +813,23 @@ const NotificationLogs = () => {
                             sx={{ borderColor: '#cbd5e1', color: '#64748b', fontWeight: 600 }}
                           />
                         )}
+
+                        {/* Individual Delete Option */}
+                        <Tooltip title="Delete this notification">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleOpenDeleteDialog(item, e)}
+                            sx={{
+                              color: '#dc2626',
+                              border: '1px solid #fee2e2',
+                              borderRadius: 2,
+                              p: 0.7,
+                              '&:hover': { bgcolor: '#fef2f2', borderColor: '#fca5a5' }
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
                       </Box>
                     </Box>
                   </Paper>
@@ -637,7 +852,7 @@ const NotificationLogs = () => {
         </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
-            Are you sure you want to close this notification?
+            Are you sure you want to mark this notification as closed?
           </Typography>
 
           <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', mb: 2 }}>
@@ -685,7 +900,7 @@ const NotificationLogs = () => {
           </Button>
           <Button
             variant="contained"
-            color="error"
+            color="warning"
             onClick={handleConfirmClose}
             disabled={confirmInput.trim().toLowerCase() !== 'close' || closingInProgress}
             sx={{
@@ -696,6 +911,121 @@ const NotificationLogs = () => {
             }}
           >
             {closingInProgress ? <CircularProgress size={20} color="inherit" /> : 'Confirm Close'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog to Delete Single Notification */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deletingInProgress && setDeleteDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DeleteIcon sx={{ color: '#dc2626' }} /> Delete Notification
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
+            Are you sure you want to permanently delete this notification?
+          </Typography>
+
+          <Box sx={{ p: 1.5, bgcolor: '#fef2f2', borderRadius: 2, border: '1px solid #fee2e2', mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#991b1b' }}>
+              {selectedDeleteNotif?.title}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#7f1d1d', display: 'block', mt: 0.5 }}>
+              Category: <strong>{selectedDeleteNotif?.category}</strong>
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
+              {selectedDeleteNotif?.message}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, bgcolor: '#f8fafc' }}>
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deletingInProgress}
+            sx={{ color: '#64748b', textTransform: 'none', fontWeight: 600 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDeleteSingle}
+            disabled={deletingInProgress}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              borderRadius: 2,
+              px: 2.5
+            }}
+          >
+            {deletingInProgress ? <CircularProgress size={20} color="inherit" /> : 'Delete Notification'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog to Delete All Notifications */}
+      <Dialog
+        open={deleteAllDialogOpen}
+        onClose={() => !deletingAllInProgress && setDeleteAllDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DeleteSweepIcon sx={{ color: '#dc2626' }} /> Delete All Notifications
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body1" sx={{ color: '#1e293b', fontWeight: 600, mb: 1.5 }}>
+            You are about to delete {deleteAllScopeAll ? `all ${summary.total}` : `${filteredNotifications.length}`} notification(s).
+          </Typography>
+
+          <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
+            {!deleteAllScopeAll 
+              ? `This will remove all ${filteredNotifications.length} notifications currently visible in "${getTabLabelName()}" (${statusFilter.toUpperCase()}).`
+              : `This will clear and delete all open and closed notifications across the entire system.`}
+          </Typography>
+
+          <Paper sx={{ p: 1.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={deleteAllScopeAll}
+                  onChange={(e) => setDeleteAllScopeAll(e.target.checked)}
+                  color="error"
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontWeight: 600, color: deleteAllScopeAll ? '#dc2626' : '#334155' }}>
+                  Delete ALL alerts across all categories ({summary.total} total)
+                </Typography>
+              }
+            />
+          </Paper>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, bgcolor: '#f8fafc' }}>
+          <Button 
+            onClick={() => setDeleteAllDialogOpen(false)}
+            disabled={deletingAllInProgress}
+            sx={{ color: '#64748b', textTransform: 'none', fontWeight: 600 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDeleteAll}
+            disabled={deletingAllInProgress}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              borderRadius: 2,
+              px: 2.5
+            }}
+          >
+            {deletingAllInProgress ? <CircularProgress size={20} color="inherit" /> : 'Confirm Delete All'}
           </Button>
         </DialogActions>
       </Dialog>

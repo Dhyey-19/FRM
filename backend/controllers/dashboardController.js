@@ -1126,9 +1126,124 @@ exports.getDashboardNotifications = async (req, res) => {
       console.warn('Error fetching TaskNotifications:', tnErr.message);
     }
 
-    // Map status and lock generated timestamp for all notifications
+    // 1g. Fetch CRM Leads Alerts (Overdue follow-ups, Due today, Stuck inquiries, Missing next action)
+    try {
+      const crmLeadsResult = await pool.request().query(`
+        SELECT 
+          LeadID,
+          CONVERT(VARCHAR(10), DateAdded, 120) AS DateAdded,
+          Customer,
+          ISNULL(Country, 'India') AS Country,
+          ISNULL(Contact, '') AS Contact,
+          ISNULL(ProductRequirement, '') AS ProductRequirement,
+          ISNULL(ItemCode, '') AS ItemCode,
+          Stage,
+          ISNULL(NextAction, '') AS NextAction,
+          CONVERT(VARCHAR(10), FollowUpDate, 120) AS FollowUpDate,
+          ISNULL(DealValue, 0) AS DealValue,
+          ISNULL(Source, '') AS Source,
+          DATEDIFF(day, DateAdded, GETDATE()) AS AgeDays,
+          DATEDIFF(day, FollowUpDate, GETDATE()) AS OverdueDays
+        FROM CRM_Leads
+        WHERE LOWER(Stage) NOT IN ('won', 'lost')
+      `);
+
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      (crmLeadsResult.recordset || []).forEach(lead => {
+        const leadId = lead.LeadID;
+        const customer = (lead.Customer || '').trim();
+        const stage = lead.Stage || 'New';
+        const dealVal = parseFloat(lead.DealValue) || 0;
+        const valFormatted = dealVal > 0 ? `₹${Math.round(dealVal).toLocaleString('en-IN')}` : '';
+        const fu = lead.FollowUpDate;
+        const na = (lead.NextAction || '').trim();
+        const reqStr = lead.ProductRequirement || lead.ItemCode || '';
+
+        // 1g-i. Overdue Follow-up
+        if (fu && fu < todayStr) {
+          const diffDays = Math.max(1, parseInt(lead.OverdueDays, 10) || 1);
+          notifications.push({
+            id: `crm_overdue_${leadId}`,
+            type: 'crm_overdue',
+            category: 'CRM Follow-up Overdue',
+            severity: diffDays > 3 ? 'critical' : 'warning',
+            title: `CRM Follow-up Overdue (${diffDays}d late): ${customer} [${stage}]`,
+            message: `Follow-up with ${customer} was scheduled for ${fu} (${diffDays} days ago). Next Action: "${na || 'Follow up with customer'}".${valFormatted ? ` Deal Value: ${valFormatted}.` : ''}${reqStr ? ` Requirement: ${reqStr}.` : ''}`,
+            customer: customer,
+            stage: stage,
+            dealValue: dealVal,
+            followUpDate: fu,
+            nextAction: na,
+            overdueDays: diffDays,
+            timestamp: new Date().toISOString(),
+            actionLink: `/dashboard/crm?search=${encodeURIComponent(customer)}`
+          });
+        }
+        // 1g-ii. Due Today Follow-up
+        else if (fu && fu === todayStr) {
+          notifications.push({
+            id: `crm_today_${leadId}`,
+            type: 'crm_today',
+            category: 'CRM Due Today',
+            severity: 'warning',
+            title: `CRM Follow-up Due Today: ${customer} [${stage}]`,
+            message: `Sales follow-up with ${customer} is scheduled for today! Next Action: "${na || 'Contact customer'}".${valFormatted ? ` Deal Value: ${valFormatted}.` : ''}${reqStr ? ` Requirement: ${reqStr}.` : ''}`,
+            customer: customer,
+            stage: stage,
+            dealValue: dealVal,
+            followUpDate: fu,
+            nextAction: na,
+            timestamp: new Date().toISOString(),
+            actionLink: `/dashboard/crm?search=${encodeURIComponent(customer)}`
+          });
+        }
+        // 1g-iii. Missing Next Action / Follow-up Date
+        else if (!na || !fu) {
+          notifications.push({
+            id: `crm_no_action_${leadId}`,
+            type: 'crm_no_action',
+            category: 'CRM Action Required',
+            severity: 'warning',
+            title: `CRM Action Required: ${customer} [${stage}]`,
+            message: `Inquiry from ${customer} (${stage}) is missing a Next Action or Follow-up Date.${valFormatted ? ` Deal Value: ${valFormatted}.` : ''} Plan next step to keep inquiry moving.`,
+            customer: customer,
+            stage: stage,
+            dealValue: dealVal,
+            timestamp: new Date().toISOString(),
+            actionLink: `/dashboard/crm?search=${encodeURIComponent(customer)}`
+          });
+        }
+        // 1g-iv. Stuck Inquiry (>21 days)
+        else if (parseInt(lead.AgeDays, 10) > 21) {
+          notifications.push({
+            id: `crm_stuck_${leadId}`,
+            type: 'crm_stuck',
+            category: 'CRM Stuck Lead (>21d)',
+            severity: 'info',
+            title: `CRM Stuck Inquiry (${lead.AgeDays}d open): ${customer} [${stage}]`,
+            message: `Inquiry from ${customer} has been open in stage "${stage}" for ${lead.AgeDays} days.${valFormatted ? ` Deal Value: ${valFormatted}.` : ''} Review proposal or follow up with buyer.`,
+            customer: customer,
+            stage: stage,
+            dealValue: dealVal,
+            timestamp: new Date().toISOString(),
+            actionLink: `/dashboard/crm?search=${encodeURIComponent(customer)}`
+          });
+        }
+      });
+    } catch (crmErr) {
+      console.error('Error fetching CRM notifications:', crmErr);
+    }
+
+    // Map status and lock generated timestamp for all notifications (excluding Deleted)
+    const activeNotifications = [];
     for (const n of notifications) {
       const existing = statusMap.get(n.id);
+      if (existing && existing.Status === 'Deleted') {
+        // Suppress deleted notification
+        continue;
+      }
+
       if (existing) {
         n.status = existing.Status || 'Open';
         n.generatedAt = existing.GeneratedAt ? new Date(existing.GeneratedAt).toISOString() : n.timestamp;
@@ -1161,12 +1276,13 @@ exports.getDashboardNotifications = async (req, res) => {
           // ignore duplicate insert errors
         }
       }
+      activeNotifications.push(n);
     }
 
     // Include closed alerts from historical database records if not already in dynamic list
     closedRowsList.forEach(r => {
-      if (!notifications.some(x => x.id === r.NotificationId)) {
-        notifications.push({
+      if (r.Status !== 'Deleted' && !activeNotifications.some(x => x.id === r.NotificationId)) {
+        activeNotifications.push({
           id: r.NotificationId,
           type: r.NotificationType || 'general',
           category: r.NotificationType ? r.NotificationType.replace(/_/g, ' ').toUpperCase() : 'Closed Alert',
@@ -1184,22 +1300,24 @@ exports.getDashboardNotifications = async (req, res) => {
     });
 
     const summary = {
-      total: notifications.length,
-      open: notifications.filter(n => n.status !== 'Closed').length,
-      closed: notifications.filter(n => n.status === 'Closed').length,
-      reorder: notifications.filter(n => n.type === 'reorder' && n.status !== 'Closed').length,
-      shortfall: notifications.filter(n => n.type === 'shortfall' && n.status !== 'Closed').length,
-      dispatchReady: notifications.filter(n => n.type === 'dispatch_ready' && n.status !== 'Closed').length,
-      receivables: notifications.filter(n => n.type === 'receivable_overdue' && n.status !== 'Closed').length,
-      payables: notifications.filter(n => n.type === 'payable_overdue' && n.status !== 'Closed').length,
-      overduePod: notifications.filter(n => n.type === 'overdue_pod' && n.status !== 'Closed').length,
-      critical: notifications.filter(n => n.severity === 'critical' && n.status !== 'Closed').length,
-      warning: notifications.filter(n => n.severity === 'warning' && n.status !== 'Closed').length,
-      success: notifications.filter(n => n.severity === 'success' && n.status !== 'Closed').length
+      total: activeNotifications.length,
+      open: activeNotifications.filter(n => n.status !== 'Closed').length,
+      closed: activeNotifications.filter(n => n.status === 'Closed').length,
+      reorder: activeNotifications.filter(n => n.type === 'reorder' && n.status !== 'Closed').length,
+      shortfall: activeNotifications.filter(n => n.type === 'shortfall' && n.status !== 'Closed').length,
+      dispatchReady: activeNotifications.filter(n => n.type === 'dispatch_ready' && n.status !== 'Closed').length,
+      receivables: activeNotifications.filter(n => n.type === 'receivable_overdue' && n.status !== 'Closed').length,
+      payables: activeNotifications.filter(n => n.type === 'payable_overdue' && n.status !== 'Closed').length,
+      overduePod: activeNotifications.filter(n => n.type === 'overdue_pod' && n.status !== 'Closed').length,
+      tasks: activeNotifications.filter(n => n.type === 'task_notification' && n.status !== 'Closed').length,
+      crm: activeNotifications.filter(n => ['crm_overdue', 'crm_today', 'crm_no_action', 'crm_stuck'].includes(n.type) && n.status !== 'Closed').length,
+      critical: activeNotifications.filter(n => n.severity === 'critical' && n.status !== 'Closed').length,
+      warning: activeNotifications.filter(n => n.severity === 'warning' && n.status !== 'Closed').length,
+      success: activeNotifications.filter(n => n.severity === 'success' && n.status !== 'Closed').length
     };
 
     res.status(200).json({
-      notifications,
+      notifications: activeNotifications,
       summary
     });
   } catch (error) {
@@ -1278,5 +1396,122 @@ exports.reopenNotification = async (req, res) => {
   } catch (error) {
     console.error('Error reopening notification:', error);
     return res.status(500).json({ message: 'Server error while reopening notification' });
+  }
+};
+
+// DELETE /api/dashboard/notifications/:id or POST /api/dashboard/notifications/:id/delete
+exports.deleteNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, title, message } = req.body || {};
+    const currentUser = req.headers['x-username'] || 'User';
+    const pool = await connectDB();
+
+    if (id && id.startsWith('task_notif_')) {
+      const realNotifId = parseInt(id.replace('task_notif_', ''), 10);
+      if (!isNaN(realNotifId)) {
+        await pool.request()
+          .input('NotifId', realNotifId)
+          .query(`DELETE FROM TaskNotifications WHERE NotificationId = @NotifId`);
+      }
+    }
+
+    await pool.request()
+      .input('NotificationId', id)
+      .input('NotificationType', type || null)
+      .input('Title', title ? String(title).slice(0, 255) : null)
+      .input('Message', message ? String(message).slice(0, 1000) : null)
+      .input('ClosedBy', currentUser)
+      .input('ClosedReason', 'Deleted by user')
+      .query(`
+        IF EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
+        BEGIN
+          UPDATE NotificationLogStatus
+          SET Status = 'Deleted',
+              ClosedAt = GETDATE(),
+              ClosedBy = @ClosedBy,
+              ClosedReason = @ClosedReason,
+              UpdatedAt = GETDATE()
+          WHERE NotificationId = @NotificationId
+        END
+        ELSE
+        BEGIN
+          INSERT INTO NotificationLogStatus (NotificationId, NotificationType, Title, Message, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason, UpdatedAt)
+          VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Deleted', GETDATE(), GETDATE(), @ClosedBy, @ClosedReason, GETDATE())
+        END
+      `);
+
+    return res.status(200).json({ success: true, message: 'Notification deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    return res.status(500).json({ message: 'Server error while deleting notification' });
+  }
+};
+
+// POST /api/dashboard/notifications/delete-all
+exports.deleteAllNotifications = async (req, res) => {
+  try {
+    const { ids, scope } = req.body || {};
+    const currentUser = req.headers['x-username'] || 'User';
+    const pool = await connectDB();
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      // Mark specific array of IDs as Deleted
+      for (const id of ids) {
+        if (id && id.startsWith('task_notif_')) {
+          const realNotifId = parseInt(id.replace('task_notif_', ''), 10);
+          if (!isNaN(realNotifId)) {
+            await pool.request()
+              .input('NotifId', realNotifId)
+              .query(`DELETE FROM TaskNotifications WHERE NotificationId = @NotifId`);
+          }
+        }
+
+        await pool.request()
+          .input('NotificationId', id)
+          .input('ClosedBy', currentUser)
+          .query(`
+            IF EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
+            BEGIN
+              UPDATE NotificationLogStatus
+              SET Status = 'Deleted', ClosedAt = GETDATE(), ClosedBy = @ClosedBy, ClosedReason = 'Deleted by user (bulk)', UpdatedAt = GETDATE()
+              WHERE NotificationId = @NotificationId
+            END
+            ELSE
+            BEGIN
+              INSERT INTO NotificationLogStatus (NotificationId, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason, UpdatedAt)
+              VALUES (@NotificationId, 'Deleted', GETDATE(), GETDATE(), @ClosedBy, 'Deleted by user (bulk)', GETDATE())
+            END
+          `);
+      }
+
+      return res.status(200).json({
+        success: true,
+        count: ids.length,
+        message: `Successfully deleted ${ids.length} notifications.`
+      });
+    }
+
+    if (scope === 'all') {
+      // Mark all existing NotificationLogStatus as Deleted
+      await pool.request()
+        .input('ClosedBy', currentUser)
+        .query(`
+          UPDATE NotificationLogStatus
+          SET Status = 'Deleted', ClosedAt = GETDATE(), ClosedBy = @ClosedBy, ClosedReason = 'Deleted all notifications', UpdatedAt = GETDATE()
+        `);
+
+      await pool.request().query(`DELETE FROM TaskNotifications`);
+
+      return res.status(200).json({
+        success: true,
+        message: 'All notifications have been cleared and deleted.'
+      });
+    }
+
+    return res.status(400).json({ message: 'Please specify notification IDs or scope' });
+  } catch (error) {
+    console.error('Error deleting all notifications:', error);
+    return res.status(500).json({ message: 'Server error while deleting all notifications' });
   }
 };

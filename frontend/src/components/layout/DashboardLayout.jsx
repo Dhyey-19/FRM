@@ -12,6 +12,7 @@ import {
   Typography, 
   Button,
   useMediaQuery,
+  Badge,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -250,7 +251,32 @@ const DashboardLayout = () => {
   const location = useLocation();
   const [localUser, setLocalUser] = useState(() => JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {});
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [unreadAlertsCount, setUnreadAlertsCount] = useState(0);
   const drawerWidth = isCollapsed ? 70 : 300;
+
+  // Fetch unread / open notifications count for header badge
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAlertCount = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/dashboard/notifications`);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data && data.summary) {
+            setUnreadAlertsCount(data.summary.open || 0);
+          }
+        }
+      } catch (e) {
+        // quiet error
+      }
+    };
+    fetchAlertCount();
+    const interval = setInterval(fetchAlertCount, 60000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     const handleStorage = () => {
@@ -598,7 +624,9 @@ const DashboardLayout = () => {
                     '&:hover': { bgcolor: '#e2e8f0', color: '#F88A01' } 
                   }}
                 >
-                  <NotificationsIcon fontSize="small" />
+                  <Badge badgeContent={unreadAlertsCount} color="error" max={99}>
+                    <NotificationsIcon fontSize="small" />
+                  </Badge>
                 </IconButton>
               </Tooltip>
 
