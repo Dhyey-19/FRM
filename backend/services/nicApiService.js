@@ -201,7 +201,7 @@ class NicApiService {
 
   // Simulate IRN generation with official algorithm
   simulateGeneration(einvoiceJSON, settings) {
-    const sellerGstin = einvoiceJSON.SellerDtls?.Gstin || settings.Gstin || '24AAACF1234K1Z5';
+    const sellerGstin = einvoiceJSON.SellerDtls?.Gstin || settings.Gstin || '';
     const docNo = einvoiceJSON.DocDtls?.No || 'INV-001';
     const docDate = einvoiceJSON.DocDtls?.Dt || new Date().toLocaleDateString('en-GB');
     const docType = einvoiceJSON.DocDtls?.Typ || 'INV';

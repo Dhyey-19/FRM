@@ -388,7 +388,7 @@ const EInvoiceModal = ({ open, onClose, invoice, onInvoiceUpdated }) => {
                     NIC Gateway Active via Company Profile ({settings.Environment === 'simulation' ? 'Simulation Engine' : settings.Environment === 'sandbox' ? 'NIC Sandbox' : 'Live einvoice1.gst.gov.in'})
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#15803d' }}>
-                    GSTIN: <strong>{settings.Gstin || '24AAACF1234K1Z5'}</strong> {settings.Username ? `| API User: ${settings.Username}` : ''}
+                    GSTIN: <strong>{settings.Gstin || 'Not Configured'}</strong> {settings.Username ? `| API User: ${settings.Username}` : ''}
                   </Typography>
                 </Box>
               </Box>

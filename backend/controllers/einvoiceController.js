@@ -586,7 +586,7 @@ async function getSettingsFromDB() {
     Id: 1,
     IsEnabled: 1,
     Environment: 'sandbox',
-    Gstin: '24AAACF1234K1Z5',
+    Gstin: '',
     ClientId: '',
     ClientSecret: '',
     Username: '',

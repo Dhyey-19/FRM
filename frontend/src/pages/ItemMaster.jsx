@@ -71,6 +71,7 @@ const ItemMaster = () => {
   
   // Filter States
   const [filterCategory, setFilterCategory] = useState('All');
+  const [filterItemCategory, setFilterItemCategory] = useState('All');
   const [filterItemType, setFilterItemType] = useState('All');
   const [filterSeries, setFilterSeries] = useState('All');
   const [filterDeadStock, setFilterDeadStock] = useState('All');
@@ -109,6 +110,7 @@ const ItemMaster = () => {
 
   const [formData, setFormData] = useState({
     Category: 'Inhouse',
+    ItemCategory: '',
     ItemCode: '',
     SubCode: '',
     ItemName: '',
@@ -228,6 +230,7 @@ const ItemMaster = () => {
   // Filter items based on search and dropdowns
   const standardSeriesList = SERIES_DEFINITIONS.map(s => s.seriesName);
   const uniqueSeries = ['All', ...new Set([...standardSeriesList, ...items.map(i => i.Series).filter(Boolean)])];
+  const uniqueItemCategories = ['All', ...new Set(items.map(i => i.ItemCategory).filter(Boolean))];
 
   const filteredItems = items.filter(item => {
     const searchLower = searchTerm.toLowerCase();
@@ -235,11 +238,13 @@ const ItemMaster = () => {
       (item.ItemName && item.ItemName.toLowerCase().includes(searchLower)) ||
       (item.ItemCode && item.ItemCode.toLowerCase().includes(searchLower)) ||
       (item.SubCode && item.SubCode.toLowerCase().includes(searchLower)) ||
+      (item.ItemCategory && item.ItemCategory.toLowerCase().includes(searchLower)) ||
       (item.WarehouseNo && item.WarehouseNo.toLowerCase().includes(searchLower)) ||
       (item.Location && item.Location.toLowerCase().includes(searchLower)) ||
       (item.Series && item.Series.toLowerCase().includes(searchLower))
     );
     const matchesCategory = filterCategory === 'All' || item.Category === filterCategory;
+    const matchesItemCategory = filterItemCategory === 'All' || item.ItemCategory === filterItemCategory;
     const matchesType = filterItemType === 'All' || item.ItemType === filterItemType;
     const matchesSeries = filterSeries === 'All' || item.Series === filterSeries;
     
@@ -254,7 +259,7 @@ const ItemMaster = () => {
       matchesDeadStock = item.DeadStockType === 'Auto' || item.DeadStockType === 'Manual' || item.IsDeadStock === 1;
     }
 
-    return matchesSearch && matchesCategory && matchesType && matchesSeries && matchesDeadStock;
+    return matchesSearch && matchesCategory && matchesItemCategory && matchesType && matchesSeries && matchesDeadStock;
   });
 
   const handleSort = (key) => {
@@ -285,6 +290,7 @@ const ItemMaster = () => {
       setOriginalSubCode(item.SubCode || '');
       setFormData({
         Category: item.Category || 'Inhouse',
+        ItemCategory: item.ItemCategory || '',
         ItemCode: item.ItemCode,
         SubCode: item.SubCode || '',
         ItemName: item.ItemName,
@@ -309,6 +315,7 @@ const ItemMaster = () => {
       setOriginalSubCode('');
       setFormData({
         Category: 'Inhouse',
+        ItemCategory: '',
         ItemCode: '',
         SubCode: '',
         ItemName: '',
@@ -516,6 +523,7 @@ const ItemMaster = () => {
   const handleExport = () => {
     const exportData = items.map(item => ({
       Category: item.Category || 'Inhouse',
+      ItemCategory: item.ItemCategory || '',
       ItemCode: item.ItemCode,
       SubCode: item.SubCode || '',
       ItemName: item.ItemName,
@@ -649,15 +657,27 @@ const ItemMaster = () => {
             <TextField
               select
               size="small"
-              label="Category"
+              label="Sourcing"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 140 }, minWidth: { sm: 140 } }}
+              sx={{ width: { xs: '100%', sm: 130 }, minWidth: { sm: 130 } }}
             >
-              <MenuItem value="All">All Categories</MenuItem>
+              <MenuItem value="All">All Sourcing</MenuItem>
               <MenuItem value="SubContract">SubContract</MenuItem>
               <MenuItem value="Inhouse">Inhouse</MenuItem>
               <MenuItem value="BOP">BOP</MenuItem>
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="Item Category"
+              value={filterItemCategory}
+              onChange={(e) => setFilterItemCategory(e.target.value)}
+              sx={{ width: { xs: '100%', sm: 160 }, minWidth: { sm: 160 } }}
+            >
+              {uniqueItemCategories.map(c => (
+                <MenuItem key={c} value={c}>{c === 'All' ? 'All Item Categories' : c}</MenuItem>
+              ))}
             </TextField>
             <TextField
               select
@@ -775,11 +795,20 @@ const ItemMaster = () => {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
+                    active={sortConfig.key === 'ItemCategory'}
+                    direction={sortConfig.key === 'ItemCategory' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('ItemCategory')}
+                  >
+                    Item Category
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                  <TableSortLabel
                     active={sortConfig.key === 'Category'}
                     direction={sortConfig.key === 'Category' ? sortConfig.direction : 'asc'}
                     onClick={() => handleSort('Category')}
                   >
-                    Category
+                    Sourcing
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
@@ -874,6 +903,22 @@ const ItemMaster = () => {
                       <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>{row.ItemCode}</TableCell>
                       <TableCell sx={{ fontWeight: 500, color: row.SubCode ? '#334155' : '#94a3b8' }}>
                         {row.SubCode || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {row.ItemCategory ? (
+                          <Chip 
+                            label={row.ItemCategory} 
+                            size="small" 
+                            sx={{ 
+                              fontSize: '0.7rem', 
+                              fontWeight: 600,
+                              bgcolor: '#f1f5f9', 
+                              color: '#334155',
+                              border: '1px solid #cbd5e1',
+                              height: 22 
+                            }} 
+                          />
+                        ) : '-'}
                       </TableCell>
                       <TableCell>
                         <Chip 
@@ -1033,37 +1078,49 @@ const ItemMaster = () => {
           )}
           <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 0.5 }}>
             
-            {/* Top Dropdown: Category (SubContract, Inhouse, BOP) */}
-            <FormControl fullWidth size="small">
-              <InputLabel id="item-category-label">Category / Classification *</InputLabel>
-              <Select
-                labelId="item-category-label"
-                label="Category / Classification *"
-                name="Category"
-                value={formData.Category || 'Inhouse'}
-                onChange={handleInputChange}
-                sx={{ fontWeight: 600 }}
-              >
-                <MenuItem value="SubContract">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip label="SubContract" size="small" sx={{ bgcolor: '#fff7ed', color: '#ea580c', fontWeight: 700, height: 20 }} />
-                    <Typography variant="body2" sx={{ color: '#475569' }}>- Processed or sourced via external job workers</Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="Inhouse">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip label="Inhouse" size="small" sx={{ bgcolor: '#eff6ff', color: '#0F3B66', fontWeight: 700, height: 20 }} />
-                    <Typography variant="body2" sx={{ color: '#475569' }}>- Manufactured or machined in factory departments</Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="BOP">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip label="BOP" size="small" sx={{ bgcolor: '#ecfeff', color: '#0891b2', fontWeight: 700, height: 20 }} />
-                    <Typography variant="body2" sx={{ color: '#475569' }}>- Bought-Out Parts (Purchased raw material / standard parts)</Typography>
-                  </Box>
-                </MenuItem>
-              </Select>
-            </FormControl>
+            {/* Sourcing Category & Sanitary Item Category */}
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="item-category-label">Sourcing Category *</InputLabel>
+                <Select
+                  labelId="item-category-label"
+                  label="Sourcing Category *"
+                  name="Category"
+                  value={formData.Category || 'Inhouse'}
+                  onChange={handleInputChange}
+                  sx={{ fontWeight: 600 }}
+                >
+                  <MenuItem value="SubContract">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip label="SubContract" size="small" sx={{ bgcolor: '#fff7ed', color: '#ea580c', fontWeight: 700, height: 20 }} />
+                      <Typography variant="body2" sx={{ color: '#475569' }}>- External job workers</Typography>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="Inhouse">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip label="Inhouse" size="small" sx={{ bgcolor: '#eff6ff', color: '#0F3B66', fontWeight: 700, height: 20 }} />
+                      <Typography variant="body2" sx={{ color: '#475569' }}>- In-house factory production</Typography>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="BOP">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip label="BOP" size="small" sx={{ bgcolor: '#ecfeff', color: '#0891b2', fontWeight: 700, height: 20 }} />
+                      <Typography variant="body2" sx={{ color: '#475569' }}>- Bought-Out Parts</Typography>
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+              <TextField 
+                label="Item Category (Sanitary)" 
+                name="ItemCategory" 
+                value={formData.ItemCategory || ''} 
+                onChange={handleInputChange} 
+                fullWidth 
+                size="small" 
+                placeholder="e.g. SS Chain Tube, Health Faucet, Angle Valve"
+                helperText="Product line / sanitary category"
+              />
+            </Box>
 
             {/* Composite Primary Key Fields: ItemCode & SubCode */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
@@ -1075,7 +1132,7 @@ const ItemMaster = () => {
                 fullWidth 
                 size="small" 
                 required
-                helperText="Primary identifier (e.g. RM-BR01, FG-101)"
+                helperText="Primary identifier (e.g. SS16, HF101)"
               />
               <TextField 
                 label="Sub Code" 
@@ -1084,7 +1141,7 @@ const ItemMaster = () => {
                 onChange={handleInputChange} 
                 fullWidth 
                 size="small" 
-                placeholder="Optional subcode (e.g. 01, A, REV-1)"
+                placeholder="Variant / Size SubCode (e.g. SS201, 12IN, 1.5M)"
                 helperText="Composite key with Item Code"
               />
             </Box>

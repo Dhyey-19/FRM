@@ -1759,7 +1759,7 @@ const CRM = ({ initialTab = 0 }) => {
                       required
                       size="small"
                       label="Customer / Buyer Company Name"
-                      placeholder="e.g. Acme Hardware & Pipe Fittings"
+                      placeholder="e.g. Customer Name"
                     />
                   )}
                 />

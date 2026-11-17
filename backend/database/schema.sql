@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS "ItemMaster" (
     "ItemName" VARCHAR(50) NOT NULL,
     "ItemType" VARCHAR(15),
     "Category" VARCHAR(20) DEFAULT 'Inhouse',
+    "ItemCategory" VARCHAR(100),
     "WarehouseNo" VARCHAR(50),
     "Location" VARCHAR(100),
     "Series" VARCHAR(15),
@@ -575,7 +576,7 @@ INSERT OR IGNORE INTO "Users" ("UserId", "Username", "Password", "MobileNo", "Us
 
 -- Default Initial Company Profile (if table is empty)
 INSERT INTO "CompanyProfile" ("CompanyName", "Address1", "City", "StateName", "CountryName", "Pincode", "EmailID", "GSTIN", "BankName", "AccountNo", "IFSCCode", "UPI", "LogoPath")
-SELECT 'FRM Precision Manufacturing Ltd', 'Plot No. 42-45, GIDC Industrial Estate', 'Ahmedabad', 'Gujarat', 'India', '382415', 'contact@frm.demo', '24AAACF1234K1Z5', 'State Bank of India', '33889900112', 'SBIN0004052', 'frm@sbi', '/assets/app_logo.jpeg'
+SELECT 'FRM-BBP', NULL, NULL, NULL, 'India', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '/assets/app_logo.jpeg'
 WHERE NOT EXISTS (SELECT 1 FROM "CompanyProfile");
 
 -- Table: AttendanceMonthlySummary

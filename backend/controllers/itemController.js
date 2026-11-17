@@ -3,7 +3,7 @@ const { sql, connectDB } = require('../config/db');
 // GET /api/items
 exports.getItems = async (req, res) => {
   try {
-    const { itemCode, subCode, category, search } = req.query;
+    const { itemCode, subCode, category, itemCategory, search } = req.query;
     const pool = await connectDB();
     const request = pool.request();
     
@@ -14,6 +14,7 @@ exports.getItems = async (req, res) => {
         ItemName, 
         ItemType, 
         ISNULL(Category, 'Inhouse') AS Category, 
+        ISNULL(ItemCategory, '') AS ItemCategory,
         WarehouseNo, 
         Location, 
         Series, 
@@ -48,8 +49,13 @@ exports.getItems = async (req, res) => {
       request.input('Category', sql.VarChar(20), category);
     }
 
+    if (itemCategory && itemCategory !== 'All') {
+      conditions.push('ItemCategory = @ItemCategory');
+      request.input('ItemCategory', sql.NVarChar(100), itemCategory);
+    }
+
     if (search) {
-      conditions.push('(ItemCode LIKE @Search OR SubCode LIKE @Search OR ItemName LIKE @Search OR Series LIKE @Search OR WarehouseNo LIKE @Search OR Location LIKE @Search)');
+      conditions.push('(ItemCode LIKE @Search OR SubCode LIKE @Search OR ItemName LIKE @Search OR Series LIKE @Search OR ItemCategory LIKE @Search OR WarehouseNo LIKE @Search OR Location LIKE @Search)');
       request.input('Search', sql.VarChar(100), `%${search}%`);
     }
 
@@ -75,6 +81,7 @@ exports.createItem = async (req, res) => {
     ItemName, 
     ItemType, 
     Category = 'Inhouse', 
+    ItemCategory = '',
     WarehouseNo = '', 
     Location = '', 
     Series, 
@@ -124,12 +131,13 @@ exports.createItem = async (req, res) => {
     await pool.request()
       .input('ItemCode', sql.VarChar(50), cleanItemCode)
       .input('SubCode', sql.VarChar(50), cleanSubCode)
-      .input('ItemName', sql.VarChar(50), ItemName)
+      .input('ItemName', sql.NVarChar(100), ItemName)
       .input('ItemType', sql.VarChar(15), ItemType || null)
       .input('Category', sql.VarChar(20), validCategory)
+      .input('ItemCategory', sql.NVarChar(100), ItemCategory ? String(ItemCategory).trim() : null)
       .input('WarehouseNo', sql.VarChar(50), WarehouseNo || '')
       .input('Location', sql.VarChar(100), Location || '')
-      .input('Series', sql.VarChar(15), Series || null)
+      .input('Series', sql.VarChar(50), Series || null)
       .input('StdWeight', sql.Numeric(12, 3), StdWeight || null)
       .input('Unit', sql.VarChar(10), Unit || null)
       .input('MRP', sql.Numeric(15, 2), parseFloat(MRP) || 0)
@@ -143,12 +151,12 @@ exports.createItem = async (req, res) => {
       .input('IsDeadStock', sql.Int, flagIsDeadStock)
       .query(`
         INSERT INTO ItemMaster (
-          ItemCode, SubCode, ItemName, ItemType, Category, WarehouseNo, Location, 
+          ItemCode, SubCode, ItemName, ItemType, Category, ItemCategory, WarehouseNo, Location, 
           Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel,
           DeadStockType, DeadStockDays, IsDeadStock
         )
         VALUES (
-          @ItemCode, @SubCode, @ItemName, @ItemType, @Category, @WarehouseNo, @Location,
+          @ItemCode, @SubCode, @ItemName, @ItemType, @Category, @ItemCategory, @WarehouseNo, @Location,
           @Series, @StdWeight, @Unit, @MRP, @Costing, @OpeningStock, @ClosingStock, @HSNCode, @ReorderLevel,
           @DeadStockType, @DeadStockDays, @IsDeadStock
         )
@@ -172,6 +180,7 @@ exports.updateItem = async (req, res) => {
     ItemName, 
     ItemType, 
     Category = 'Inhouse', 
+    ItemCategory,
     WarehouseNo = '', 
     Location = '', 
     Series, 
@@ -229,12 +238,13 @@ exports.updateItem = async (req, res) => {
       .input('OldSubCode', sql.VarChar(50), targetOldSubCode)
       .input('NewItemCode', sql.VarChar(50), newCleanItemCode)
       .input('NewSubCode', sql.VarChar(50), newCleanSubCode)
-      .input('ItemName', sql.VarChar(50), ItemName)
+      .input('ItemName', sql.NVarChar(100), ItemName)
       .input('ItemType', sql.VarChar(15), ItemType || null)
       .input('Category', sql.VarChar(20), validCategory)
+      .input('ItemCategory', sql.NVarChar(100), ItemCategory !== undefined ? (ItemCategory ? String(ItemCategory).trim() : null) : null)
       .input('WarehouseNo', sql.VarChar(50), WarehouseNo || '')
       .input('Location', sql.VarChar(100), Location || '')
-      .input('Series', sql.VarChar(15), Series || null)
+      .input('Series', sql.VarChar(50), Series || null)
       .input('StdWeight', sql.Numeric(12, 3), StdWeight || null)
       .input('Unit', sql.VarChar(10), Unit || null)
       .input('MRP', sql.Numeric(15, 2), parseFloat(MRP) || 0)
@@ -253,6 +263,7 @@ exports.updateItem = async (req, res) => {
             ItemName = @ItemName,
             ItemType = @ItemType,
             Category = @Category,
+            ItemCategory = COALESCE(@ItemCategory, ItemCategory),
             WarehouseNo = @WarehouseNo,
             Location = @Location,
             Series = @Series,
@@ -371,12 +382,13 @@ exports.bulkCreateItems = async (req, res) => {
           await request
             .input('UpdItemCode', sql.VarChar(50), cleanItemCode)
             .input('UpdSubCode', sql.VarChar(50), cleanSubCode)
-            .input('UpdItemName', sql.VarChar(50), ItemName)
+            .input('UpdItemName', sql.NVarChar(100), ItemName)
             .input('UpdItemType', sql.VarChar(15), ItemType || null)
             .input('UpdCategory', sql.VarChar(20), validCategory)
+            .input('UpdItemCategory', sql.NVarChar(100), item.ItemCategory ? String(item.ItemCategory).trim() : null)
             .input('UpdWarehouseNo', sql.VarChar(50), WarehouseNo || '')
             .input('UpdLocation', sql.VarChar(100), Location || '')
-            .input('UpdSeries', sql.VarChar(15), Series || null)
+            .input('UpdSeries', sql.VarChar(50), Series || null)
             .input('UpdStdWeight', sql.Numeric(12, 3), StdWeight || null)
             .input('UpdUnit', sql.VarChar(10), Unit || null)
             .input('UpdMRP', sql.Numeric(15, 2), parseFloat(MRP) || 0)
@@ -393,6 +405,7 @@ exports.bulkCreateItems = async (req, res) => {
               SET ItemName = @UpdItemName, 
                   ItemType = @UpdItemType, 
                   Category = @UpdCategory,
+                  ItemCategory = COALESCE(@UpdItemCategory, ItemCategory),
                   WarehouseNo = @UpdWarehouseNo,
                   Location = @UpdLocation,
                   Series = @UpdSeries, 
@@ -416,12 +429,13 @@ exports.bulkCreateItems = async (req, res) => {
           await request
             .input('InsItemCode', sql.VarChar(50), cleanItemCode)
             .input('InsSubCode', sql.VarChar(50), cleanSubCode)
-            .input('InsItemName', sql.VarChar(50), ItemName)
+            .input('InsItemName', sql.NVarChar(100), ItemName)
             .input('InsItemType', sql.VarChar(15), ItemType || null)
             .input('InsCategory', sql.VarChar(20), validCategory)
+            .input('InsItemCategory', sql.NVarChar(100), item.ItemCategory ? String(item.ItemCategory).trim() : null)
             .input('InsWarehouseNo', sql.VarChar(50), WarehouseNo || '')
             .input('InsLocation', sql.VarChar(100), Location || '')
-            .input('InsSeries', sql.VarChar(15), Series || null)
+            .input('InsSeries', sql.VarChar(50), Series || null)
             .input('InsStdWeight', sql.Numeric(12, 3), StdWeight || null)
             .input('InsUnit', sql.VarChar(10), Unit || null)
             .input('InsMRP', sql.Numeric(15, 2), parseFloat(MRP) || 0)
@@ -435,12 +449,12 @@ exports.bulkCreateItems = async (req, res) => {
             .input('InsIsDeadStock', sql.Int, flagIsDeadStock)
             .query(`
               INSERT INTO ItemMaster (
-                ItemCode, SubCode, ItemName, ItemType, Category, WarehouseNo, Location,
+                ItemCode, SubCode, ItemName, ItemType, Category, ItemCategory, WarehouseNo, Location,
                 Series, StdWeight, Unit, MRP, Costing, OpeningStock, ClosingStock, HSNCode, ReorderLevel,
                 DeadStockType, DeadStockDays, IsDeadStock
               )
               VALUES (
-                @InsItemCode, @InsSubCode, @InsItemName, @InsItemType, @InsCategory, @InsWarehouseNo, @InsLocation,
+                @InsItemCode, @InsSubCode, @InsItemName, @InsItemType, @InsCategory, @InsItemCategory, @InsWarehouseNo, @InsLocation,
                 @InsSeries, @InsStdWeight, @InsUnit, @InsMRP, @InsCosting, @InsOpeningStock, @InsClosingStock, @InsHSNCode, @InsReorderLevel,
                 @InsDeadStockType, @InsDeadStockDays, @InsIsDeadStock
               )

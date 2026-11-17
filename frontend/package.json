@@ -1,7 +1,7 @@
 {
   "name": "frm-bbp-frontend",
   "private": true,
-  "version": "20261115.0.0",
+  "version": "20261117.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
