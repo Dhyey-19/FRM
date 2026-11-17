@@ -1086,7 +1086,7 @@ const PendingPOReport = () => {
                   onChange={(e) => setFulfillmentCategory(e.target.value)}
                 >
                   <MenuItem value="All">All Categories</MenuItem>
-                  <MenuItem value="SubContract">SubContract</MenuItem>
+                  <MenuItem value="SubContract">Sub-Contract</MenuItem>
                   <MenuItem value="Inhouse">Inhouse</MenuItem>
                   <MenuItem value="BOP">BOP</MenuItem>
                 </Select>
@@ -1592,7 +1592,7 @@ const PendingPOReport = () => {
                             <TableCell>
                               <Chip
                                 size="small"
-                                label={row.Category}
+                                label={row.Category === 'SubContract' ? 'Sub-Contract' : row.Category}
                                 variant="outlined"
                                 color={row.Category === 'SubContract' ? 'warning' : row.Category === 'BOP' ? 'secondary' : 'default'}
                                 sx={{ height: 20, fontSize: '0.7rem' }}

@@ -277,7 +277,8 @@ const LedgerMaster = () => {
         const data = XLSX.utils.sheet_to_json(ws);
 
         if (data.length > 0) {
-          const mappedData = data.map(row => ({
+          const mappedData = data.map((row, idx) => ({
+            __rowNum__: idx + 2,
             LedgerName: row['Ledger Name'] || row.LedgerName || row['Party Name'] || '',
             AccountGroupName: row['Account Group'] || row.AccountGroupName || row.AccountGroup || row['Group Name'] || '',
             Address: row.Address || '',

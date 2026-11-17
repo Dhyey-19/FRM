@@ -494,12 +494,12 @@ const StockReportContent = () => {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(80);
     const baseTitle = reportType === 'combined' 
-      ? 'Combined Stock Report (Main Stock + Department Stock + Job Work Stock)' 
+      ? 'Combined Stock Report (Main Stock + Department Stock + Sub-Contract Stock)' 
       : reportType === 'item' 
         ? 'Item Stock Report' 
         : reportType === 'department'
           ? 'Department Stock Report'
-          : 'Job Work Outstanding Stock Report';
+          : 'Sub-Contract Outstanding Stock Report';
     const title = isNegativeActive ? `${baseTitle} - [NEGATIVE STOCK ONLY]` : baseTitle;
     doc.text(title, 14, 26);
     
@@ -526,7 +526,7 @@ const StockReportContent = () => {
       doc.text(`DEPT STOCK: ${Number(totals.deptStock || 0).toLocaleString()} PCS`, 85, startY + 6.5);
 
       doc.setTextColor(217, 119, 6);
-      doc.text(`JOBWORK STOCK: ${Number(totals.jwStock || 0).toLocaleString()} PCS`, 150, startY + 6.5);
+      doc.text(`SUB-CONTRACT STOCK: ${Number(totals.jwStock || 0).toLocaleString()} PCS`, 150, startY + 6.5);
 
       doc.setTextColor(15, 59, 102);
       doc.text(`COMBINED TOTAL: ${Number(totals.totalStock || 0).toLocaleString()} PCS (Val: Rs. ${Number(totals.totalValuation || 0).toLocaleString()})`, 210, startY + 6.5);
@@ -546,7 +546,7 @@ const StockReportContent = () => {
     let head = [];
 
     if (reportType === 'combined') {
-      head = [['Code', 'Sub Code', 'Item Name', 'Type', 'Unit', 'Main Stock', 'Dept Stock', 'Jobwork Stock', 'Combined Total', 'Total Wt (KG)', 'Valuation (Rs.)']];
+      head = [['Code', 'Sub Code', 'Item Name', 'Type', 'Unit', 'Main Stock', 'Dept Stock', 'Sub-Contract Stock', 'Combined Total', 'Valuation (Rs.)']];
       sortedData.forEach(row => {
         tableData.push([
           row.ItemCode,
@@ -558,7 +558,6 @@ const StockReportContent = () => {
           Number(row.DeptStock || 0),
           Number(row.JwStock || 0),
           Number(row.TotalStock || 0),
-          Number(row.TotalWeight || 0).toFixed(3),
           Number(row.Valuation || 0).toFixed(2)
         ]);
       });
@@ -569,7 +568,6 @@ const StockReportContent = () => {
           { content: Number(totals.deptStock || 0), styles: { fontStyle: 'bold', textColor: [13, 148, 136] } },
           { content: Number(totals.jwStock || 0), styles: { fontStyle: 'bold', textColor: [217, 119, 6] } },
           { content: Number(totals.totalStock || 0), styles: { fontStyle: 'bold', textColor: [15, 59, 102] } },
-          { content: Number(totals.totalWeight || 0).toFixed(3), styles: { fontStyle: 'bold' } },
           { content: Number(totals.totalValuation || 0).toFixed(2), styles: { fontStyle: 'bold', textColor: [194, 65, 12] } }
         ]);
       }
@@ -622,8 +620,8 @@ const StockReportContent = () => {
         ]);
       }
     } else {
-      // Job Work Stock
-      head = [['Job Worker (Vendor)', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt', 'Costing (Rs.)', 'Valuation (Rs.)']];
+      // Sub-Contract Stock
+      head = [['Sub-Contractor (Vendor)', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt', 'Costing (Rs.)', 'Valuation (Rs.)']];
       sortedData.forEach(row => {
         tableData.push([
           row.LedgerName,
@@ -716,10 +714,9 @@ const StockReportContent = () => {
           'Main Stock': Number(row.MainStock || 0),
           'Department Stock Total': Number(row.DeptStock || 0),
           'Department Breakdown': deptSummary || '-',
-          'Jobwork Stock Total': Number(row.JwStock || 0),
-          'Jobwork Ledger Breakdown': jwSummary || '-',
+          'Sub-Contract Stock Total': Number(row.JwStock || 0),
+          'Sub-Contract Ledger Breakdown': jwSummary || '-',
           'Total Combined Stock': Number(row.TotalStock || 0),
-          'Total Weight (KG)': Number(row.TotalWeight || 0),
           'Valuation (Rs.)': Number(row.Valuation || 0)
         });
       });
@@ -735,10 +732,9 @@ const StockReportContent = () => {
           'Main Stock': Number(totals.mainStock) || 0,
           'Department Stock Total': Number(totals.deptStock) || 0,
           'Department Breakdown': '',
-          'Jobwork Stock Total': Number(totals.jwStock) || 0,
-          'Jobwork Ledger Breakdown': '',
+          'Sub-Contract Stock Total': Number(totals.jwStock) || 0,
+          'Sub-Contract Ledger Breakdown': '',
           'Total Combined Stock': Number(totals.totalStock) || 0,
-          'Total Weight (KG)': Number(totals.totalWeight) || 0,
           'Valuation (Rs.)': Number(totals.totalValuation) || 0
         });
       }
@@ -789,10 +785,10 @@ const StockReportContent = () => {
         });
       }
     } else {
-      // Job Work Stock
+      // Sub-Contract Stock
       sortedData.forEach(row => {
         flatData.push({
-          'Job Worker': row.LedgerName,
+          'Sub-Contractor': row.LedgerName,
           'Code': row.ItemCode,
           'Sub Code': row.SubCode || '-',
           'Item Name': row.ItemName,
@@ -808,7 +804,7 @@ const StockReportContent = () => {
       });
       if (sortedData.length > 0) {
         flatData.push({
-          'Job Worker': 'Total:',
+          'Sub-Contractor': 'Total:',
           'Code': '',
           'Sub Code': '',
           'Item Name': '',
@@ -833,7 +829,7 @@ const StockReportContent = () => {
         ? 'Item Stock' 
         : reportType === 'department' 
           ? 'Department Stock' 
-          : 'Job Work Stock';
+          : 'Sub-Contract Stock';
     const sheetName = isNegativeActive ? `${baseSheetName} (Negative)` : baseSheetName;
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     const filename = `${sheetName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_report.xlsx`;
@@ -967,7 +963,7 @@ const StockReportContent = () => {
       'Unit': row.Unit || 'PCS',
       'Main Stock': Number(row.MainStock || 0),
       'Dept Stock': Number(row.DeptStock || 0),
-      'Jobwork Stock': Number(row.JwStock || 0),
+      'Sub-Contract Stock': Number(row.JwStock || 0),
       'Total Stock': Number(row.TotalStock || 0),
       'Costing (Rs.)': Number(row.Costing || 0),
       'Dead Stock Valuation (Rs.)': Number(row.DeadStockValuation || 0),
@@ -989,7 +985,7 @@ const StockReportContent = () => {
         'Unit': '',
         'Main Stock': null,
         'Dept Stock': null,
-        'Jobwork Stock': null,
+        'Sub-Contract Stock': null,
         'Total Stock': Number(deadStockTotals.totalQty) || 0,
         'Costing (Rs.)': null,
         'Dead Stock Valuation (Rs.)': Number(deadStockTotals.totalValuation) || 0,
@@ -1164,12 +1160,12 @@ const StockReportContent = () => {
           <Typography variant="caption" sx={{ color: '#64748b' }}>
             {mainTab === 0 
               ? (reportType === 'combined' 
-                  ? 'Multi-location real-time stock across Main Store, Manufacturing Departments & Job Work Vendors'
+                  ? 'Multi-location real-time stock across Main Store, Manufacturing Departments & Sub-Contractors'
                   : reportType === 'item' 
                     ? 'Master Item stock register' 
                     : reportType === 'department'
                       ? 'In-process stock allocated across factory departments'
-                      : 'Pending material outstanding stock at outside Job Work vendors')
+                      : 'Pending material outstanding stock at outside Sub-Contractors')
               : 'Audit of non-moving inventory, auto-detected inactive stock items & manually declared dead stock'}
           </Typography>
         </Box>
@@ -1309,7 +1305,7 @@ const StockReportContent = () => {
               <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="caption" sx={{ color: '#c2410c', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Job Work Stock
+                    Sub-Contract Stock
                   </Typography>
                   <Factory sx={{ color: '#ea580c', fontSize: 18 }} />
                 </Box>
@@ -1317,7 +1313,7 @@ const StockReportContent = () => {
                   {Number(totals.jwStock || 0).toLocaleString()} <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>PCS</span>
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#f97316', fontWeight: 600 }}>
-                  Material with Job Workers
+                  Material with Sub-Contractors
                 </Typography>
               </CardContent>
             </Card>
@@ -1370,7 +1366,7 @@ const StockReportContent = () => {
                   Department Stock
                 </ToggleButton>
                 <ToggleButton value="jobwork" sx={{ px: 2, fontWeight: 600 }}>
-                  Job Work Stock
+                  Sub-Contract Stock
                 </ToggleButton>
               </ToggleButtonGroup>
 
@@ -1452,9 +1448,9 @@ const StockReportContent = () => {
                 size="small"
                 placeholder={
                   reportType === 'combined' 
-                    ? "Search Code, Name, Dept or Jobworker..." 
+                    ? "Search Code, Name, Dept or Sub-Contractor..." 
                     : reportType === 'jobwork'
-                      ? "Search Job Worker, Item Code or Name..."
+                      ? "Search Sub-Contractor, Item Code or Name..."
                       : "Search report..."
                 }
                 value={searchTerm}
@@ -1512,7 +1508,7 @@ const StockReportContent = () => {
                     <MenuItem value="All">All Items (Including Nil Stock)</MenuItem>
                     <MenuItem value="MainStock">In Main Stock (Main &gt; 0)</MenuItem>
                     <MenuItem value="DeptStock">In Departments (Dept &gt; 0)</MenuItem>
-                    <MenuItem value="JwStock">At Job Workers (JW &gt; 0)</MenuItem>
+                    <MenuItem value="JwStock">At Sub-Contractors (SC &gt; 0)</MenuItem>
                     <MenuItem value="NegativeStock" sx={{ color: '#dc2626', fontWeight: 700 }}>
                       ⚠️ Negative Stock Only {negativeCount > 0 ? `(${negativeCount})` : ''}
                     </MenuItem>
@@ -1537,8 +1533,8 @@ const StockReportContent = () => {
             {(reportType === 'combined' || reportType === 'jobwork') && (
               <Grid item xs={12} sm={6} md={reportType === 'jobwork' ? 4 : 2}>
                 <FormControl fullWidth size="small" sx={{ backgroundColor: '#fff', borderRadius: 1 }}>
-                  <InputLabel>Job Worker (Vendor)</InputLabel>
-                  <Select value={jwFilter} label="Job Worker (Vendor)" onChange={(e) => setJwFilter(e.target.value)}>
+                  <InputLabel>Sub-Contractor (Vendor)</InputLabel>
+                  <Select value={jwFilter} label="Sub-Contractor (Vendor)" onChange={(e) => setJwFilter(e.target.value)}>
                     {uniqueJobworkers.map(j => <MenuItem key={j} value={j}>{j}</MenuItem>)}
                   </Select>
                 </FormControl>
@@ -1594,7 +1590,7 @@ const StockReportContent = () => {
                   reportType === 'combined' 
                     ? 'Combined Multi-Location Stock...' 
                     : reportType === 'jobwork' 
-                      ? 'Job Work Vendor Stock...' 
+                      ? 'Sub-Contract Vendor Stock...' 
                       : 'Stock records...'
                 }
               </Typography>
@@ -1619,10 +1615,9 @@ const StockReportContent = () => {
                       <SortableTableCell label="Unit" property="Unit" width="6%" align="center" />
                       <SortableTableCell label="Main Stock" property="MainStock" align="right" width="9%" />
                       <SortableTableCell label="Dept Stock" property="DeptStock" align="right" width="9%" />
-                      <SortableTableCell label="Jobwork Stock" property="JwStock" align="right" width="9%" />
+                      <SortableTableCell label="Sub-Contract Stock" property="JwStock" align="right" width="9%" />
                       <SortableTableCell label="Combined Stock" property="TotalStock" align="right" width="10%" />
-                      <SortableTableCell label="Total Wt (KG)" property="TotalWeight" align="right" width="8%" />
-                      <SortableTableCell label="Valuation (₹)" property="Valuation" align="right" width="10%" />
+                      <SortableTableCell label="Valuation (₹)" property="Valuation" align="right" width="12%" />
                     </>
                   ) : reportType === 'item' ? (
                     <>
@@ -1649,9 +1644,9 @@ const StockReportContent = () => {
                       <SortableTableCell label="Valuation (₹)" property="Valuation" align="right" width="10%" />
                     </>
                   ) : (
-                    // Job Work Stock Columns
+                    // Sub-Contract Stock Columns
                     <>
-                      <SortableTableCell label="Job Worker (Vendor)" property="LedgerName" width="20%" />
+                      <SortableTableCell label="Sub-Contractor (Vendor)" property="LedgerName" width="20%" />
                       <SortableTableCell label="Item Code" property="ItemCode" width="11%" />
                       <SortableTableCell label="Item Name" property="ItemName" width="18%" />
                       <SortableTableCell label="Sent Qty" property="OutQty" align="right" width="8%" />
@@ -1700,7 +1695,7 @@ const StockReportContent = () => {
                                     size="small"
                                     onClick={() => toggleRowExpansion(rowKey)}
                                     sx={{ p: 0.3, color: isExpanded ? '#0F3B66' : '#94a3b8' }}
-                                    title={isExpanded ? "Collapse location breakdown" : "Expand department & jobworker details"}
+                                    title={isExpanded ? "Collapse location breakdown" : "Expand department & sub-contract details"}
                                   >
                                     {isExpanded ? <KeyboardArrowUp fontSize="small" /> : <KeyboardArrowDown fontSize="small" />}
                                   </IconButton>
@@ -1789,7 +1784,7 @@ const StockReportContent = () => {
                               {/* 3. Job Work Stock */}
                               <TableCell align="right">
                                 {(row.JwStock || 0) !== 0 || (row.JwWeight || 0) > 0 ? (
-                                  <Tooltip title={`With ${(row.Jobworkers || []).length} Job Worker(s). Click arrow to view details.`}>
+                                  <Tooltip title={`With ${(row.Jobworkers || []).length} Sub-Contractor(s). Click arrow to view details.`}>
                                     <Box 
                                       component="span" 
                                       onClick={() => toggleRowExpansion(rowKey)}
@@ -1834,10 +1829,6 @@ const StockReportContent = () => {
                                 {Number(row.TotalStock || 0).toLocaleString()}
                               </TableCell>
 
-                              {/* Total Weight */}
-                              <TableCell align="right" sx={{ color: '#475569', fontSize: '0.8rem' }}>
-                                {Number(row.TotalWeight || 0).toFixed(3)}
-                              </TableCell>
                               {/* Valuation */}
                               <TableCell align="right" sx={{ fontWeight: 700, color: '#c2410c', fontSize: '0.84rem' }}>
                                 ₹{Number(row.Valuation || 0).toFixed(2)}
@@ -2042,7 +2033,7 @@ const StockReportContent = () => {
                                     <Box sx={{ p: 1.2, bgcolor: '#ffffff', borderRadius: 1.5, border: '1px solid #fed7aa' }}>
                                       <Typography variant="caption" sx={{ fontWeight: 800, color: '#c2410c', display: 'flex', alignItems: 'center', gap: 0.6, mb: 0.8, textTransform: 'uppercase' }}>
                                         <Factory sx={{ fontSize: 15 }} />
-                                        Job Work Ledger-wise Pending Stock ({(row.Jobworkers || []).length} Vendors):
+                                        Sub-Contract Ledger-wise Pending Stock ({(row.Jobworkers || []).length} Vendors):
                                       </Typography>
                                       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                                         {row.Jobworkers.map(j => {
@@ -2104,9 +2095,6 @@ const StockReportContent = () => {
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 900, color: '#0F3B66', fontSize: '0.9rem' }}>
                           {Number(totals.totalStock || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 800, color: '#334155' }}>
-                          {Number(totals.totalWeight || 0).toFixed(3)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 900, color: '#c2410c' }}>
                           ₹{Number(totals.totalValuation || 0).toFixed(2)}
@@ -2276,7 +2264,7 @@ const StockReportContent = () => {
                     onChange={(e) => setDeadStockCategoryFilter(e.target.value)}
                   >
                     <MenuItem value="All">All Categories</MenuItem>
-                    <MenuItem value="SubContract">SubContract</MenuItem>
+                    <MenuItem value="SubContract">Sub-Contract</MenuItem>
                     <MenuItem value="Inhouse">Inhouse</MenuItem>
                     <MenuItem value="BOP">BOP</MenuItem>
                   </Select>
@@ -2557,7 +2545,7 @@ const StockReportContent = () => {
                 ? 'Item Stock Preview' 
                 : reportType === 'department' 
                   ? 'Department Stock Preview' 
-                  : 'Job Work Stock Preview'
+                  : 'Sub-Contract Stock Preview'
         } 
       />
     </Box>

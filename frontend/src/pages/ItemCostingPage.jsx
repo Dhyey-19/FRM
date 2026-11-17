@@ -5,8 +5,6 @@ import {
   Grid,
   TextField,
   Paper,
-  Tabs,
-  Tab,
   Table,
   TableHead,
   TableBody,
@@ -42,7 +40,7 @@ import {
   KeyboardArrowUp as ArrowUpIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { DEFAULT_CONFIG, SIZES, SERIES_DEFINITIONS, calculateCosting } from '../utils/itemCostingEngine';
+import { DEFAULT_CONFIG, SIZES } from '../utils/itemCostingEngine';
 import * as XLSX from 'xlsx';
 
 const RED_CELL_STYLE = {
@@ -87,12 +85,6 @@ const ItemCostingPage = () => {
   // Batch Update Progress State
   const [updatingBatch, setUpdatingBatch] = useState(false);
   const [updatingRowKey, setUpdatingRowKey] = useState(null);
-
-  // Page view mode: 0 = Multi-Item BOM Costing Calculator, 1 = Complete 8-Series Matrix
-  const [pageTab, setPageTab] = useState(0);
-  const [matrixSeriesTab, setMatrixSeriesTab] = useState(0);
-  const [matrixMargins, setMatrixMargins] = useState({});
-  const [bulkMatrixMarginVal, setBulkMatrixMarginVal] = useState('');
 
   // 1. Fetch Config from Database
   const fetchConfig = async () => {
@@ -164,12 +156,7 @@ const ItemCostingPage = () => {
     };
   }, [config]);
 
-  // 4. Matrix for Tab 1 (Excel Reference)
-  const calculationResult = useMemo(() => {
-    return calculateCosting(config, matrixMargins);
-  }, [config, matrixMargins]);
-
-  // 5. Live dynamic calculation of each item's BOM and total costing in real time
+  // Live dynamic calculation of each item's BOM and total costing in real time
   const itemsWithLiveCalculations = useMemo(() => {
     const pRate = Number(config.PipeRatePerMeter) || DEFAULT_CONFIG.PipeRatePerMeter;
     const hcpRate = Number(config.HcpPipeRatePerMeter) || DEFAULT_CONFIG.HcpPipeRatePerMeter;
@@ -860,24 +847,8 @@ const ItemCostingPage = () => {
         </Grid>
       </Paper>
 
-      {/* VIEW TABS */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs 
-          value={pageTab} 
-          onChange={(e, val) => setPageTab(val)}
-          sx={{
-            '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', fontSize: '0.95rem' },
-            '& .Mui-selected': { color: '#0F3B66' }
-          }}
-        >
-          <Tab icon={<BOMIcon />} iconPosition="start" label="Product Costing & BOM Calculator (Filtered Multi-Record View)" />
-          <Tab icon={<CalculateIcon />} iconPosition="start" label="Complete 8-Series Production Matrix (Excel Reference)" />
-        </Tabs>
-      </Box>
-
-      {/* TAB 0: MULTI-DROPDOWN FILTERING & BATCH PRICING UPDATE */}
-      {pageTab === 0 && (
-        <Box>
+      {/* PRODUCT COSTING & BOM CALCULATOR (FILTERED MULTI-RECORD VIEW) */}
+      <Box>
           {/* 4 DROPDOWNS FILTER BAR: Category, ItemCode, SubCode, ProductName */}
           <Paper elevation={2} sx={{ p: 2.5, mb: 3, borderRadius: 2, bgcolor: '#ffffff', border: '1px solid #cbd5e1' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, pb: 1, borderBottom: '1.5px solid #e2e8f0', flexWrap: 'wrap', gap: 1 }}>
@@ -1290,241 +1261,6 @@ const ItemCostingPage = () => {
             </TableContainer>
           )}
         </Box>
-      )}
-
-      {/* TAB 1: COMPLETE 8-SERIES PRODUCTION MATRIX (EXCEL REFERENCE) */}
-      {pageTab === 1 && (
-        <Box>
-          {/* Global Margin Quick Fill Tool */}
-          <Paper elevation={0} sx={{ p: 2, mb: 3, borderRadius: 2, border: '1px solid #fed7aa', bgcolor: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <TrendingUpIcon sx={{ color: '#ea580c', fontSize: 28 }} />
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9a3412' }}>
-                  Batch Margin Tool for Production Matrix
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#c2410c' }}>
-                  Quickly apply a profit margin across all sizes and series to instantly compute the Sale Price (MRP = Costing + Margin).
-                </Typography>
-              </Box>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <TextField
-                size="small"
-                type="number"
-                placeholder="Margin in ₹"
-                value={bulkMatrixMarginVal}
-                onChange={(e) => setBulkMatrixMarginVal(e.target.value)}
-                InputProps={{ startAdornment: <InputAdornment position="start">₹</InputAdornment> }}
-                sx={{ width: 150, bgcolor: '#ffffff' }}
-              />
-              <Button
-                variant="contained"
-                onClick={() => {
-                  const num = Number(bulkMatrixMarginVal);
-                  if (isNaN(num)) return;
-                  const newMargins = {};
-                  SERIES_DEFINITIONS.forEach(s => {
-                    newMargins[s.seriesKey] = {};
-                    SIZES.forEach(sz => {
-                      newMargins[s.seriesKey][sz.size] = num;
-                    });
-                  });
-                  setMatrixMargins(newMargins);
-                  setToast({ show: true, message: `Applied margin ₹${num} across all matrix series and sizes!`, severity: 'success' });
-                }}
-                sx={{ bgcolor: '#ea580c', '&:hover': { bgcolor: '#c2410c' }, textTransform: 'none', fontWeight: 700 }}
-              >
-                Apply to All 40 Sizes
-              </Button>
-            </Box>
-          </Paper>
-
-          {/* Series Tabs */}
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs 
-              value={matrixSeriesTab} 
-              onChange={(e, val) => setMatrixSeriesTab(val)}
-              variant="scrollable"
-              scrollButtons="auto"
-              sx={{
-                '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', fontSize: '0.9rem' },
-                '& .Mui-selected': { color: '#0F3B66', fontWeight: 800 }
-              }}
-            >
-              <Tab label="All 8 Series (Complete Grid)" />
-              {calculationResult.series.map(s => (
-                <Tab key={s.seriesKey} label={`${s.seriesKey} Series`} />
-              ))}
-            </Tabs>
-          </Box>
-
-          {/* Matrix Tables */}
-          {calculationResult.series
-            .filter((s, idx) => matrixSeriesTab === 0 || matrixSeriesTab === idx + 1)
-            .map(s => (
-              <Paper 
-                key={s.seriesKey}
-                elevation={2}
-                sx={{ 
-                  p: 2.5, 
-                  mb: 3, 
-                  borderRadius: 2, 
-                  border: '1px solid #cbd5e1',
-                  bgcolor: '#ffffff'
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '2px solid #0F3B66', flexWrap: 'wrap', gap: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F3B66' }}>
-                    {s.seriesName}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip 
-                      label={`Nut: ${s.nutName} (₹${s.nutUnitCost} × 2 = ₹${s.nutTotalCost})`} 
-                      size="small" 
-                      sx={{ bgcolor: '#f1f5f9', fontWeight: 600, color: '#334155' }} 
-                    />
-                    <Chip 
-                      label={`Inner: ${s.innerName} (₹${s.innerUnitCost} × 2 = ₹${s.innerTotalCost})`} 
-                      size="small" 
-                      sx={{ bgcolor: '#f1f5f9', fontWeight: 600, color: '#334155' }} 
-                    />
-                    {s.isHcp && (
-                      <Chip 
-                        label="HCP Pipe" 
-                        size="small" 
-                        sx={{ bgcolor: '#e0f2fe', color: '#0284c7', fontWeight: 700 }} 
-                      />
-                    )}
-                  </Box>
-                </Box>
-
-                <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5 }}>
-                  <Table size="small">
-                    <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 700, width: '22%', color: '#475569' }}>Sub-Item / Component</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ fontWeight: 800, color: '#0F3B66', fontSize: '0.92rem' }}>
-                            {sz.size}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Pipe Cost (Rate/38×mult)</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ fontWeight: 500 }}>
-                            ₹{sz.pipeCost.toFixed(2)}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Cap</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ color: '#64748b' }}>₹{sz.capCost.toFixed(2)}</TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Nut ({s.nutName} ×2)</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ color: '#64748b' }}>₹{sz.nutCost.toFixed(2)}</TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Inner ({s.innerName} ×2)</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ color: '#64748b' }}>₹{sz.innerCost.toFixed(2)}</TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Key</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ color: '#64748b' }}>₹{sz.keyCost.toFixed(2)}</TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Washer</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ color: '#64748b' }}>₹{sz.washerCost.toFixed(2)}</TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Labour</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ color: '#64748b' }}>₹{sz.labourCost.toFixed(2)}</TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow hover>
-                        <TableCell sx={{ color: '#475569' }}>Packing</TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ color: '#64748b' }}>₹{sz.packingCost.toFixed(2)}</TableCell>
-                        ))}
-                      </TableRow>
-
-                      <TableRow sx={{ bgcolor: '#eff6ff', borderTop: '2px solid #3b82f6' }}>
-                        <TableCell sx={{ fontWeight: 800, color: '#1e3a8a', fontSize: '0.92rem' }}>
-                          ITEM COSTING (₹)
-                        </TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ fontWeight: 800, color: '#1e40af', fontSize: '1rem' }}>
-                            ₹{sz.totalCost.toFixed(2)}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-
-                      <TableRow sx={{ bgcolor: '#fffbeb' }}>
-                        <TableCell sx={{ fontWeight: 700, color: '#b45309' }}>
-                          + Add Margin (₹)
-                        </TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ p: 0.8 }}>
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={matrixMargins[s.seriesKey]?.[sz.size] ?? ''}
-                              placeholder="0"
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                setMatrixMargins(prev => ({
-                                  ...prev,
-                                  [s.seriesKey]: {
-                                    ...(prev[s.seriesKey] || {}),
-                                    [sz.size]: val
-                                  }
-                                }));
-                              }}
-                              InputProps={{
-                                startAdornment: <InputAdornment position="start">₹</InputAdornment>
-                              }}
-                              sx={{
-                                width: 105,
-                                bgcolor: '#ffffff',
-                                '& input': { textAlign: 'right', fontWeight: 600, color: '#b45309' }
-                              }}
-                            />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-
-                      <TableRow sx={{ bgcolor: '#dcfce7', borderTop: '2px solid #22c55e', borderBottom: '2px solid #22c55e' }}>
-                        <TableCell sx={{ fontWeight: 800, color: '#14532d', fontSize: '0.95rem' }}>
-                          SALE PRICE / MRP (₹)
-                        </TableCell>
-                        {s.sizes.map(sz => (
-                          <TableCell key={sz.size} align="center" sx={{ fontWeight: 900, color: '#15803d', fontSize: '1.08rem' }}>
-                            ₹{sz.salePrice.toFixed(2)}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-            ))}
-        </Box>
-      )}
     </Box>
   );
 };

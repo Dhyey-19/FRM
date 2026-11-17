@@ -202,10 +202,11 @@ const DepartmentMaster = () => {
         const data = XLSX.utils.sheet_to_json(ws);
 
         if (data.length > 0) {
-          const mappedData = data.map(row => ({
+          const mappedData = data.map((row, idx) => ({
+            __rowNum__: idx + 2,
             DeptName: row['Department Name'] || row.DeptName || row.DepartmentName || row.Department || '',
             Costing: parseFloat(row.Costing !== undefined ? row.Costing : row['Costing']) || 0
-          })).filter(r => r.DeptName && String(r.DeptName).trim());
+          }));
 
           if (mappedData.length === 0) {
             alert('No valid department rows found in the uploaded file.');

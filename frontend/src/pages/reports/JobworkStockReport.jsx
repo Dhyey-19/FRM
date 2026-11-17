@@ -57,7 +57,7 @@ const JobworkStockReport = () => {
 
   const columns = useMemo(() => {
     return [
-      { field: 'LedgerName', headerName: 'Job Worker', width: getColWidth('LedgerName', 'Job Worker', 180) },
+      { field: 'LedgerName', headerName: 'Sub-Contractor', width: getColWidth('LedgerName', 'Sub-Contractor', 180) },
       { field: 'ItemCode', headerName: 'Item Code', width: getColWidth('ItemCode', 'Item Code', 110) },
       { field: 'SubCode', headerName: 'Sub Code', width: getColWidth('SubCode', 'Sub Code', 100), valueGetter: (value, row) => row?.SubCode || '-' },
       { field: 'ItemName', headerName: 'Item Name', width: getColWidth('ItemName', 'Item Name', 180) },
@@ -118,7 +118,7 @@ const JobworkStockReport = () => {
     
     doc.setFontSize(14);
     doc.setTextColor(100);
-    doc.text('Job Work Outstanding Stock Report', 14, 30);
+    doc.text('Sub-Contract Outstanding Stock Report', 14, 30);
     
     // Add date
     doc.setFontSize(10);
@@ -145,7 +145,7 @@ const JobworkStockReport = () => {
     ]);
     
     autoTable(doc, {
-      head: [['Job Worker', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt', 'Costing (Rs.)', 'Valuation (Rs.)']],
+      head: [['Sub-Contractor', 'Item Code', 'Sub Code', 'Item Name', 'Sent Qty', 'Sent Wt', 'Ret Qty', 'Ret Wt', 'Outs Qty', 'Outs Wt', 'Costing (Rs.)', 'Valuation (Rs.)']],
       body: tableData,
       startY: 45,
       theme: 'grid',
@@ -198,7 +198,7 @@ const JobworkStockReport = () => {
 
   const handleExportExcel = () => {
     const exportData = stockRecords.map(row => ({
-      'Job Worker': row.LedgerName,
+      'Sub-Contractor': row.LedgerName,
       'Item Code': row.ItemCode,
       'Sub Code': row.SubCode || '-',
       'Item Name': row.ItemName,
@@ -223,7 +223,7 @@ const JobworkStockReport = () => {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-          Subcontract Stock Report
+          Sub-Contract Stock Report
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
           <Button 
@@ -330,7 +330,7 @@ const JobworkStockReport = () => {
         open={previewOpen} 
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
-        title="Job Work Stock Preview" 
+        title="Sub-Contract Stock Preview" 
       />
     </Box>
   );

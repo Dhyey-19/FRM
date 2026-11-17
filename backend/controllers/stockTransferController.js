@@ -143,9 +143,11 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
         WHERE ItemCode = '${detail.OutItemCode}' AND ISNULL(SubCode, '') = '${outSub}'
       `);
     } else {
-      // Reduce DepartmentStock
-      const pcsChange = -1 * multiplier * (detail.OutPcs || 0);
-      const wtChange = -1 * multiplier * (detail.OutWeight || 0);
+      // Reduce DepartmentStock based on Unit
+      const unit = String(units[`${detail.OutItemCode}_${outSub}`] || '').toUpperCase();
+      const isKg = unit === 'KG' || unit === 'KGS';
+      const pcsChange = isKg ? 0 : (-1 * multiplier * (detail.OutPcs || 0));
+      const wtChange = isKg ? (-1 * multiplier * (detail.OutWeight || 0)) : 0;
 
       const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${FromDeptID} AND ItemCode = '${detail.OutItemCode}' AND ISNULL(SubCode, '') = '${outSub}'`);
       if (check.recordset.length > 0) {
@@ -180,9 +182,11 @@ const modifyStock = async (request, detail, FromDeptID, ToDeptID, multiplier = 1
         WHERE ItemCode = '${detail.InItemCode}' AND ISNULL(SubCode, '') = '${inSub}'
       `);
     } else {
-      // Increase DepartmentStock
-      const pcsChange = 1 * multiplier * (detail.InPcs || 0);
-      const wtChange = 1 * multiplier * (detail.InWeight || 0);
+      // Increase DepartmentStock based on Unit
+      const unit = String(units[`${detail.InItemCode}_${inSub}`] || '').toUpperCase();
+      const isKg = unit === 'KG' || unit === 'KGS';
+      const pcsChange = isKg ? 0 : (1 * multiplier * (detail.InPcs || 0));
+      const wtChange = isKg ? (1 * multiplier * (detail.InWeight || 0)) : 0;
 
       const check = await request.query(`SELECT * FROM DepartmentStock WHERE DeptID = ${ToDeptID} AND ItemCode = '${detail.InItemCode}' AND ISNULL(SubCode, '') = '${inSub}'`);
       if (check.recordset.length > 0) {

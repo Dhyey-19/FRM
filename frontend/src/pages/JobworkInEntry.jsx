@@ -4,7 +4,8 @@ import {
   Box, Typography, Paper, Toolbar, Button, TextField, InputAdornment,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert,
-  Autocomplete, Grid, Divider, Checkbox, FormControlLabel, Chip, ToggleButtonGroup, ToggleButton
+  Autocomplete, Grid, Divider, Checkbox, FormControlLabel, Chip, ToggleButtonGroup, ToggleButton,
+  FormControl, Select, MenuItem
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -31,10 +32,10 @@ const emptyRow = {
   GROSSWT: '',
   NETWT: '',
   TENPCSWT: '',
-  SCRAPITEMCODE: '',
+  SCRAPITEMCODE: null,
   SCRAPSUBCODE: '',
-  SCRAPPCS: '',
-  SCRAPWT: '',
+  SCRAPPCS: 0,
+  SCRAPWT: 0,
   QUANTITY: '',
   PROCESS: '',
   UNIT: '',
@@ -42,7 +43,7 @@ const emptyRow = {
   AMOUNT: ''
 };
 
-const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
+const JobworkInEntry = ({ hideTitle = false, title = 'Sub-Contract IN' }) => {
   const [jwInwards, setJwInwards] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [items, setItems] = useState([]);
@@ -69,6 +70,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
   const [jwInwardNo, setJwInwardNo] = useState('');
   const [jwInwardDate, setJwInwardDate] = useState(todayDate);
   const [ledgerId, setLedgerId] = useState(null);
+  const [itemTypeFilter, setItemTypeFilter] = useState('Unfinished');
   const jwOutwardNo = 'All';
   const [jobworkOuts, setJobworkOuts] = useState([]);
   const [totalAmount, setTotalAmount] = useState('');
@@ -103,7 +105,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       jwInwards.filter(jw => jw.LEDGERID === ledgerId && jw.ID !== editingId).forEach(inward => {
         if (inward.Details) {
           inward.Details.forEach(d => {
-            if (d.OUTITEMCODE === itemCode && (d.OUTSUBCODE || '') === safeSub) {
+            if ((d.OUTITEMCODE === itemCode || d.INITEMCODE === itemCode) && ((d.OUTSUBCODE || d.INSUBCODE || '') === safeSub)) {
               receivedQty += parseFloat(d.QUANTITY) || 0;
               receivedNetWt += parseFloat(d.NETWT) || 0;
             }
@@ -132,7 +134,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       if (inward.JWOUTWARDNO === targetOutwardNo && inward.ID !== editingId) {
         if (inward.Details) {
           inward.Details.forEach(d => {
-            if (d.OUTITEMCODE === itemCode && (d.OUTSUBCODE || '') === safeSub) {
+            if ((d.OUTITEMCODE === itemCode || d.INITEMCODE === itemCode) && ((d.OUTSUBCODE || d.INSUBCODE || '') === safeSub)) {
               receivedQty += parseFloat(d.QUANTITY) || 0;
               receivedNetWt += parseFloat(d.NETWT) || 0;
             }
@@ -147,33 +149,47 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     };
   };
 
-  const getOutItemOptions = () => {
-    if (!jwOutwardNo) return [];
-    if (jwOutwardNo === 'All') {
-      const outItemKeys = new Set();
-      const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
-      allOutwards.forEach(jw => {
-        if (jw.Details) {
-          jw.Details.forEach(d => {
-            const bal = getItemBalance(d.ITEMCODE, d.SUBCODE || '', 'All');
-            if (bal.qty > 0 || bal.wt > 0) {
-              outItemKeys.add(`${d.ITEMCODE}_${d.SUBCODE || ''}`);
-            }
-          });
-        }
+  const getFilteredItemsByType = () => {
+    if (itemTypeFilter === 'Unfinished') {
+      return items.filter(i => {
+        const t = (i.ItemType || '').toLowerCase();
+        return t.includes('unfinish') || t.includes('semi') || i.ItemType === 'SF' || i.ItemType === 'WIP';
       });
-      return items.filter(i => outItemKeys.has(`${i.ItemCode}_${i.SubCode || ''}`));
+    } else if (itemTypeFilter !== 'All') {
+      return items.filter(i => i.ItemType === itemTypeFilter);
     }
-    const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
-    if (!selectedOutward || !selectedOutward.Details) return [];
+    return items;
+  };
+
+  const getOutItemOptions = () => {
+    const baseItems = getFilteredItemsByType();
+    if (!ledgerId) return baseItems;
+
     const outItemKeys = new Set();
-    selectedOutward.Details.forEach(d => {
-      const bal = getItemBalance(d.ITEMCODE, d.SUBCODE || '', jwOutwardNo);
-      if (bal.qty > 0 || bal.wt > 0) {
-        outItemKeys.add(`${d.ITEMCODE}_${d.SUBCODE || ''}`);
+    const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
+    allOutwards.forEach(jw => {
+      if (jw.Details) {
+        jw.Details.forEach(d => {
+          const bal = getItemBalance(d.ITEMCODE, d.SUBCODE || '', 'All');
+          if (bal.qty > 0 || bal.wt > 0) {
+            outItemKeys.add(`${d.ITEMCODE}_${d.SUBCODE || ''}`);
+          }
+        });
       }
     });
-    return items.filter(i => outItemKeys.has(`${i.ItemCode}_${i.SubCode || ''}`));
+
+    const pendingItems = baseItems.filter(i => outItemKeys.has(`${i.ItemCode}_${i.SubCode || ''}`));
+    if (pendingItems.length > 0) return pendingItems;
+    return baseItems;
+  };
+
+  const getRowOutItemOptions = (itemCode, subCode) => {
+    const list = getOutItemOptions();
+    if (itemCode && !list.some(i => i.ItemCode === itemCode && (i.SubCode || '') === (subCode || ''))) {
+      const match = items.find(i => i.ItemCode === itemCode && (i.SubCode || '') === (subCode || ''));
+      if (match) return [match, ...list];
+    }
+    return list;
   };
 
   const fetchJwInwards = async () => {
@@ -254,9 +270,25 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     fetchJobworkOuts();
   }, []);
 
+  const calculateRowAmount = (row) => {
+    const unit = row.UNIT ? row.UNIT.trim().toUpperCase() : '';
+    const rate = parseFloat(row.RATE) || 0;
+    if (unit === 'KGS' || unit === 'KG') {
+      const netwt = parseFloat(row.NETWT) || 0;
+      return (netwt * rate).toFixed(2);
+    } else {
+      const qty = parseFloat(row.QUANTITY) || 0;
+      return (qty * rate).toFixed(2);
+    }
+  };
+
+  const calculateEstimatedTotalValue = (rows) => {
+    return rows.reduce((sum, r) => sum + (parseFloat(r.AMOUNT !== undefined && r.AMOUNT !== '' ? r.AMOUNT : calculateRowAmount(r)) || 0), 0);
+  };
+
   // Update total amount whenever gridRows changes
   useEffect(() => {
-    const total = gridRows.reduce((sum, row) => sum + (parseFloat(row.AMOUNT) || 0), 0);
+    const total = calculateEstimatedTotalValue(gridRows);
     setTotalAmount(total.toFixed(2));
   }, [gridRows]);
 
@@ -310,11 +342,9 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     setDialogError('');
     setEditingId(null);
     
-    // Immediately pre-fill auto-incremented challan no
     const nextNo = generateNextJwInwardNo(jwInwards);
     setJwInwardNo(nextNo);
 
-    // Sync latest next number from server
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/jobwork-ins/next-no`);
       if (response.ok) {
@@ -330,6 +360,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     setJwInwardDate(new Date().toISOString().split('T')[0]);
     setBill(true);
     setLedgerId(null);
+    setItemTypeFilter('Unfinished');
     setRemark('');
     setGridRows([{ ...emptyRow }]);
     setOpenDialog(true);
@@ -342,26 +373,27 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     setJwInwardNo(jw.JWINWARDNO || '');
     setJwInwardDate(jw.JWINWARDDATE ? jw.JWINWARDDATE.split('T')[0] : new Date().toISOString().split('T')[0]);
     setLedgerId(jw.LEDGERID);
+    setItemTypeFilter('Unfinished');
     setRemark(jw.REMARK || '');
     
     if (jw.Details && jw.Details.length > 0) {
       setGridRows(jw.Details.map(d => ({
-        OUTITEMCODE: d.OUTITEMCODE || '',
-        OUTSUBCODE: d.OUTSUBCODE || '',
-        INITEMCODE: d.INITEMCODE || '',
-        INSUBCODE: d.INSUBCODE || '',
-        GROSSWT: d.GROSSWT !== null ? d.GROSSWT.toString() : '',
-        NETWT: d.NETWT !== null ? d.NETWT.toString() : '',
+        OUTITEMCODE: d.OUTITEMCODE || d.INITEMCODE || '',
+        OUTSUBCODE: d.OUTSUBCODE || d.INSUBCODE || '',
+        INITEMCODE: d.INITEMCODE || d.OUTITEMCODE || '',
+        INSUBCODE: d.INSUBCODE || d.OUTSUBCODE || '',
+        GROSSWT: d.GROSSWT !== null && d.GROSSWT !== undefined ? d.GROSSWT.toString() : '',
+        NETWT: d.NETWT !== null && d.NETWT !== undefined ? d.NETWT.toString() : '',
         TENPCSWT: d.TENPCSWT !== null && d.TENPCSWT !== undefined ? d.TENPCSWT.toString() : '',
-        SCRAPITEMCODE: d.SCRAPITEMCODE || '',
-        SCRAPSUBCODE: d.SCRAPSUBCODE || '',
-        SCRAPPCS: d.SCRAPPCS !== null ? d.SCRAPPCS.toString() : '',
-        SCRAPWT: d.SCRAPWT !== null ? d.SCRAPWT.toString() : '',
-        QUANTITY: d.QUANTITY !== null ? d.QUANTITY.toString() : '',
+        SCRAPITEMCODE: null,
+        SCRAPSUBCODE: '',
+        SCRAPPCS: 0,
+        SCRAPWT: 0,
+        QUANTITY: d.QUANTITY !== null && d.QUANTITY !== undefined ? d.QUANTITY.toString() : '',
         PROCESS: d.PROCESS || '',
         UNIT: d.UNIT || '',
-        RATE: d.RATE !== null ? d.RATE.toString() : '',
-        AMOUNT: d.AMOUNT !== null ? d.AMOUNT.toString() : ''
+        RATE: d.RATE !== null && d.RATE !== undefined ? d.RATE.toString() : '',
+        AMOUNT: d.AMOUNT !== null && d.AMOUNT !== undefined ? d.AMOUNT.toString() : ''
       })));
     } else {
       setGridRows([{ ...emptyRow }]);
@@ -375,23 +407,10 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     setDialogError('');
   };
 
-  const calculateRowAmount = (row) => {
-    const unit = row.UNIT ? row.UNIT.trim().toUpperCase() : '';
-    const rate = parseFloat(row.RATE) || 0;
-    if (unit === 'KGS' || unit === 'KG') {
-      const netwt = parseFloat(row.NETWT) || 0;
-      return (netwt * rate).toFixed(2);
-    } else {
-      const qty = parseFloat(row.QUANTITY) || 0;
-      return (qty * rate).toFixed(2);
-    }
-  };
-
   const handleRowChange = (index, field, value) => {
     const newRows = [...gridRows];
     newRows[index][field] = value;
 
-    // Auto calculate Quantity if 10 Pcs Wt or Net Wt changes
     if (field === 'TENPCSWT' || field === 'NETWT') {
       const netWt = parseFloat(newRows[index].NETWT);
       const tenPcsWt = parseFloat(newRows[index].TENPCSWT);
@@ -401,7 +420,6 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       }
     }
 
-    // Auto calculate Amount if Qty, Rate, NetWt, Unit, GrossWt or 10 Pcs Wt changes
     if (['QUANTITY', 'RATE', 'NETWT', 'GROSSWT', 'UNIT', 'TENPCSWT'].includes(field)) {
       newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
@@ -409,49 +427,31 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     setGridRows(newRows);
   };
 
-  const handleItemSelect = (index, field, item) => {
+  const handleItemSelect = (index, item) => {
     const newRows = [...gridRows];
-    newRows[index][field] = item ? item.ItemCode : '';
-    const subField = field === 'OUTITEMCODE' ? 'OUTSUBCODE' : (field === 'INITEMCODE' ? 'INSUBCODE' : 'SCRAPSUBCODE');
-    newRows[index][subField] = item ? (item.SubCode || '') : '';
-    
-    if (field === 'OUTITEMCODE') {
-      newRows[index].INITEMCODE = item ? item.ItemCode : '';
-      newRows[index].INSUBCODE = item ? (item.SubCode || '') : '';
-      if (jwOutwardNo && item) {
-        let outwardDetail = null;
-        if (jwOutwardNo === 'All') {
-          const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
-          for (let jw of allOutwards) {
-            if (jw.Details) {
-              const det = jw.Details.find(d => d.ITEMCODE === item.ItemCode && (d.SUBCODE || '') === (item.SubCode || ''));
-              if (det) {
-                const bal = getItemBalance(item.ItemCode, item.SubCode || '', jw.JWOUTWARDNO);
-                if (bal.qty > 0 || bal.wt > 0) {
-                  outwardDetail = det;
-                  break;
-                }
-              }
-            }
+    const itemCode = item ? item.ItemCode : '';
+    const subCode = item ? (item.SubCode || '') : '';
+    newRows[index].OUTITEMCODE = itemCode;
+    newRows[index].OUTSUBCODE = subCode;
+    newRows[index].INITEMCODE = itemCode;
+    newRows[index].INSUBCODE = subCode;
+    newRows[index].UNIT = item ? item.Unit : '';
+
+    if (item && ledgerId) {
+      const allOutwards = jobworkOuts.filter(jw => jw.LEDGERID === ledgerId);
+      for (let jw of allOutwards) {
+        if (jw.Details) {
+          const det = jw.Details.find(d => d.ITEMCODE === itemCode && (d.SUBCODE || '') === subCode);
+          if (det) {
+            if (!newRows[index].PROCESS) newRows[index].PROCESS = det.PROCESS || '';
+            if (!newRows[index].RATE && det.RATE !== null && det.RATE !== undefined) newRows[index].RATE = det.RATE.toString();
+            break;
           }
-        } else {
-          const selectedOutward = jobworkOuts.find(jw => jw.JWOUTWARDNO === jwOutwardNo);
-          outwardDetail = selectedOutward?.Details?.find(d => d.ITEMCODE === item.ItemCode && (d.SUBCODE || '') === (item.SubCode || ''));
-        }
-        if (outwardDetail) {
-          newRows[index].PROCESS = outwardDetail.PROCESS || '';
-          newRows[index].RATE = outwardDetail.RATE !== null && outwardDetail.RATE !== undefined ? outwardDetail.RATE.toString() : '';
         }
       }
-      newRows[index].UNIT = item ? item.Unit : '';
-      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     }
-    
-    if (field === 'INITEMCODE') {
-      newRows[index].UNIT = item ? item.Unit : '';
-      newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
-    }
-    
+
+    newRows[index].AMOUNT = calculateRowAmount(newRows[index]);
     setGridRows(newRows);
   };
 
@@ -474,7 +474,6 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       format: 'a4'
     });
 
-    // Vendor Header (top-left)
     const vendorName = ledgerObj.LedgerName || 'Walk-in Party';
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
@@ -501,11 +500,10 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       doc.text(headerTaxDetails.join(' | '), 14, headerY);
     }
 
-    // Title
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    doc.text('JOB WORK INWARD CHALLAN', 196, 20, { align: 'right' });
+    doc.text('SUB-CONTRACT INWARD CHALLAN', 196, 20, { align: 'right' });
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -513,19 +511,18 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     doc.text(`Challan No: ${jw.JWINWARDNO}`, 196, 25, { align: 'right' });
     
     const dateVal = jw.JWINWARDDATE || new Date();
-    const formattedDate = new Date(dateVal).toLocaleDateString('en-GB'); // DD/MM/YYYY
+    const formattedDate = new Date(dateVal).toLocaleDateString('en-GB');
     doc.text(`Date: ${formattedDate}`, 196, 29, { align: 'right' });
 
     doc.setDrawColor(15, 59, 102);
     doc.setLineWidth(0.5);
-    const dividerY = Math.max(headerY + 2, 33);
+    const dividerY = Math.max(headerY + 6, 35);
     doc.line(14, dividerY, 196, dividerY);
 
-    // Receiver Details (FRM/Company details)
-    doc.setFontSize(10);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    doc.text('RECEIVER DETAILS', 14, dividerY + 7);
+    doc.text('RECEIVED AT:', 14, dividerY + 6);
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
@@ -562,35 +559,27 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       doc.text('GSTIN: 27AAAAA0000A1Z5 | Phone: +91 9876543210', 14, receiverY);
     }
 
-    // Table Column & Rows
-    const tableColumn = ["Sr.", "Out Item", "In Item", "Net Wt", "Qty", "Process", "Unit", "Scrap Item", "Scrap Pcs", "Scrap Wt", "Rate", "Amount"];
+    const tableColumn = ["Sr.", "Item", "Process", "Gross Wt", "Net Wt", "Qty", "Unit", "Rate", "Amount"];
     const detailsSource = isSaveAction ? jw.Details : (jw.Details || []);
     
     const tableRows = detailsSource.map((d, index) => {
-      const outMatched = items.find(item => item.ItemCode === d.OUTITEMCODE && (item.SubCode || '') === (d.OUTSUBCODE || ''));
-      const inMatched = items.find(item => item.ItemCode === d.INITEMCODE && (item.SubCode || '') === (d.INSUBCODE || ''));
-      const scrapMatched = items.find(item => item.ItemCode === d.SCRAPITEMCODE && (item.SubCode || '') === (d.SCRAPSUBCODE || ''));
-
-      const outName = outMatched ? `${d.OUTITEMCODE}${d.OUTSUBCODE ? ` / ${d.OUTSUBCODE}` : ''} - ${outMatched.ItemName}` : (d.OUTITEMCODE || '-');
-      const inName = inMatched ? `${d.INITEMCODE}${d.INSUBCODE ? ` / ${d.INSUBCODE}` : ''} - ${inMatched.ItemName}` : (d.INITEMCODE || '-');
-      const scrapName = scrapMatched ? `${d.SCRAPITEMCODE}${d.SCRAPSUBCODE ? ` / ${d.SCRAPSUBCODE}` : ''} - ${scrapMatched.ItemName}` : (d.SCRAPITEMCODE || '-');
+      const itemCodeDisplay = d.OUTITEMCODE || d.ITEMCODE || '-';
+      const itemSubDisplay = d.OUTSUBCODE || d.SUBCODE || '';
+      const matchedItem = items.find(item => item.ItemCode === itemCodeDisplay && (item.SubCode || '') === itemSubDisplay);
+      const itemName = matchedItem ? matchedItem.ItemName : (d.ItemName || itemCodeDisplay);
+      const gross = parseFloat(d.GROSSWT) || 0;
       const net = parseFloat(d.NETWT) || 0;
       const qty = parseFloat(d.QUANTITY) || 0;
-      const scrapPcs = parseFloat(d.SCRAPPCS) || 0;
-      const scrapWt = parseFloat(d.SCRAPWT) || 0;
       const rate = parseFloat(d.RATE) || 0;
-      const amt = parseFloat(d.AMOUNT) || 0;
+      const amt = parseFloat(d.AMOUNT !== undefined && d.AMOUNT !== '' ? d.AMOUNT : calculateRowAmount(d)) || 0;
       return [
         index + 1,
-        outName,
-        inName,
+        `${itemCodeDisplay}${itemSubDisplay ? ` / ${itemSubDisplay}` : ''} - ${itemName}`,
+        d.PROCESS || '-',
+        gross.toFixed(3),
         net.toFixed(3),
         qty.toFixed(2),
-        d.PROCESS || '-',
         d.UNIT || '-',
-        scrapName,
-        scrapPcs.toFixed(2),
-        scrapWt.toFixed(3),
         rate.toFixed(2),
         amt.toFixed(2)
       ];
@@ -603,19 +592,16 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       body: tableRows,
       startY: tableStartY,
       theme: 'grid',
-      headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-      styles: { fontSize: 7, cellPadding: 1 },
+      headStyles: { fillColor: [15, 59, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+      styles: { fontSize: 8.5, cellPadding: 1.5 },
       columnStyles: {
         0: { width: 8, halign: 'center' },
         3: { halign: 'right' },
         4: { halign: 'right' },
-        5: { halign: 'left' },
+        5: { halign: 'right' },
         6: { halign: 'center' },
-        7: { halign: 'left' },
-        8: { halign: 'right' },
-        9: { halign: 'right' },
-        10: { halign: 'right' },
-        11: { halign: 'right' }
+        7: { halign: 'right' },
+        8: { halign: 'right' }
       },
       margin: { top: 30 }
     });
@@ -623,17 +609,16 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     const finalY = doc.lastAutoTable.finalY + 8;
     const pageHeight = doc.internal.pageSize.height;
 
-    // Check pagination room
     let checkY = finalY;
     if (checkY + 45 > pageHeight - 30) {
       doc.addPage();
       checkY = 20;
     }
 
-    // Totals calculations
-    const totalQty = detailsSource.reduce((sum, r) => sum + (parseFloat(r.QUANTITY) || 0), 0);
+    const totalGross = detailsSource.reduce((sum, r) => sum + (parseFloat(r.GROSSWT) || 0), 0);
     const totalNet = detailsSource.reduce((sum, r) => sum + (parseFloat(r.NETWT) || 0), 0);
-    const estVal = detailsSource.reduce((sum, r) => sum + (parseFloat(r.AMOUNT) || 0), 0);
+    const totalQty = detailsSource.reduce((sum, r) => sum + (parseFloat(r.QUANTITY) || 0), 0);
+    const estVal = detailsSource.reduce((sum, r) => sum + (parseFloat(r.AMOUNT !== undefined && r.AMOUNT !== '' ? r.AMOUNT : calculateRowAmount(r)) || 0), 0);
 
     let labelY = checkY;
     const drawTotalLine = (label, value, isBold = false) => {
@@ -644,14 +629,14 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       labelY += 5;
     };
 
+    drawTotalLine('Total Gross Wt:', totalGross.toFixed(3));
     drawTotalLine('Total Net Wt:', totalNet.toFixed(3));
     drawTotalLine('Total Quantity:', totalQty.toFixed(2));
     labelY += 1;
     doc.line(120, labelY - 3, 196, labelY - 3);
     drawTotalLine('Grand Total Amount:', estVal.toFixed(2), true);
 
-    // Remarks
-    const remarkY = Math.max(checkY + 20, labelY + 2);
+    const remarkY = Math.max(checkY + 25, labelY + 2);
     if (jw.REMARK) {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
@@ -663,14 +648,12 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       doc.text(splitRemark, 14, remarkY + 4);
     }
 
-    // Signatures
     doc.line(14, pageHeight - 30, 70, pageHeight - 30);
     doc.text('Prepared By', 42, pageHeight - 25, { align: 'center' });
 
     doc.line(140, pageHeight - 30, 196, pageHeight - 30);
     doc.text('Authorized Signatory', 168, pageHeight - 25, { align: 'center' });
 
-    // Use iframe for printing
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     setPreviewUrl(url);
@@ -688,10 +671,20 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       return;
     }
 
-    const validRows = gridRows.filter(r => r.OUTITEMCODE && r.INITEMCODE && (parseFloat(r.QUANTITY) > 0 || parseFloat(r.NETWT) > 0));
+    const validRows = gridRows.filter(r => r.OUTITEMCODE);
     if (validRows.length === 0) {
-      setDialogError('Please fill in at least one valid row with Raw Material, Finished Item, and Quantity or Net Wt.');
+      setDialogError('Please fill in at least one valid row with an Item.');
       return;
+    }
+
+    // Compulsory Pcs check when Unit is PCS
+    for (let i = 0; i < validRows.length; i++) {
+      const r = validRows[i];
+      const u = String(r.UNIT || '').trim().toUpperCase();
+      if ((u === 'PCS' || (!u.includes('KG') && u !== '')) && (!r.QUANTITY || parseFloat(r.QUANTITY) <= 0)) {
+        setDialogError(`Pcs / Quantity is compulsory for row #${i + 1} (${r.OUTITEMCODE}) because its unit is PCS.`);
+        return;
+      }
     }
 
     const localUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user')) || {};
@@ -708,19 +701,22 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
       CREATEDBY: username,
       UPDATEDBY: username,
       Details: validRows.map(r => ({
-        ...r,
+        OUTITEMCODE: r.OUTITEMCODE,
         OUTSUBCODE: r.OUTSUBCODE || '',
-        INSUBCODE: r.INSUBCODE || '',
+        INITEMCODE: r.OUTITEMCODE,
+        INSUBCODE: r.OUTSUBCODE || '',
         GROSSWT: r.GROSSWT ? parseFloat(r.GROSSWT) : 0,
         NETWT: r.NETWT ? parseFloat(r.NETWT) : 0,
         TENPCSWT: r.TENPCSWT ? parseFloat(r.TENPCSWT) : null,
-        SCRAPITEMCODE: r.SCRAPITEMCODE || null,
-        SCRAPSUBCODE: r.SCRAPSUBCODE || '',
-        SCRAPPCS: r.SCRAPPCS ? parseFloat(r.SCRAPPCS) : 0,
-        SCRAPWT: r.SCRAPWT ? parseFloat(r.SCRAPWT) : 0,
+        SCRAPITEMCODE: null,
+        SCRAPSUBCODE: '',
+        SCRAPPCS: 0,
+        SCRAPWT: 0,
         QUANTITY: r.QUANTITY ? parseFloat(r.QUANTITY) : 0,
+        PROCESS: r.PROCESS || null,
+        UNIT: r.UNIT || null,
         RATE: r.RATE ? parseFloat(r.RATE) : 0,
-        AMOUNT: r.AMOUNT ? parseFloat(r.AMOUNT) : 0
+        AMOUNT: r.AMOUNT !== undefined && r.AMOUNT !== '' ? parseFloat(r.AMOUNT) : parseFloat(calculateRowAmount(r))
       }))
     };
 
@@ -746,7 +742,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
         fetchJwInwards();
       } else {
         const data = await response.json();
-        setDialogError(data.message || 'Error saving job work in');
+        setDialogError(data.message || 'Error saving sub-contract in');
       }
     } catch (error) {
       console.error('Error during save:', error);
@@ -773,58 +769,69 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
     }
   };
 
-  const maxLedgerLength = ledgers.length > 0 ? Math.max(...ledgers.map(l => (l.LedgerName || '').length)) : 15;
-
   return (
     <Box>
       {!hideTitle && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <JwInIcon /> {title}
-          </Typography>
-        </Box>
+        <Paper sx={{ mb: 3, p: 2, background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', color: 'white', borderRadius: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <JwInIcon sx={{ fontSize: 32, color: '#38bdf8' }} />
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+                {title} (Material Receipt)
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                Receive processed / semi-finished goods back from sub-contract parties
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
       )}
 
-      <Paper sx={{ width: '100%', mb: 2, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <Toolbar sx={{ pl: { xs: 1.5, sm: 2 }, pr: { xs: 1.5, sm: 2 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 2, pb: 2, flexWrap: 'wrap', gap: 2 }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
+      <Paper sx={{ width: '100%', mb: 2, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
+        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 }, py: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
             <TextField
               size="small"
-              placeholder={`Search ${title}...`}
+              placeholder="Search Challan / Party..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment> }}
-              sx={{ width: { xs: '100%', sm: 220 } }}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+                endAdornment: searchTerm && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchTerm('')}><CloseIcon fontSize="small" /></IconButton>
+                  </InputAdornment>
+                )
+              }}
+              sx={{ width: { xs: '100%', sm: 240 } }}
             />
             <TextField
-              label="From Date"
-              type="date"
               size="small"
+              type="date"
+              label="From Date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: { xs: 'calc(50% - 8px)', sm: 150 } }}
+              sx={{ width: { xs: '47%', sm: 140 } }}
             />
             <TextField
-              label="To Date"
-              type="date"
               size="small"
+              type="date"
+              label="To Date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ width: { xs: 'calc(50% - 8px)', sm: 150 } }}
+              sx={{ width: { xs: '47%', sm: 140 } }}
             />
-            <Button size="small" onClick={() => { setFromDate(''); setToDate(''); }} sx={{ width: { xs: '100%', sm: 'auto' } }}>Clear Dates</Button>
-
             <ToggleButtonGroup
+              size="small"
               value={billFilter}
               exclusive
-              onChange={(e, nextMode) => { if (nextMode) setBillFilter(nextMode); }}
-              size="small"
-              sx={{ bgcolor: '#f8fafc', width: { xs: '100%', sm: 'auto' } }}
+              onChange={(e, val) => { if (val) setBillFilter(val); }}
+              sx={{ height: 38, width: { xs: '100%', sm: 'auto' }, display: 'flex' }}
             >
               <ToggleButton value="combined" sx={{ flex: { xs: 1, sm: 'none' }, fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
-                <ReceiptLong fontSize="small" sx={{ mr: 0.5 }} /> Combined
+                <ReceiptLong fontSize="small" color="action" sx={{ mr: 0.5 }} /> All
               </ToggleButton>
               <ToggleButton value="with_bill" sx={{ flex: { xs: 1, sm: 'none' }, fontWeight: 600, textTransform: 'none', px: 1.5, py: 0.5, fontSize: '0.8rem' }}>
                 <Receipt fontSize="small" color="primary" sx={{ mr: 0.5 }} /> With Bill
@@ -888,7 +895,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
               ))}
               {filteredJwInwards.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>No Job Work In entries found.</TableCell>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>No Sub-Contract In entries found.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -946,158 +953,102 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
             </Grid>
           </Paper>
 
+          {/* Filter by Item Type Bar */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              Received Items (Sub-Contract In)
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>Filter Item Type:</Typography>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <Select
+                  value={itemTypeFilter}
+                  onChange={(e) => setItemTypeFilter(e.target.value)}
+                  sx={{ height: 32, fontSize: '0.82rem', bgcolor: '#fff' }}
+                >
+                  <MenuItem value="Unfinished" sx={{ fontSize: '0.82rem' }}>Unfinished / Semi-Finished</MenuItem>
+                  <MenuItem value="All" sx={{ fontSize: '0.82rem' }}>All Item Types</MenuItem>
+                  {[...new Set(items.map(i => i.ItemType).filter(Boolean))]
+                    .filter(t => !t.toLowerCase().includes('unfinish') && !t.toLowerCase().includes('semi') && t.toUpperCase() !== 'SF')
+                    .map(t => (
+                      <MenuItem key={t} value={t} sx={{ fontSize: '0.82rem' }}>{t}</MenuItem>
+                    ))
+                  }
+                </Select>
+              </FormControl>
+            </Box>
+          </Box>
+
           {/* Grid Section */}
-          <TableContainer component={Paper} sx={{ mb: 2, maxHeight: '50vh', border: '1px solid #e0e0e0', boxShadow: 'none' }}>
-            <Table stickyHeader size="small" sx={{ minWidth: 950 }}>
+          <TableContainer component={Paper} sx={{ mb: 2, maxHeight: '42vh', border: '1px solid #e0e0e0', boxShadow: 'none' }}>
+            <Table stickyHeader size="small" sx={{ minWidth: 850 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '22%', minWidth: 140 }}>Out Item (Raw)</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '22%', minWidth: 140 }}>In Item (Fin)</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '7%', minWidth: 65 }}>Gross Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '7%', minWidth: 65 }}>Net Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '7%', minWidth: 65 }}>10 Pcs Wt</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '7%', minWidth: 65 }}>Qty</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '11%', minWidth: 95 }}>Unit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '7%', minWidth: 65 }}>Rate</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '8%', minWidth: 75 }}>Amount</TableCell>
-                  <TableCell sx={{ width: '2%' }}></TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Process</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Gross Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Net Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>10 Pcs Wt</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Qty</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '7%', textAlign: 'center' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Rate</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Amount</TableCell>
+                  <TableCell sx={{ width: '4%' }}></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {gridRows.map((row, index) => (
-                  <React.Fragment key={index}>
-                    {/* Row 1: Primary items and weights */}
-                    <TableRow sx={{ '& td': { py: 0.5, px: 0.5, borderBottom: 'none' } }}>
-                      {/* Out Item */}
-                      <TableCell>
-                        <Autocomplete
-                          options={getOutItemOptions()}
-                          getOptionLabel={(option) => {
-                            if (!option) return '';
-                            const subStr = option.SubCode ? ` / ${option.SubCode}` : '';
-                            const bal = getItemBalance(option.ItemCode, option.SubCode || '');
-                            return `${option.ItemCode}${subStr} - ${option.ItemName} (Bal: Qty: ${bal.qty.toFixed(2)}, Wt: ${bal.wt.toFixed(3)})`;
-                          }}
-                          value={getOutItemOptions().find(i => i.ItemCode === row.OUTITEMCODE && (i.SubCode || '') === (row.OUTSUBCODE || '')) || null}
-                          onChange={(e, newValue) => handleItemSelect(index, 'OUTITEMCODE', newValue)}
-                          renderInput={(params) => <TextField {...params} placeholder={jwOutwardNo ? "Select Item" : "Select Challan"} size="small" />}
-                          disabled={!jwOutwardNo}
-                          fullWidth
-                          slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
-                        />
-                      </TableCell>
-                      {/* In Item */}
-                      <TableCell>
-                        <Autocomplete
-                          options={items}
-                          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
-                          value={items.find(i => i.ItemCode === row.INITEMCODE && (i.SubCode || '') === (row.INSUBCODE || '')) || null}
-                          onChange={(e, newValue) => handleItemSelect(index, 'INITEMCODE', newValue)}
-                          renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
-                          fullWidth
-                          slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
-                        />
-                      </TableCell>
-                      {/* Gross Wt */}
-                      <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
-                      {/* Net Wt */}
-                      <TableCell><TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth /></TableCell>
-                      {/* 10 Pcs Wt */}
-                      <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
-                      {/* Qty */}
-                      <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
-                      {/* Unit */}
-                      <TableCell>
-                        <Autocomplete
-                          options={dbUnits}
-                          getOptionLabel={(option) => option.Unit || ''}
-                          value={dbUnits.find(u => u.Unit === row.UNIT) || null}
-                          onChange={(e, newValue) => handleRowChange(index, 'UNIT', newValue ? newValue.Unit : '')}
-                          renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
-                          disableClearable
-                          fullWidth
-                        />
-                      </TableCell>
-                      {/* Rate */}
-                      <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
-                      {/* Amount */}
-                      <TableCell>
-                        <TextField 
-                          type="number" 
-                          size="small" 
-                          value={row.AMOUNT} 
-                          onChange={(e) => handleRowChange(index, 'AMOUNT', e.target.value)}
-                          fullWidth 
-                          InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}
-                        />
-                      </TableCell>
-                      {/* Actions */}
-                      <TableCell align="center">
-                        <IconButton color="error" size="small" onClick={() => removeGridRow(index)} disabled={gridRows.length === 1}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                    
-                    {/* Row 2: Secondary items and process */}
-                    <TableRow sx={{ '& td': { py: 0.5, px: 0.5 }, backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
-                      {/* Process */}
-                      <TableCell colSpan={2}>
-                        <TextField 
-                          label="Process" 
-                          size="small" 
-                          value={row.PROCESS} 
-                          onChange={(e) => handleRowChange(index, 'PROCESS', e.target.value)} 
-                          fullWidth 
-                          sx={{ maxWidth: 220 }}
-                          InputLabelProps={{ shrink: true }}
-                        />
-                      </TableCell>
-                      {/* Scrap Item */}
-                      <TableCell colSpan={2}>
-                        <Autocomplete
-                          options={items.filter(item => (item.ItemType || '').toLowerCase() === 'scrap' || (item.ItemName || '').toLowerCase().includes('scrap'))}
-                          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
-                          value={items.find(i => i.ItemCode === row.SCRAPITEMCODE && (i.SubCode || '') === (row.SCRAPSUBCODE || '')) || null}
-                          onChange={(e, newValue) => handleItemSelect(index, 'SCRAPITEMCODE', newValue)}
-                          renderInput={(params) => <TextField {...params} label="Scrap Item" size="small" InputLabelProps={{ shrink: true }} />}
-                          fullWidth
-                          slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
-                        />
-                      </TableCell>
-                      {/* Scrap Pcs */}
-                      <TableCell colSpan={1}>
-                        <TextField 
-                          label="Scrap Pcs" 
-                          type="number" 
-                          size="small" 
-                          value={row.SCRAPPCS} 
-                          onChange={(e) => handleRowChange(index, 'SCRAPPCS', e.target.value)} 
-                          fullWidth 
-                          InputLabelProps={{ shrink: true }}
-                        />
-                      </TableCell>
-                      {/* Scrap Wt */}
-                      <TableCell colSpan={1}>
-                        <TextField 
-                          label="Scrap Wt" 
-                          type="number" 
-                          size="small" 
-                          value={row.SCRAPWT} 
-                          onChange={(e) => handleRowChange(index, 'SCRAPWT', e.target.value)} 
-                          fullWidth 
-                          InputLabelProps={{ shrink: true }}
-                        />
-                      </TableCell>
-                      {/* Spacers */}
-                      <TableCell colSpan={4} />
-                    </TableRow>
-
-                    {/* Spacer row to add space between records */}
-                    <TableRow key={`spacer-${index}`} sx={{ height: '10px', backgroundColor: '#f8fafc', '& td': { border: 'none', py: 0 } }}>
-                      <TableCell colSpan={10} sx={{ border: 'none', py: 0 }} />
-                    </TableRow>
-                  </React.Fragment>
+                  <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
+                    <TableCell>
+                      <Autocomplete
+                        options={getRowOutItemOptions(row.OUTITEMCODE, row.OUTSUBCODE)}
+                        isOptionEqualToValue={(option, value) => option?.ItemCode === value?.ItemCode && (option?.SubCode || '') === (value?.SubCode || '')}
+                        getOptionLabel={(option) => {
+                          if (!option) return '';
+                          const subStr = option.SubCode ? ` / ${option.SubCode}` : '';
+                          const bal = getItemBalance(option.ItemCode, option.SubCode || '');
+                          const u = (option.Unit || '').toUpperCase();
+                          const isKg = u === 'KG' || u === 'KGS';
+                          const balStr = isKg ? `${bal.wt.toFixed(3)} ${option.Unit || 'KG'}` : `${bal.qty.toFixed(2)} ${option.Unit || 'PCS'}`;
+                          return `${option.ItemCode}${subStr} - ${option.ItemName} [Bal: ${balStr}]`;
+                        }}
+                        value={items.find(i => i.ItemCode === row.OUTITEMCODE && (i.SubCode || '') === (row.OUTSUBCODE || '')) || null}
+                        onChange={(e, newValue) => handleItemSelect(index, newValue)}
+                        renderInput={(params) => (
+                          <TextField 
+                            {...params} 
+                            placeholder="Select Item" 
+                            size="small" 
+                          />
+                        )}
+                        fullWidth
+                        slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%', maxWidth: 450 } } }}
+                      />
+                    </TableCell>
+                    <TableCell><TextField size="small" placeholder="Process" value={row.PROCESS || ''} onChange={(e) => handleRowChange(index, 'PROCESS', e.target.value)} fullWidth /></TableCell>
+                    <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
+                    <TableCell><TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth /></TableCell>
+                    <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
+                    <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
+                    <TableCell align="center">
+                      <Chip label={row.UNIT || 'PCS'} size="small" sx={{ fontWeight: 600, bgcolor: '#f1f5f9' }} />
+                    </TableCell>
+                    <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
+                    <TableCell>
+                      <TextField 
+                        type="number" 
+                        size="small" 
+                        value={row.AMOUNT !== undefined && row.AMOUNT !== '' ? row.AMOUNT : calculateRowAmount(row)} 
+                        fullWidth 
+                        InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <IconButton color="error" size="small" onClick={() => removeGridRow(index)} disabled={gridRows.length === 1}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
@@ -1132,17 +1083,11 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
                       {gridRows.reduce((sum, row) => sum + (parseFloat(row.NETWT) || 0), 0).toFixed(3)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2">Total Scrap Weight:</Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {gridRows.reduce((sum, row) => sum + (parseFloat(row.SCRAPWT) || 0), 0).toFixed(3)}
-                    </Typography>
-                  </Box>
                   <Divider sx={{ my: 0.5 }} />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="subtitle1" fontWeight={700}>Total Processing Amount:</Typography>
                     <Typography variant="subtitle1" fontWeight={700} color="primary.main">
-                      {totalAmount || '0.00'}
+                      ₹{calculateEstimatedTotalValue(gridRows).toFixed(2)}
                     </Typography>
                   </Box>
                 </Box>
@@ -1164,7 +1109,7 @@ const JobworkInEntry = ({ hideTitle = false, title = 'Subcontract IN' }) => {
         onClose={() => setDeleteConfirmOpen(false)}
         onConfirm={handleDelete}
         title="Confirm Deletion"
-        itemName="this jobwork in entry"
+        itemName="this sub-contract in entry"
       />
       <PdfPreviewModal 
         open={previewOpen} 

@@ -119,15 +119,17 @@ exports.addJobworkIn = async (req, res) => {
 
       // 2. Insert Details and Update Item Stocks
       for (const d of Details) {
-        if (!d.INITEMCODE || !d.OUTITEMCODE) {
-          throw new Error('Incoming Item and Outgoing Item are required for all detail rows');
+        const outItemCode = d.OUTITEMCODE || d.ITEMCODE;
+        const inItemCode = d.INITEMCODE || outItemCode;
+        if (!outItemCode) {
+          throw new Error('Item is required for all detail rows');
         }
         
         const detailReq = new sql.Request(transaction);
         await detailReq
           .input('JWINWARDID', sql.Numeric(8,0), newJwInwardId)
-          .input('OUTITEMCODE', sql.VarChar(10), d.OUTITEMCODE)
-          .input('INITEMCODE', sql.VarChar(10), d.INITEMCODE)
+          .input('OUTITEMCODE', sql.VarChar(50), outItemCode)
+          .input('INITEMCODE', sql.VarChar(50), inItemCode)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -224,14 +226,14 @@ exports.addJobworkIn = async (req, res) => {
       }
 
       await transaction.commit();
-      res.status(201).json({ message: 'Job work in added successfully', id: newJwInwardId });
+      res.status(201).json({ message: 'Sub-contract in added successfully', id: newJwInwardId });
     } catch (err) {
       await transaction.rollback();
       throw err;
     }
   } catch (error) {
     console.error('Error adding job work in:', error);
-    res.status(500).json({ message: error.message || 'Server error adding job work in' });
+    res.status(500).json({ message: error.message || 'Server error adding sub-contract in' });
   }
 };
 
@@ -340,15 +342,17 @@ exports.updateJobworkIn = async (req, res) => {
 
       // 5. Insert new details and apply stock changes
       for (const d of Details) {
-        if (!d.INITEMCODE || !d.OUTITEMCODE) {
-          throw new Error('Incoming Item and Outgoing Item are required for all detail rows');
+        const outItemCode = d.OUTITEMCODE || d.ITEMCODE;
+        const inItemCode = d.INITEMCODE || outItemCode;
+        if (!outItemCode) {
+          throw new Error('Item is required for all detail rows');
         }
         
         const detailReq = new sql.Request(transaction);
         await detailReq
           .input('JWINWARDID', sql.Numeric(8,0), id)
-          .input('OUTITEMCODE', sql.VarChar(10), d.OUTITEMCODE)
-          .input('INITEMCODE', sql.VarChar(10), d.INITEMCODE)
+          .input('OUTITEMCODE', sql.VarChar(50), outItemCode)
+          .input('INITEMCODE', sql.VarChar(50), inItemCode)
           .input('GROSSWT', sql.Numeric(10,3), d.GROSSWT || 0)
           .input('NETWT', sql.Numeric(10,3), d.NETWT || 0)
           .input('TENPCSWT', sql.Numeric(10,3), d.TENPCSWT || null)
@@ -445,14 +449,14 @@ exports.updateJobworkIn = async (req, res) => {
       }
 
       await transaction.commit();
-      res.status(200).json({ message: 'Job work in updated successfully' });
+      res.status(200).json({ message: 'Sub-contract in updated successfully' });
     } catch (err) {
       await transaction.rollback();
       throw err;
     }
   } catch (error) {
     console.error('Error updating job work in:', error);
-    res.status(500).json({ message: error.message || 'Server error updating job work in' });
+    res.status(500).json({ message: error.message || 'Server error updating sub-contract in' });
   }
 };
 
@@ -540,14 +544,14 @@ exports.deleteJobworkIn = async (req, res) => {
         `);
 
       await transaction.commit();
-      res.status(200).json({ message: 'Job work in deleted successfully' });
+      res.status(200).json({ message: 'Sub-contract in deleted successfully' });
     } catch (err) {
       await transaction.rollback();
       throw err;
     }
   } catch (error) {
     console.error('Error deleting job work in:', error);
-    res.status(500).json({ message: 'Server error deleting job work in' });
+    res.status(500).json({ message: 'Server error deleting sub-contract in' });
   }
 };
 
@@ -1007,7 +1011,7 @@ exports.getJobworkMovementReport = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching jobwork movement report:', error);
-    res.status(500).json({ message: 'Server error generating jobwork movement report' });
+    res.status(500).json({ message: 'Server error generating sub-contract movement report' });
   }
 };
 

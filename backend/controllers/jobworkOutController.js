@@ -93,8 +93,15 @@ async function applyJobworkOutStock(request, deptId, itemCode, subCode, quantity
       WHERE ItemCode = '${itemCode}' AND ISNULL(SubCode, '') = '${safeSubCode}' AND UPPER(ISNULL(Unit, '')) IN ('KG', 'KGS');
     `);
   } else {
-    const pcsChange = multiplier * (Number(quantity) || 0);
-    const wtChange = multiplier * (Number(netWt) || 0);
+    // Department Stock: maintain stock based on item's Unit
+    const itemUnitRes = await request.query(`
+      SELECT Unit FROM ItemMaster WHERE ItemCode = '${itemCode}' AND ISNULL(SubCode, '') = '${safeSubCode}'
+    `);
+    const u = String(itemUnitRes.recordset[0]?.Unit || '').toUpperCase();
+    const isKg = u === 'KG' || u === 'KGS';
+    const pcsChange = isKg ? 0 : (multiplier * (Number(quantity) || 0));
+    const wtChange = isKg ? (multiplier * (Number(netWt) || 0)) : 0;
+
     const check = await request.query(`
       SELECT * FROM DepartmentStock WHERE DeptID = ${deptId} AND ItemCode = '${itemCode}' AND ISNULL(SubCode, '') = '${safeSubCode}'
     `);
@@ -228,14 +235,14 @@ exports.addJobworkOut = async (req, res) => {
       }
 
       await transaction.commit();
-      res.status(201).json({ message: 'Job work out added successfully', id: newJwOutwardId });
+      res.status(201).json({ message: 'Sub-contract out added successfully', id: newJwOutwardId });
     } catch (err) {
       await transaction.rollback();
       throw err;
     }
   } catch (error) {
     console.error('Error adding job work out:', error);
-    res.status(500).json({ message: error.message || 'Server error adding job work out' });
+    res.status(500).json({ message: error.message || 'Server error adding sub-contract out' });
   }
 };
 
@@ -325,14 +332,14 @@ exports.updateJobworkOut = async (req, res) => {
       }
 
       await transaction.commit();
-      res.status(200).json({ message: 'Job work out updated successfully' });
+      res.status(200).json({ message: 'Sub-contract out updated successfully' });
     } catch (err) {
       await transaction.rollback();
       throw err;
     }
   } catch (error) {
     console.error('Error updating job work out:', error);
-    res.status(500).json({ message: error.message || 'Server error updating job work out' });
+    res.status(500).json({ message: error.message || 'Server error updating sub-contract out' });
   }
 };
 
@@ -375,14 +382,14 @@ exports.deleteJobworkOut = async (req, res) => {
         `);
 
       await transaction.commit();
-      res.status(200).json({ message: 'Job work out deleted successfully' });
+      res.status(200).json({ message: 'Sub-contract out deleted successfully' });
     } catch (err) {
       await transaction.rollback();
       throw err;
     }
   } catch (error) {
     console.error('Error deleting job work out:', error);
-    res.status(500).json({ message: 'Server error deleting job work out' });
+    res.status(500).json({ message: 'Server error deleting sub-contract out' });
   }
 };
 

@@ -561,12 +561,18 @@ const ItemMaster = () => {
         const workbook = XLSX.read(bstr, { type: 'binary' });
         const wsname = workbook.SheetNames[0];
         const ws = workbook.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const rawData = XLSX.utils.sheet_to_json(ws);
         
-        if (!data || data.length === 0) {
+        if (!rawData || rawData.length === 0) {
           alert('Uploaded excel sheet is empty!');
           return;
         }
+
+        // Attach actual 1-based Excel row number (header is row 1, data starts row 2)
+        const data = rawData.map((row, idx) => ({
+          ...row,
+          __rowNum__: idx + 2
+        }));
 
         setImporting(true);
         setImportProgress(10);
@@ -663,7 +669,7 @@ const ItemMaster = () => {
               sx={{ width: { xs: '100%', sm: 130 }, minWidth: { sm: 130 } }}
             >
               <MenuItem value="All">All Sourcing</MenuItem>
-              <MenuItem value="SubContract">SubContract</MenuItem>
+              <MenuItem value="SubContract">Sub-Contract</MenuItem>
               <MenuItem value="Inhouse">Inhouse</MenuItem>
               <MenuItem value="BOP">BOP</MenuItem>
             </TextField>
@@ -922,7 +928,7 @@ const ItemMaster = () => {
                       </TableCell>
                       <TableCell>
                         <Chip 
-                          label={row.Category || 'Inhouse'} 
+                          label={row.Category === 'SubContract' ? 'Sub-Contract' : (row.Category || 'Inhouse')} 
                           size="small" 
                           sx={{ 
                             fontSize: '0.7rem', 
@@ -1092,8 +1098,8 @@ const ItemMaster = () => {
                 >
                   <MenuItem value="SubContract">
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Chip label="SubContract" size="small" sx={{ bgcolor: '#fff7ed', color: '#ea580c', fontWeight: 700, height: 20 }} />
-                      <Typography variant="body2" sx={{ color: '#475569' }}>- External job workers</Typography>
+                      <Chip label="Sub-Contract" size="small" sx={{ bgcolor: '#fff7ed', color: '#ea580c', fontWeight: 700, height: 20 }} />
+                      <Typography variant="body2" sx={{ color: '#475569' }}>- External sub-contractors</Typography>
                     </Box>
                   </MenuItem>
                   <MenuItem value="Inhouse">
@@ -1394,7 +1400,7 @@ const ItemMaster = () => {
               )}
               {formData.DeadStockType === 'Auto' && (
                 <Alert severity="info" sx={{ mt: 1.5, py: 0.5, fontSize: '0.82rem' }}>
-                  System will track transactions across Purchases, Sales, Job Work, and Transfers. If no transaction occurs within {formData.DeadStockDays || 'the specified'} days, it will be classified as dead stock.
+                  System will track transactions across Purchases, Sales, Sub-Contract, and Transfers. If no transaction occurs within {formData.DeadStockDays || 'the specified'} days, it will be classified as dead stock.
                 </Alert>
               )}
             </Paper>
@@ -1584,6 +1590,7 @@ const ItemMaster = () => {
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
+                      <TableCell sx={{ fontWeight: 700, width: 110 }}>Excel Row #</TableCell>
                       <TableCell>Item Code</TableCell>
                       <TableCell>Sub Code</TableCell>
                       <TableCell>Item Name</TableCell>
@@ -1591,15 +1598,19 @@ const ItemMaster = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {importResults.failed.map((fail, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell sx={{ fontWeight: 600 }}>{fail.item?.ItemCode || 'Unknown'}</TableCell>
-                        <TableCell>{fail.item?.SubCode || '-'}</TableCell>
-                        <TableCell>{fail.item?.ItemName || 'Unknown'}</TableCell>
-                        <TableCell sx={{ color: 'error.main' }}>{fail.reason}</TableCell>
-                      </TableRow>
-                    ))}
-                    {importResults.failed.length === 0 && <TableRow><TableCell colSpan={4} align="center">No failed items</TableCell></TableRow>}
+                    {importResults.failed.map((fail, idx) => {
+                      const rowNum = fail.rowNumber || fail.item?.__rowNum__ || (idx + 2);
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell sx={{ fontWeight: 700, color: '#dc2626' }}>Row #{rowNum}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{fail.item?.ItemCode || 'Unknown'}</TableCell>
+                          <TableCell>{fail.item?.SubCode || '-'}</TableCell>
+                          <TableCell>{fail.item?.ItemName || 'Unknown'}</TableCell>
+                          <TableCell sx={{ color: 'error.main' }}>{fail.reason}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {importResults.failed.length === 0 && <TableRow><TableCell colSpan={5} align="center">No failed items</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </TableContainer>

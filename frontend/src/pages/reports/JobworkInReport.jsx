@@ -91,7 +91,7 @@ const JobworkInReport = () => {
     
     doc.setFontSize(14);
     doc.setTextColor(100);
-    doc.text('Job Work Inward Report', 14, 30);
+    doc.text('Sub-Contract Inward Report', 14, 30);
     
     // Add date
     doc.setFontSize(10);
@@ -215,7 +215,7 @@ const JobworkInReport = () => {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     ensureNumericWorksheet(worksheet);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Jobwork In');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sub-Contract In');
     XLSX.writeFile(workbook, 'jobwork_inward_report.xlsx');
   };
 
@@ -223,7 +223,7 @@ const JobworkInReport = () => {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-          Subcontract IN Report
+          Sub-Contract IN Report
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', lg: 'auto' } }}>
           <Box sx={{ width: { xs: '100%', sm: 250 } }}>
@@ -352,7 +352,7 @@ const JobworkInReport = () => {
         open={previewOpen} 
         onClose={() => setPreviewOpen(false)} 
         pdfUrl={previewUrl} 
-        title="Job Work Inward Preview" 
+        title="Sub-Contract Inward Preview" 
       />
     </Box>
   );

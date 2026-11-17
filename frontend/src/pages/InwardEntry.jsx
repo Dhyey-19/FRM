@@ -6,7 +6,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Alert,
   Autocomplete, Grid, Divider, Checkbox, FormControlLabel, TableSortLabel, Chip,
-  ToggleButtonGroup, ToggleButton
+  ToggleButtonGroup, ToggleButton, FormControl, Select, MenuItem
 } from '@mui/material';
 import { 
   Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Delete as DeleteIcon, 
@@ -62,6 +62,7 @@ const InwardEntry = () => {
   const [InwardDate, setInwardDate] = useState(todayDate);
   const [ledgerId, setLedgerId] = useState(null);
   const [bill, setBill] = useState(true);
+  const [itemTypeFilter, setItemTypeFilter] = useState('All');
   const [expense, setExpense] = useState('');
   const [sgst, setSgst] = useState('');
   const [cgst, setCgst] = useState('');
@@ -738,10 +739,20 @@ const InwardEntry = () => {
       return;
     }
 
-    const validRows = gridRows.filter(r => r.ITEMCODE && r.QUANTITY && parseFloat(r.QUANTITY) > 0);
+    const validRows = gridRows.filter(r => r.ITEMCODE);
     if (validRows.length === 0) {
-      setDialogError('Please fill in at least one valid row with Item and Quantity.');
+      setDialogError('Please fill in at least one valid row with an Item.');
       return;
+    }
+
+    // Compulsory Pcs check when Unit is PCS
+    for (let i = 0; i < validRows.length; i++) {
+      const r = validRows[i];
+      const u = String(r.UNIT || '').trim().toUpperCase();
+      if ((u === 'PCS' || (!u.includes('KG') && u !== '')) && (!r.QUANTITY || parseFloat(r.QUANTITY) <= 0)) {
+        setDialogError(`Pcs / Quantity is compulsory for row #${i + 1} (${r.ITEMCODE}) because its unit is PCS.`);
+        return;
+      }
     }
 
     const localUser = JSON.parse(localStorage.getItem('user')) || {};
@@ -1070,59 +1081,84 @@ const InwardEntry = () => {
             </Grid>
           </Paper>
 
+          {/* Filter by Item Type Bar */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              Item Details (Purchase)
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>Filter Item Type:</Typography>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <Select
+                  value={itemTypeFilter}
+                  onChange={(e) => setItemTypeFilter(e.target.value)}
+                  sx={{ height: 32, fontSize: '0.82rem', bgcolor: '#fff' }}
+                >
+                  <MenuItem value="All" sx={{ fontSize: '0.82rem' }}>All Item Types</MenuItem>
+                  {[...new Set(items.map(i => i.ItemType).filter(Boolean))].map(t => (
+                    <MenuItem key={t} value={t} sx={{ fontSize: '0.82rem' }}>{t}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </Box>
+
           {/* Grid Section */}
           <TableContainer component={Paper} sx={{ mb: 2, maxHeight: '40vh', border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Table stickyHeader size="small" sx={{ minWidth: 850 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '28%' }}>Item</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Gross Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Net Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>10 Pcs Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Qty</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '13%' }}>Unit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '9%' }}>Rate</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Amount</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '8%', textAlign: 'center' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '10%' }}>Rate</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '11%' }}>Amount</TableCell>
                   <TableCell sx={{ width: '3%' }}></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {gridRows.map((row, index) => (
-                  <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
-                    <TableCell>
-                      <Autocomplete
-                        options={items}
-                        getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
-                        value={items.find(i => i.ItemCode === row.ITEMCODE && (i.SubCode || '') === (row.SUBCODE || '')) || null}
-                        onChange={(e, newValue) => handleItemSelect(index, newValue)}
-                        renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
-                        fullWidth
-                        slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
-                      />
-                    </TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
-                    <TableCell>
-                      <Autocomplete
-                        options={dbUnits}
-                        getOptionLabel={(option) => option.Unit || ''}
-                        value={dbUnits.find(u => u.Unit === row.UNIT) || null}
-                        onChange={(e, newValue) => handleRowChange(index, 'UNIT', newValue ? newValue.Unit : '')}
-                        renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
-                        fullWidth
-                      />
-                    </TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
-                    <TableCell><TextField type="number" size="small" value={row.AMOUNT} onChange={(e) => handleRowChange(index, 'AMOUNT', e.target.value)} fullWidth InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}/></TableCell>
-                    <TableCell align="center">
-                      <IconButton color="error" size="small" onClick={() => removeGridRow(index)} disabled={!hasDeletePermission() || gridRows.length === 1}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {gridRows.map((row, index) => {
+                  const filteredItemList = itemTypeFilter && itemTypeFilter !== 'All'
+                    ? items.filter(i => (i.ItemType || '').trim().toLowerCase() === itemTypeFilter.trim().toLowerCase())
+                    : items;
+                  return (
+                    <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
+                      <TableCell>
+                        <Autocomplete
+                          options={filteredItemList}
+                          getOptionLabel={(option) => {
+                            if (!option) return '';
+                            const sub = option.SubCode ? ` / ${option.SubCode}` : '';
+                            const typeStr = option.ItemType ? ` [${option.ItemType}]` : '';
+                            return `${option.ItemCode}${sub} - ${option.ItemName}${typeStr}`;
+                          }}
+                          value={items.find(i => i.ItemCode === row.ITEMCODE && (i.SubCode || '') === (row.SUBCODE || '')) || null}
+                          onChange={(e, newValue) => handleItemSelect(index, newValue)}
+                          renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
+                          fullWidth
+                          slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                        />
+                      </TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.GROSSWT} onChange={(e) => handleRowChange(index, 'GROSSWT', e.target.value)} fullWidth /></TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.NETWT} onChange={(e) => handleRowChange(index, 'NETWT', e.target.value)} fullWidth /></TableCell>
+                      <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
+                      <TableCell align="center">
+                        <Chip label={row.UNIT || 'PCS'} size="small" sx={{ fontWeight: 600, bgcolor: '#f1f5f9' }} />
+                      </TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
+                      <TableCell><TextField type="number" size="small" value={row.AMOUNT} onChange={(e) => handleRowChange(index, 'AMOUNT', e.target.value)} fullWidth InputProps={{ readOnly: true, sx: { bgcolor: '#f0f0f0' } }}/></TableCell>
+                      <TableCell align="center">
+                        <IconButton color="error" size="small" onClick={() => removeGridRow(index)} disabled={!hasDeletePermission() || gridRows.length === 1}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

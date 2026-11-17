@@ -80,7 +80,7 @@ export const MENU_STRUCTURE = [
       { title: 'Purchase', path: '/dashboard/inwards', icon: <ListIcon /> },
       { title: 'Sales', path: '/dashboard/outwards', icon: <ListIcon /> },
       { title: 'Sub-Contract', path: '/dashboard/subcontract', icon: <ListIcon /> },
-      { title: 'Stock Journal', path: '/dashboard/stock-journal', icon: <ListIcon /> },
+      { title: 'Stock Adjust', path: '/dashboard/stock-journal', icon: <ListIcon /> },
       { title: 'Stock Transfer', path: '/dashboard/stock-transfer', icon: <ListIcon /> },
       { title: 'Assembly', path: '/dashboard/assembly', icon: <AssemblyIcon /> },
     ]
@@ -124,15 +124,15 @@ export const MENU_STRUCTURE = [
           { title: 'Item Stock Ledger', path: '/dashboard/reports/item-ledger', icon: <ReportsIcon fontSize="small" /> },
           { title: 'BOM', path: '/dashboard/reports/bom', icon: <BOMIcon fontSize="small" /> },
           { title: 'Assembly', path: '/dashboard/reports/assembly', icon: <AssemblyIcon fontSize="small" /> },
-          { title: 'Stock Journal', path: '/dashboard/reports/stock-journal', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Stock Adjust', path: '/dashboard/reports/stock-journal', icon: <ReportsIcon fontSize="small" /> },
         ]
       },
       {
-        groupTitle: 'Jobwork Status',
+        groupTitle: 'Sub-Contract Status',
         children: [
-          { title: 'Job Work Out', path: '/dashboard/reports/jobwork-out', icon: <ReportsIcon fontSize="small" /> },
-          { title: 'Job Work In', path: '/dashboard/reports/jobwork-in', icon: <ReportsIcon fontSize="small" /> },
-          { title: 'Job Work Movement', path: '/dashboard/reports/jobwork-movement', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Sub-Contract Out', path: '/dashboard/reports/jobwork-out', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Sub-Contract In', path: '/dashboard/reports/jobwork-in', icon: <ReportsIcon fontSize="small" /> },
+          { title: 'Sub-Contract Movement', path: '/dashboard/reports/jobwork-movement', icon: <ReportsIcon fontSize="small" /> },
         ]
       },
       {

@@ -1100,6 +1100,7 @@ exports.bulkCreateLedgers = async (req, res) => {
 
   let added = 0;
   let updated = 0;
+  const failed = [];
 
   try {
     const pool = await connectDB();
@@ -1113,11 +1114,20 @@ exports.bulkCreateLedgers = async (req, res) => {
       if (!defaultGroupId) defaultGroupId = g.Id;
     }
 
-    for (const item of items) {
-      const rawName = item.LedgerName || item['Ledger Name'] || item['Party Name'];
-      if (!rawName) continue;
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      const excelRowNum = item.__rowNum__ || (index + 2);
+      try {
+        const rawName = item.LedgerName || item['Ledger Name'] || item['Party Name'];
+      if (!rawName) {
+        failed.push({ rowNumber: excelRowNum, reason: `Excel Row #${excelRowNum}: Ledger/Party name is missing` });
+        continue;
+      }
       const ledgerName = String(rawName).trim();
-      if (!ledgerName) continue;
+      if (!ledgerName) {
+        failed.push({ rowNumber: excelRowNum, reason: `Excel Row #${excelRowNum}: Ledger/Party name is blank` });
+        continue;
+      }
 
       // Resolve Account Group ID
       let rawGroup = item.AccountGroupName || item['Account Group'] || item.AccountGroup || item['Group Name'] || item.AccountGroupID;
@@ -1246,13 +1256,22 @@ exports.bulkCreateLedgers = async (req, res) => {
             )
           `);
         added++;
+        }
+      } catch (rowErr) {
+        failed.push({ rowNumber: excelRowNum, reason: `Excel Row #${excelRowNum}: ${rowErr.message}` });
       }
     }
 
+    let summaryMsg = `Processed ${items.length} records. Added: ${added}, Updated: ${updated}`;
+    if (failed.length > 0) {
+      summaryMsg += `. Failed rows: ${failed.map(f => f.reason).join('; ')}`;
+    }
+
     res.status(200).json({
-      message: `Processed ${items.length} records. Added: ${added}, Updated: ${updated}`,
+      message: summaryMsg,
       added,
-      updated
+      updated,
+      failed
     });
   } catch (error) {
     console.error('Error bulk creating ledgers:', error);

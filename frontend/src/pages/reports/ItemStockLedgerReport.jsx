@@ -228,10 +228,11 @@ const ItemStockLedgerReport = () => {
       return <Chip label="Outward" size="small" sx={{ bgcolor: '#fee2e2', color: '#b91c1c', fontWeight: 700, fontSize: '0.72rem' }} />;
     }
     if (type === 'Jobwork Out') {
-      return <Chip label="Jobwork Out" size="small" sx={{ bgcolor: '#ffedd5', color: '#c2410c', fontWeight: 700, fontSize: '0.72rem' }} />;
+      return <Chip label="Sub-Contract Out" size="small" sx={{ bgcolor: '#ffedd5', color: '#c2410c', fontWeight: 700, fontSize: '0.72rem' }} />;
     }
     if (type.startsWith('Jobwork In')) {
-      return <Chip label={type} size="small" sx={{ bgcolor: '#ccfbf1', color: '#0f766e', fontWeight: 700, fontSize: '0.72rem' }} />;
+      const displayType = type.replace('Jobwork In', 'Sub-Contract In');
+      return <Chip label={displayType} size="small" sx={{ bgcolor: '#ccfbf1', color: '#0f766e', fontWeight: 700, fontSize: '0.72rem' }} />;
     }
     if (category === 'Stock Transfer') {
       return <Chip label={type} size="small" sx={{ bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 700, fontSize: '0.72rem' }} />;
@@ -653,7 +654,7 @@ const ItemStockLedgerReport = () => {
               Item Stock Ledger
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b' }}>
-              Complete date-wise movement statement (Inward, Outward, Jobwork, Transfers & Adjustments)
+              Complete date-wise movement statement (Inward, Outward, Sub-Contract, Transfers & Adjustments)
             </Typography>
           </Box>
         </Box>
@@ -865,8 +866,8 @@ const ItemStockLedgerReport = () => {
                 <MenuItem value="All">All Types (All Transactions)</MenuItem>
                 <MenuItem value="Inward">Inward Only</MenuItem>
                 <MenuItem value="Outward">Outward Only</MenuItem>
-                <MenuItem value="Jobwork Out">Job Work Out Only</MenuItem>
-                <MenuItem value="Jobwork In">Job Work In Only</MenuItem>
+                <MenuItem value="Jobwork Out">Sub-Contract Out Only</MenuItem>
+                <MenuItem value="Jobwork In">Sub-Contract In Only</MenuItem>
                 <MenuItem value="Stock Transfer">Stock Transfer Only</MenuItem>
                 <MenuItem value="Stock Journal">Stock Journal Only</MenuItem>
                 <MenuItem value="Assembly">Assembly Only</MenuItem>
@@ -990,7 +991,7 @@ const ItemStockLedgerReport = () => {
                   </Typography>
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#166534' }}>
-                  Inward, Job In, Production
+                  Inward, Sub-Contract In, Production
                 </Typography>
               </CardContent>
             </Card>
@@ -1013,7 +1014,7 @@ const ItemStockLedgerReport = () => {
                   </Typography>
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#991b1b' }}>
-                  Outward, Job Out, Consumption
+                  Outward, Sub-Contract Out, Consumption
                 </Typography>
               </CardContent>
             </Card>
@@ -1210,7 +1211,7 @@ const ItemStockLedgerReport = () => {
               Select an Item to Generate Stock Ledger
             </Typography>
             <Typography variant="body2" sx={{ color: '#64748b', maxWidth: 480, mx: 'auto', mt: 1 }}>
-              Choose an item from the search box above to view all its chronological transactions: inward, outward, jobwork out, jobwork in, stock transfers, and stock journal adjustments.
+              Choose an item from the search box above to view all its chronological transactions: inward, outward, sub-contract out, sub-contract in, stock transfers, and stock journal adjustments.
             </Typography>
           </Paper>
         ) : errorMsg ? (

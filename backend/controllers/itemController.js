@@ -335,7 +335,9 @@ exports.bulkCreateItems = async (req, res) => {
     const pool = await connectDB();
     const request = new sql.Request(pool);
 
-    for (const item of items) {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      const excelRowNum = item.__rowNum__ || (index + 2);
       const { 
         ItemCode, 
         SubCode = '', 
@@ -354,7 +356,11 @@ exports.bulkCreateItems = async (req, res) => {
       } = item;
 
       if (!ItemCode || !ItemName || !Unit) {
-        results.failed.push({ item, reason: `ItemCode, ItemName, and Unit are required` });
+        results.failed.push({ 
+          rowNumber: excelRowNum, 
+          item, 
+          reason: `Excel Row #${excelRowNum}: ItemCode, ItemName, and Unit are required` 
+        });
         continue;
       }
 
@@ -464,7 +470,11 @@ exports.bulkCreateItems = async (req, res) => {
         }
       } catch (err) {
         request.parameters = {}; // Always clear on error
-        results.failed.push({ item, reason: err.message });
+        results.failed.push({ 
+          rowNumber: excelRowNum, 
+          item, 
+          reason: `Excel Row #${excelRowNum}: ${err.message}` 
+        });
       }
     }
 

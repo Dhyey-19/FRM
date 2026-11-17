@@ -77,6 +77,7 @@ const OutwardEntry = () => {
   const [roundOff, setRoundOff] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [remark, setRemark] = useState('');
+  const [itemTypeFilter, setItemTypeFilter] = useState('All');
   
   // Dispatch & POD Details State (in Entry modal)
   const [courierCompany, setCourierCompany] = useState('');
@@ -1085,10 +1086,20 @@ const OutwardEntry = () => {
       return;
     }
 
-    const validRows = gridRows.filter(r => r.ITEMCODE && r.QUANTITY && parseFloat(r.QUANTITY) > 0);
+    const validRows = gridRows.filter(r => r.ITEMCODE);
     if (validRows.length === 0) {
-      setDialogError('Please fill in at least one valid row with Item and Quantity.');
+      setDialogError('Please fill in at least one valid row with an Item.');
       return;
+    }
+
+    // Compulsory Pcs check when Unit is PCS
+    for (let i = 0; i < validRows.length; i++) {
+      const r = validRows[i];
+      const u = String(r.UNIT || '').trim().toUpperCase();
+      if ((u === 'PCS' || (!u.includes('KG') && u !== '')) && (!r.QUANTITY || parseFloat(r.QUANTITY) <= 0)) {
+        setDialogError(`Pcs / Quantity is compulsory for row #${i + 1} (${r.ITEMCODE}) because its unit is PCS.`);
+        return;
+      }
     }
 
     const localUser = JSON.parse(localStorage.getItem('user')) || {};
@@ -1561,17 +1572,39 @@ const OutwardEntry = () => {
             })()}
           </Paper>
 
+          {/* Filter by Item Type Bar */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+              Item Details (Sales)
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>Filter Item Type:</Typography>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <Select
+                  value={itemTypeFilter}
+                  onChange={(e) => setItemTypeFilter(e.target.value)}
+                  sx={{ height: 32, fontSize: '0.82rem', bgcolor: '#fff' }}
+                >
+                  <MenuItem value="All" sx={{ fontSize: '0.82rem' }}>All Item Types</MenuItem>
+                  {[...new Set(items.map(i => i.ItemType).filter(Boolean))].map(t => (
+                    <MenuItem key={t} value={t} sx={{ fontSize: '0.82rem' }}>{t}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </Box>
+
           {/* Grid Section */}
           <TableContainer component={Paper} sx={{ mb: 2, maxHeight: '40vh', border: '1px solid #e0e0e0', boxShadow: 'none' }}>
             <Table stickyHeader size="small" sx={{ minWidth: 850 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: '23%' }}>Item</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Item</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>Gross Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>Net Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>10 Pcs Wt</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '8%' }}>Qty</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '11%' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '7%', textAlign: 'center' }}>Unit</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>Rate</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '9%' }}>Discount (%)</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '10%' }}>Amount</TableCell>
@@ -1580,6 +1613,9 @@ const OutwardEntry = () => {
               </TableHead>
               <TableBody>
                 {gridRows.map((row, index) => {
+                  const filteredItemList = itemTypeFilter && itemTypeFilter !== 'All'
+                    ? items.filter(i => (i.ItemType || '').trim().toLowerCase() === itemTypeFilter.trim().toLowerCase())
+                    : items;
                   const selectedItem = items.find(i => i.ItemCode === row.ITEMCODE && (i.SubCode || '') === (row.SUBCODE || ''));
                   let warningMsg = null;
                   if (selectedItem && selectedItem.StdWeight) {
@@ -1599,8 +1635,13 @@ const OutwardEntry = () => {
                     <TableRow key={index} sx={{ '& td': { py: 0.5, px: 1 } }}>
                       <TableCell>
                         <Autocomplete
-                          options={items}
-                          getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                          options={filteredItemList}
+                          getOptionLabel={(option) => {
+                            if (!option) return '';
+                            const sub = option.SubCode ? ` / ${option.SubCode}` : '';
+                            const typeStr = option.ItemType ? ` [${option.ItemType}]` : '';
+                            return `${option.ItemCode}${sub} - ${option.ItemName}${typeStr}`;
+                          }}
                           value={selectedItem || null}
                           onChange={(e, newValue) => handleItemSelect(index, newValue)}
                           renderInput={(params) => <TextField {...params} placeholder="Select Item" size="small" />}
@@ -1615,15 +1656,8 @@ const OutwardEntry = () => {
                       </TableCell>
                       <TableCell><TextField type="number" size="small" placeholder="10 Pcs Wt" value={row.TENPCSWT || ''} onChange={(e) => handleRowChange(index, 'TENPCSWT', e.target.value)} fullWidth inputProps={{ step: "any" }} /></TableCell>
                       <TableCell><TextField type="number" size="small" value={row.QUANTITY} onChange={(e) => handleRowChange(index, 'QUANTITY', e.target.value)} fullWidth /></TableCell>
-                      <TableCell>
-                        <Autocomplete
-                          options={dbUnits}
-                          getOptionLabel={(option) => option.Unit || ''}
-                          value={dbUnits.find(u => u.Unit === row.UNIT) || null}
-                          onChange={(e, newValue) => handleRowChange(index, 'UNIT', newValue ? newValue.Unit : '')}
-                          renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
-                          fullWidth
-                        />
+                      <TableCell align="center">
+                        <Chip label={row.UNIT || 'PCS'} size="small" sx={{ fontWeight: 600, bgcolor: '#f1f5f9' }} />
                       </TableCell>
                       <TableCell><TextField type="number" size="small" value={row.RATE} onChange={(e) => handleRowChange(index, 'RATE', e.target.value)} fullWidth /></TableCell>
                       <TableCell><TextField type="number" size="small" placeholder="0.00" value={row.DISCOUNT || ''} onChange={(e) => handleRowChange(index, 'DISCOUNT', e.target.value)} fullWidth inputProps={{ style: { textAlign: 'right' } }} /></TableCell>

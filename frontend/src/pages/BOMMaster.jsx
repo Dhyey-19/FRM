@@ -41,30 +41,19 @@ const BOMMaster = () => {
         if (response.ok && Array.isArray(data)) {
           setItems(data);
 
-          // Finished goods / assemblies are items where ItemType contains FINISH or ASSEMBLY, or Category is Inhouse/SubContract
+          // Only select items where ItemType = Finished (Finished Good / FG / Finished)
           const finished = data.filter(item => {
             if (!item) return false;
             const type = (item.ItemType || '').trim().toUpperCase();
-            const cat = (item.Category || '').trim().toUpperCase();
-            return (
-              type === 'FG' ||
-              type === 'SF' ||
-              type.includes('FINISH') ||
-              type.includes('ASSEMBLY') ||
-              type === 'FINISHED GOOD' ||
-              type === 'SEMI-FINISHED' ||
-              type === 'FINISHED' ||
-              cat === 'INHOUSE' ||
-              cat === 'SUBCONTRACT'
-            );
+            return type === 'FG' || type.includes('FINISH') || type === 'FINISHED GOOD' || type === 'FINISHED';
           });
 
-          // Always ensure finishedGoods has options (fallback to all items if none matched filter)
+          // Always ensure finishedGoods has options
           const validFinished = finished.length > 0 ? finished : data;
           setFinishedGoods(validFinished);
 
-          // Child parts / raw materials can be any item in the inventory (RM, Semi-Finished, BOP, Consumables, etc.)
-          setRawMaterials(data);
+          // For BOM raw materials: user requested to load only finished items here as well
+          setRawMaterials(validFinished);
         }
       } catch (error) {
         console.error('Error fetching items:', error);

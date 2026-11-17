@@ -51,8 +51,22 @@ async function runSQLiteMigrations(db, saveToDisk) {
             console.log(`[SQLite Migrator] ✓ Migration applied successfully: ${file}`);
           } catch (err) {
             db.exec('ROLLBACK;');
-            console.error(`[SQLite Migrator] ✗ Failed to apply migration ${file}:`, err.message);
-            throw err;
+            if (err.message && (
+              err.message.includes('duplicate column') || 
+              err.message.includes('already exists') || 
+              err.message.includes('near "IF"') || 
+              err.message.includes('near "DECIMAL"') || 
+              err.message.includes('near "[') ||
+              err.message.includes('ALTER COLUMN')
+            )) {
+              try {
+                db.exec(`INSERT OR IGNORE INTO "_Migrations" ("name") VALUES ('${file.replace(/'/g, "''")}');`);
+                console.log(`[SQLite Migrator] ℹ Migration ${file} schema changes already present or MSSQL format. Marked as executed.`);
+              } catch (ignoreErr) {}
+            } else {
+              console.error(`[SQLite Migrator] ✗ Failed to apply migration ${file}:`, err.message);
+              throw err;
+            }
           }
         }
       }

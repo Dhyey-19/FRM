@@ -46,7 +46,7 @@ class ErrorBoundary extends React.Component {
             }
           >
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              An error occurred while loading the Jobwork Movement Report.
+              An error occurred while loading the Sub-Contract Movement Report.
             </Typography>
             <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
               {this.state.error?.message || String(this.state.error)}
@@ -223,7 +223,7 @@ const JobworkMovementReportContent = () => {
     // Sheet 1: Summary Balances
     const summaryRows = (reportData.partyItemSummary || []).map((r, i) => ({
       'Sr. No': i + 1,
-      'Job Worker (Party)': r.partyName,
+      'Sub-Contractor (Party)': r.partyName,
       'Item Code': r.itemCode,
       'Sub Code': r.subCode || '-',
       'Item Name': r.itemName,
@@ -241,7 +241,7 @@ const JobworkMovementReportContent = () => {
 
     const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
     ensureNumericWorksheet(wsSummary);
-    XLSX.utils.book_append_sheet(workbook, wsSummary, 'Jobwork Balances Summary');
+    XLSX.utils.book_append_sheet(workbook, wsSummary, 'Sub-Contract Balances Summary');
 
     // Sheet 2: Detailed Movement Register
     const movementRows = (reportData.movementTransactions || []).map((t, i) => ({
@@ -251,7 +251,7 @@ const JobworkMovementReportContent = () => {
       'Challan No': t.docNo || '-',
       'Ref Out Challan': t.refDocNo || '-',
       'Movement Type': t.type,
-      'Job Worker (Party)': t.partyName,
+      'Sub-Contractor (Party)': t.partyName,
       'Item Code': t.itemCode,
       'Sub Code': t.subCode || '-',
       'Item Name': t.itemName,
@@ -313,14 +313,14 @@ const JobworkMovementReportContent = () => {
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 59, 102);
-    const reportTitle = activeTab === 0 ? 'JOB WORK MOVEMENT & BALANCE SUMMARY' : 'JOB WORK DETAILED MOVEMENT REGISTER (LEDGER)';
+    const reportTitle = activeTab === 0 ? 'SUB-CONTRACT MOVEMENT & BALANCE SUMMARY' : 'SUB-CONTRACT DETAILED MOVEMENT REGISTER (LEDGER)';
     doc.text(reportTitle, 14, 32);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(80);
     const filterCtx = [
-      `Party: ${selectedParty ? selectedParty.name : 'All Job Workers'}`,
+      `Party: ${selectedParty ? selectedParty.name : 'All Sub-Contractors'}`,
       `Item: ${selectedItem ? `[${selectedItem.itemCode}] ${selectedItem.itemName}` : 'All Items'}`,
       `Period: ${startDate ? startDate.toLocaleDateString('en-GB') : 'All Time'} to ${endDate ? endDate.toLocaleDateString('en-GB') : 'Present'}`,
       `Status: ${statusFilter.toUpperCase()}`
@@ -365,7 +365,7 @@ const JobworkMovementReportContent = () => {
 
     if (activeTab === 0) {
       // Summary Table
-      const headers = [['Sr', 'Job Worker (Party)', 'Item Code', 'Item Name', 'Unit', 'Sent Qty', 'Sent Wt', 'Recv Qty', 'Recv Wt', 'Bal Qty', 'Bal Wt (KG)', 'Last Date']];
+      const headers = [['Sr', 'Sub-Contractor (Party)', 'Item Code', 'Item Name', 'Unit', 'Sent Qty', 'Sent Wt', 'Recv Qty', 'Recv Wt', 'Bal Qty', 'Bal Wt (KG)', 'Last Date']];
       const body = filteredSummary.map((r, i) => [
         i + 1,
         r.partyName || '-',
@@ -406,7 +406,7 @@ const JobworkMovementReportContent = () => {
       });
     } else {
       // Detailed Movement Table
-      const headers = [['Sr', 'Date', 'Challan', 'Ref Out', 'Type', 'Job Worker', 'Item Code & Name', 'Process', 'Sent Qty', 'Sent Wt', 'Recv Qty', 'Recv Wt', 'Run Bal Qty', 'Run Bal Wt']];
+      const headers = [['Sr', 'Date', 'Challan', 'Ref Out', 'Type', 'Sub-Contractor', 'Item Code & Name', 'Process', 'Sent Qty', 'Sent Wt', 'Recv Qty', 'Recv Wt', 'Run Bal Qty', 'Run Bal Wt']];
       const body = filteredTransactions.map((t, i) => [
         i + 1,
         t.date ? new Date(t.date).toLocaleDateString('en-GB') : '-',
@@ -455,7 +455,7 @@ const JobworkMovementReportContent = () => {
       const pdfBlob = doc.output('blob');
       const blobUrl = URL.createObjectURL(pdfBlob);
       setPreviewUrl(blobUrl);
-      setPreviewTitle(`Jobwork Movement Report - ${selectedParty ? selectedParty.name : 'All Parties'}`);
+      setPreviewTitle(`Sub-Contract Movement Report - ${selectedParty ? selectedParty.name : 'All Parties'}`);
       setPreviewOpen(true);
     } else {
       const safeName = (selectedParty?.name || 'All_Parties').replace(/[^a-zA-Z0-9]/g, '_');
@@ -473,10 +473,10 @@ const JobworkMovementReportContent = () => {
           </Box>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800, color: '#0F3B66', letterSpacing: -0.5 }}>
-              Job Work Movement
+              Sub-Contract Movement
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.8rem' }}>
-              Track Outward Sent vs Inward Received materials with outstanding balance at each Job Worker
+              Track Outward Sent vs Inward Received materials with outstanding balance at each Sub-Contractor
             </Typography>
           </Box>
         </Box>
@@ -566,9 +566,9 @@ const JobworkMovementReportContent = () => {
                 <TextField 
                   {...params} 
                   fullWidth
-                  label="Filter by Party (Job Worker)" 
+                  label="Filter by Party (Sub-Contractor)" 
                   size="small" 
-                  placeholder="Select or search Job Worker..."
+                  placeholder="Select or search Sub-Contractor..."
                   InputLabelProps={{ shrink: true }}
                 />
               )}
@@ -863,7 +863,7 @@ const JobworkMovementReportContent = () => {
               <TableHead>
                 <TableRow sx={{ '& th': { bgcolor: '#0F3B66', color: '#ffffff', fontWeight: 700, fontSize: '0.8rem', py: 1.2 } }}>
                   <TableCell sx={{ color: '#ffffff', width: 50, textAlign: 'center' }}>Sr</TableCell>
-                  <TableCell sx={{ color: '#ffffff', minWidth: 180 }}>Job Worker (Party)</TableCell>
+                  <TableCell sx={{ color: '#ffffff', minWidth: 180 }}>Sub-Contractor (Party)</TableCell>
                   <TableCell sx={{ color: '#ffffff', minWidth: 110 }}>Item Code</TableCell>
                   <TableCell sx={{ color: '#ffffff', minWidth: 200 }}>Item Name</TableCell>
                   <TableCell sx={{ color: '#ffffff', width: 70, textAlign: 'center' }}>Unit</TableCell>
@@ -884,7 +884,7 @@ const JobworkMovementReportContent = () => {
                     <TableCell colSpan={13} align="center" sx={{ py: 6 }}>
                       <CircularProgress size={32} sx={{ color: '#0F3B66' }} />
                       <Typography variant="body2" sx={{ mt: 1, color: '#64748b' }}>
-                        Loading Jobwork balances...
+                        Loading Sub-Contract balances...
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -892,7 +892,7 @@ const JobworkMovementReportContent = () => {
                   <TableRow>
                     <TableCell colSpan={13} align="center" sx={{ py: 6 }}>
                       <Typography variant="body1" sx={{ fontWeight: 600, color: '#475569' }}>
-                        No Jobwork records found matching your filter criteria.
+                        No Sub-Contract records found matching your filter criteria.
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -993,7 +993,7 @@ const JobworkMovementReportContent = () => {
                   <TableCell sx={{ color: '#ffffff', minWidth: 100 }}>Date & Time</TableCell>
                   <TableCell sx={{ color: '#ffffff', minWidth: 90 }}>Challan No</TableCell>
                   <TableCell sx={{ color: '#ffffff', minWidth: 120 }}>Movement Type</TableCell>
-                  <TableCell sx={{ color: '#ffffff', minWidth: 160 }}>Job Worker (Party)</TableCell>
+                  <TableCell sx={{ color: '#ffffff', minWidth: 160 }}>Sub-Contractor (Party)</TableCell>
                   <TableCell sx={{ color: '#ffffff', minWidth: 150 }}>Item Details</TableCell>
                   <TableCell sx={{ color: '#ffffff', minWidth: 100 }}>Process</TableCell>
                   <TableCell sx={{ color: '#ffffff', textAlign: 'right', minWidth: 100 }}>Sent (+)</TableCell>

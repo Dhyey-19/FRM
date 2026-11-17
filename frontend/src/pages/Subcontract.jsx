@@ -50,7 +50,7 @@ const Subcontract = ({ initialTab = 0 }) => {
             <SubcontractIcon sx={{ color: '#0F3B66' }} /> Sub-Contract
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
-            Unified management for Subcontract IN and Subcontract OUT operations
+            Unified management for Sub-Contract IN and Sub-Contract OUT operations
           </Typography>
         </Box>
       </Box>
@@ -95,22 +95,22 @@ const Subcontract = ({ initialTab = 0 }) => {
           <Tab 
             icon={<JwInIcon sx={{ color: activeTab === 0 ? '#10b981' : 'inherit' }} />} 
             iconPosition="start" 
-            label="1: Subcontract IN" 
+            label="1: Sub-Contract IN" 
           />
           <Tab 
             icon={<JwOutIcon sx={{ color: activeTab === 1 ? '#3b82f6' : 'inherit' }} />} 
             iconPosition="start" 
-            label="2: Subcontract OUT" 
+            label="2: Sub-Contract OUT" 
           />
         </Tabs>
       </Paper>
 
       {/* Tab Panels: keep both mounted to preserve state/search across tab switches */}
       <Box sx={{ display: activeTab === 0 ? 'block' : 'none' }}>
-        <JobworkInEntry hideTitle title="Subcontract IN" />
+        <JobworkInEntry hideTitle title="Sub-Contract IN" />
       </Box>
       <Box sx={{ display: activeTab === 1 ? 'block' : 'none' }}>
-        <JobworkOutEntry hideTitle title="Subcontract OUT" />
+        <JobworkOutEntry hideTitle title="Sub-Contract OUT" />
       </Box>
     </Box>
   );

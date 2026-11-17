@@ -262,7 +262,7 @@ const BOMShortfallView = ({
                       <Stack direction="row" spacing={0.5} sx={{ mt: 0.3 }}>
                         <Chip
                           size="small"
-                          label={child.category}
+                          label={child.category === 'SubContract' ? 'Sub-Contract' : child.category}
                           variant="outlined"
                           color={child.category === 'SubContract' ? 'warning' : child.category === 'BOP' ? 'secondary' : 'default'}
                           sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600 }}

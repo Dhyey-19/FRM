@@ -3,7 +3,7 @@ import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../uti
 import {
     Box, Typography, Paper, Grid, TextField, Autocomplete, Button, Alert,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, FormControl, InputLabel, Select, MenuItem,
-    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Divider
+    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Divider, Chip
 } from '@mui/material';
 import { ListAlt as JournalIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon, Print as PrintIcon } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
@@ -74,7 +74,7 @@ const VoucherPreview = ({ row, companyProfile, copyType }) => {
                     fontSize: '14px',
                     fontWeight: '600',
                     marginTop: '5px'
-                }}>STOCK JOURNAL VOUCHER</div>
+                }}>STOCK ADJUST VOUCHER</div>
                 <div style={{
                     position: 'absolute',
                     top: '0',
@@ -272,6 +272,12 @@ const StockJournal = ({ user }) => {
             return;
         }
 
+        const u = String(selectedItem.Unit || '').trim().toUpperCase();
+        if ((u === 'PCS' || (!u.includes('KG') && u !== '')) && (!qty || parseFloat(qty) <= 0)) {
+            setError(`Quantity / Pcs is compulsory because item unit is ${selectedItem.Unit || 'PCS'}.`);
+            return;
+        }
+
         const payload = {
             SJDate: sjDate,
             SJType: sjType,
@@ -430,7 +436,7 @@ const StockJournal = ({ user }) => {
         <Box>
             <Box sx={{ mb: 3 }}>
                 <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <JournalIcon /> Stock Journal
+                    <JournalIcon /> Stock Adjust
                 </Typography>
             </Box>
 
@@ -438,11 +444,11 @@ const StockJournal = ({ user }) => {
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
                 {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-                <Grid container spacing={2}>
+                <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} sm={2}>
                         <TextField
                             fullWidth
-                            label="Journal Date"
+                            label="Adjust Date"
                             type="date"
                             size="small"
                             value={sjDate}
@@ -453,10 +459,10 @@ const StockJournal = ({ user }) => {
                     </Grid>
                     <Grid item xs={12} sm={2}>
                         <FormControl fullWidth size="small">
-                            <InputLabel>Journal Type</InputLabel>
+                            <InputLabel>Adjust Type</InputLabel>
                             <Select
                                 value={sjType}
-                                label="Journal Type"
+                                label="Adjust Type"
                                 onChange={(e) => setSjType(e.target.value)}
                             >
                                 <MenuItem value="Production">Production (+)</MenuItem>
@@ -464,7 +470,18 @@ const StockJournal = ({ user }) => {
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid item xs={12} sm={1}>
+                    <Grid item xs={12} sm={3.5}>
+                        <Autocomplete
+                            fullWidth
+                            options={items}
+                            getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                            value={selectedItem}
+                            onChange={(e, newValue) => setSelectedItem(newValue)}
+                            renderInput={(params) => <TextField {...params} label="Select Item" size="small" required />}
+                            slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={1.5}>
                         <TextField
                             fullWidth
                             label="Quantity"
@@ -475,19 +492,14 @@ const StockJournal = ({ user }) => {
                             required
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Autocomplete
-                            fullWidth
-                            options={items}
-                            getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
-                            value={selectedItem}
-                            onChange={(e, newValue) => setSelectedItem(newValue)}
-                            renderInput={(params) => <TextField {...params} label="Select Item" size="small" required />}
-                            sx={{ minWidth: `${Math.max(20, maxItemLength) + 6}ch` }}
-                            slotProps={{ paper: { sx: { width: 'max-content', minWidth: '100%' } } }}
+                    <Grid item xs={12} sm={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Chip 
+                            label={selectedItem ? (selectedItem.Unit || 'PCS') : 'UNIT'} 
+                            size="small" 
+                            sx={{ fontWeight: 700, bgcolor: '#f1f5f9', width: '100%', py: 1 }} 
                         />
                     </Grid>
-                    <Grid item xs={12} sm={1}>
+                    <Grid item xs={12} sm={2}>
                         <TextField
                             fullWidth
                             label="Remarks (Optional)"
@@ -496,14 +508,13 @@ const StockJournal = ({ user }) => {
                             onChange={(e) => setRemarks(e.target.value)}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={3} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
+                    <Grid item xs={12} sm={12} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
                         <Button 
                             variant="outlined" 
                             color="primary" 
                             onClick={() => handleSubmit(true)}
                             disabled={(editingId ? !hasEditPermission() : !hasAddPermission()) || !selectedItem || !qty || parseFloat(qty) <= 0}
-                            fullWidth
-                            sx={{ height: '40px' }}
+                            sx={{ height: '36px', minWidth: '140px' }}
                             startIcon={<PrintIcon />}
                         >
                             Save & Print
@@ -513,8 +524,7 @@ const StockJournal = ({ user }) => {
                             color="primary" 
                             onClick={() => handleSubmit(false)}
                             disabled={(editingId ? !hasEditPermission() : !hasAddPermission()) || !selectedItem || !qty || parseFloat(qty) <= 0}
-                            fullWidth
-                            sx={{ height: '40px' }}
+                            sx={{ height: '36px', minWidth: '100px' }}
                         >
                             {editingId ? 'Update' : 'Save'}
                         </Button>
@@ -524,7 +534,7 @@ const StockJournal = ({ user }) => {
 
             <Paper sx={{ width: '100%', p: 3, borderRadius: 2, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, color: '#0F3B66', mb: 2 }}>
-                    Recent Stock Journals
+                    Recent Stock Adjustments
                 </Typography>
                 <TableContainer>
                     <Table size="small">
@@ -588,7 +598,7 @@ const StockJournal = ({ user }) => {
             />
 
 
-          <PdfPreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} pdfUrl={previewUrl} title="Stock Journal Preview" />
+          <PdfPreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} pdfUrl={previewUrl} title="Stock Adjust Preview" />
         </Box>
     );
 };

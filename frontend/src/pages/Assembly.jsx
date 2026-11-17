@@ -3,7 +3,7 @@ import { hasAddPermission, hasEditPermission, hasDeletePermission } from '../uti
 import {
     Box, Typography, Paper, Toolbar, Button, TextField, Autocomplete,
     Grid, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Divider, Tabs, Tab
+    Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Divider, Tabs, Tab, Chip
 } from '@mui/material';
 import { 
     BuildCircle as BuildIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, Close as CloseIcon, Description as DescriptionIcon
@@ -17,6 +17,7 @@ const Assembly = ({ user }) => {
     // Form state
     const todayDate = new Date().toISOString().split('T')[0];
     const [assemblyDate, setAssemblyDate] = useState(todayDate);
+    const [itemTypeFilter, setItemTypeFilter] = useState('Finished');
     const [assemblyNo, setAssemblyNo] = useState('');
     const [selectedItem, setSelectedItem] = useState(null); // Parent item
     const [quantity, setQuantity] = useState('');
@@ -271,12 +272,39 @@ const Assembly = ({ user }) => {
                         />
                     </Grid>
 
+                    {/* Item Type Selection Dropdown (Default: Finished) */}
+                    <Grid item xs={6} sm="auto">
+                        <TextField
+                            select
+                            label="Item Type"
+                            size="small"
+                            value={itemTypeFilter}
+                            onChange={(e) => {
+                                setItemTypeFilter(e.target.value);
+                                setSelectedItem(null);
+                            }}
+                            sx={{ width: { xs: '100%', sm: 140, md: 145 } }}
+                            SelectProps={{ native: true }}
+                        >
+                            <option value="Finished">Finished</option>
+                            {[...new Set(items.map(i => i.ItemType).filter(Boolean))]
+                                .filter(t => !t.toLowerCase().includes('finish') && t.toUpperCase() !== 'FG')
+                                .map(t => (
+                                    <option key={t} value={t}>{t}</option>
+                                ))
+                            }
+                        </TextField>
+                    </Grid>
+
                     {/* Select Parent Item (Normal dropdown, ~420px width) */}
                     <Grid item xs={12} sm="auto">
                         <Autocomplete
                             options={items.filter(item => {
                                 const t = (item.ItemType || '').trim().toLowerCase();
-                                return ['fg', 'sf', 'finished', 'finished good', 'semi-finished'].includes(t) || item.Category === 'Inhouse';
+                                if (itemTypeFilter.toLowerCase() === 'finished') {
+                                    return t.includes('finish') || t === 'fg';
+                                }
+                                return t === itemTypeFilter.toLowerCase();
                             })}
                             getOptionLabel={(option) => {
                                 if (!option) return '';
@@ -344,6 +372,15 @@ const Assembly = ({ user }) => {
                                 width: { xs: 110, sm: 100, md: 95 },
                                 '& input': { fontWeight: 600 }
                             }}
+                        />
+                    </Grid>
+
+                    {/* Unit Chip */}
+                    <Grid item xs={6} sm="auto" sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Chip 
+                            label={selectedItem ? (selectedItem.Unit || 'PCS') : 'UNIT'} 
+                            size="small" 
+                            sx={{ fontWeight: 700, bgcolor: '#f1f5f9', height: 32 }} 
                         />
                     </Grid>
 

@@ -185,41 +185,63 @@ exports.bulkCreateDepartments = async (req, res) => {
   let added = 0;
   let updated = 0;
   let skipped = 0;
+  const failed = [];
 
   try {
     const pool = await connectDB();
-    for (const item of items) {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      const excelRowNum = item.__rowNum__ || (index + 2);
       const rawName = item.DeptName || item['Department Name'] || item.DepartmentName || item.Department;
-      if (!rawName) continue;
+      if (!rawName) {
+        failed.push({ rowNumber: excelRowNum, reason: `Excel Row #${excelRowNum}: Department Name is missing` });
+        skipped++;
+        continue;
+      }
       const deptName = String(rawName).trim();
-      if (!deptName) continue;
+      if (!deptName) {
+        failed.push({ rowNumber: excelRowNum, reason: `Excel Row #${excelRowNum}: Department Name is blank` });
+        skipped++;
+        continue;
+      }
 
       const numCosting = parseFloat(item.Costing !== undefined ? item.Costing : item['Costing']) || 0;
 
-      const check = await pool.request()
-        .input('DeptName', sql.VarChar(20), deptName)
-        .query('SELECT DeptID FROM DepartmentMaster WHERE DeptName = @DeptName');
+      try {
+        const check = await pool.request()
+          .input('DeptName', sql.VarChar(20), deptName)
+          .query('SELECT DeptID FROM DepartmentMaster WHERE DeptName = @DeptName');
 
-      if (check.recordset.length === 0) {
-        await pool.request()
-          .input('DeptName', sql.VarChar(20), deptName)
-          .input('Costing', sql.Numeric(15, 2), numCosting)
-          .query('INSERT INTO DepartmentMaster (DeptName, Costing) VALUES (@DeptName, @Costing)');
-        added++;
-      } else {
-        await pool.request()
-          .input('DeptName', sql.VarChar(20), deptName)
-          .input('Costing', sql.Numeric(15, 2), numCosting)
-          .query('UPDATE DepartmentMaster SET Costing = @Costing WHERE DeptName = @DeptName');
-        updated++;
+        if (check.recordset.length === 0) {
+          await pool.request()
+            .input('DeptName', sql.VarChar(20), deptName)
+            .input('Costing', sql.Numeric(15, 2), numCosting)
+            .query('INSERT INTO DepartmentMaster (DeptName, Costing) VALUES (@DeptName, @Costing)');
+          added++;
+        } else {
+          await pool.request()
+            .input('DeptName', sql.VarChar(20), deptName)
+            .input('Costing', sql.Numeric(15, 2), numCosting)
+            .query('UPDATE DepartmentMaster SET Costing = @Costing WHERE DeptName = @DeptName');
+          updated++;
+        }
+      } catch (rowErr) {
+        failed.push({ rowNumber: excelRowNum, reason: `Excel Row #${excelRowNum}: ${rowErr.message}` });
+        skipped++;
       }
     }
 
+    let summaryMsg = `Processed ${items.length} records. Added: ${added}, Updated: ${updated}`;
+    if (failed.length > 0) {
+      summaryMsg += `. Failed rows: ${failed.map(f => f.reason).join('; ')}`;
+    }
+
     res.status(200).json({
-      message: `Processed ${items.length} records. Added: ${added}, Updated: ${updated}`,
+      message: summaryMsg,
       added,
       updated,
-      skipped
+      skipped,
+      failed
     });
   } catch (error) {
     console.error('Error bulk creating departments:', error);

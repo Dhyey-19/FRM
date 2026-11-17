@@ -300,11 +300,12 @@ const StockTransfer = ({ user }) => {
     if (['Pcs', 'Weight', 'Unit'].includes(field)) {
       setInItems(prevIn => {
         const newIn = [...prevIn];
-        if (index < newIn.length) {
-          const currentInVal = newIn[index][field];
-          if (!currentInVal || currentInVal === prevVal) {
-            newIn[index] = { ...newIn[index], [field]: value };
-          }
+        while (newIn.length <= index) {
+          newIn.push({ ...emptyItemRow });
+        }
+        const currentInVal = newIn[index][field];
+        if (!currentInVal || currentInVal === prevVal) {
+          newIn[index] = { ...newIn[index], [field]: value };
         }
         return newIn;
       });
@@ -316,24 +317,25 @@ const StockTransfer = ({ user }) => {
     const newArr = [...outItems];
     newArr[index].ItemCode = item ? item.ItemCode : '';
     newArr[index].SubCode = item ? (item.SubCode || '') : '';
-    if (item && item.Unit) {
-      newArr[index].Unit = item.Unit;
-    }
+    newArr[index].Unit = item?.Unit || '';
     setOutItems(newArr);
 
-    // Auto-sync to In items if In item is empty or was matching previous Out item
+    // Auto-sync to In items: default In item to same as Out item, pcs, and weight
     setInItems(prevIn => {
       const newIn = [...prevIn];
-      if (index < newIn.length) {
-        const targetIn = newIn[index];
-        if (!targetIn.ItemCode || (prevOut && targetIn.ItemCode === prevOut.ItemCode)) {
-          newIn[index] = {
-            ...targetIn,
-            ItemCode: item ? item.ItemCode : '',
-            SubCode: item ? (item.SubCode || '') : '',
-            Unit: item?.Unit || targetIn.Unit || ''
-          };
-        }
+      while (newIn.length <= index) {
+        newIn.push({ ...emptyItemRow });
+      }
+      const targetIn = newIn[index];
+      if (!targetIn.ItemCode || (prevOut && targetIn.ItemCode === prevOut.ItemCode)) {
+        newIn[index] = {
+          ...targetIn,
+          ItemCode: item ? item.ItemCode : '',
+          SubCode: item ? (item.SubCode || '') : '',
+          Unit: item?.Unit || targetIn.Unit || '',
+          Pcs: targetIn.Pcs || newArr[index].Pcs || '',
+          Weight: targetIn.Weight || newArr[index].Weight || ''
+        };
       }
       return newIn;
     });
@@ -393,6 +395,22 @@ const StockTransfer = ({ user }) => {
     if (validOuts.length === 0) {
       setDialogError('Please fill in at least one Out Item.');
       return;
+    }
+
+    // Compulsory Pcs check if Unit is PCS
+    for (const r of validOuts) {
+      const u = String(r.Unit || '').trim().toUpperCase();
+      if ((u === 'PCS' || (!u.includes('KG') && u !== '')) && (!r.Pcs || parseFloat(r.Pcs) <= 0)) {
+        setDialogError(`Pcs is compulsory for Out Item ${r.ItemCode} because its unit is PCS.`);
+        return;
+      }
+    }
+    for (const r of validIns) {
+      const u = String(r.Unit || '').trim().toUpperCase();
+      if ((u === 'PCS' || (!u.includes('KG') && u !== '')) && (!r.Pcs || parseFloat(r.Pcs) <= 0)) {
+        setDialogError(`Pcs is compulsory for In Item ${r.ItemCode} because its unit is PCS.`);
+        return;
+      }
     }
 
     const payload = {
@@ -1034,7 +1052,10 @@ const StockTransfer = ({ user }) => {
                         getOptionLabel={(option) => {
                           if (!option) return '';
                           const subStr = option.SubCode ? ` / ${option.SubCode}` : '';
-                          return `${option.ItemCode}${subStr} - ${option.ItemName} (${option.Pcs || 0} Pcs | ${option.Weight || 0} Wt)`;
+                          const u = (option.Unit || '').toUpperCase();
+                          const isKg = u === 'KG' || u === 'KGS';
+                          const stockStr = isKg ? `${option.Weight || 0} ${option.Unit || 'KG'}` : `${option.Pcs || 0} ${option.Unit || 'PCS'}`;
+                          return `${option.ItemCode}${subStr} - ${option.ItemName} (${stockStr})`;
                         }}
                         value={availableOutItems.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || items.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || null}
                         onChange={(e, newValue) => handleOutItemSelect(index, newValue)}
@@ -1045,20 +1066,8 @@ const StockTransfer = ({ user }) => {
                     </TableCell>
                     <TableCell sx={{ width: 140 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleOutChange(index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
                     <TableCell sx={{ width: 150 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleOutChange(index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 120 }}>
-                      <Autocomplete
-                        options={unitOptions}
-                        freeSolo
-                        value={row.Unit || ''}
-                        onChange={(e, newValue) => handleOutChange(index, 'Unit', newValue || '')}
-                        onInputChange={(e, newInputValue) => {
-                          if (e && e.type === 'change') {
-                            handleOutChange(index, 'Unit', newInputValue);
-                          }
-                        }}
-                        renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
-                        fullWidth
-                      />
+                    <TableCell sx={{ width: 90, textAlign: 'center' }}>
+                      <Chip label={row.Unit || 'PCS'} size="small" sx={{ fontWeight: 600, bgcolor: '#f1f5f9' }} />
                     </TableCell>
                     <TableCell align="center" sx={{ width: 45 }}>
                       <IconButton color="error" size="small" onClick={() => removeArrayRow(setOutItems, outItems, index)} disabled={!hasDeletePermission() || outItems.length === 1}>
@@ -1080,7 +1089,11 @@ const StockTransfer = ({ user }) => {
                     <TableCell sx={{ minWidth: 260 }}>
                       <Autocomplete
                         options={items}
-                        getOptionLabel={(option) => option ? `${option.ItemCode}${option.SubCode ? ` / ${option.SubCode}` : ''} - ${option.ItemName}` : ''}
+                        getOptionLabel={(option) => {
+                          if (!option) return '';
+                          const subStr = option.SubCode ? ` / ${option.SubCode}` : '';
+                          return `${option.ItemCode}${subStr} - ${option.ItemName}`;
+                        }}
                         value={items.find(i => i.ItemCode === row.ItemCode && (i.SubCode || '') === (row.SubCode || '')) || null}
                         onChange={(e, newValue) => handleArrayItemSelect(setInItems, inItems, index, newValue)}
                         renderInput={(params) => <TextField {...params} placeholder="In Item" size="small" />}
@@ -1090,20 +1103,8 @@ const StockTransfer = ({ user }) => {
                     </TableCell>
                     <TableCell sx={{ width: 140 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
                     <TableCell sx={{ width: 150 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleArrayChange(setInItems, inItems, index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 120 }}>
-                      <Autocomplete
-                        options={unitOptions}
-                        freeSolo
-                        value={row.Unit || ''}
-                        onChange={(e, newValue) => handleArrayChange(setInItems, inItems, index, 'Unit', newValue || '')}
-                        onInputChange={(e, newInputValue) => {
-                          if (e && e.type === 'change') {
-                            handleArrayChange(setInItems, inItems, index, 'Unit', newInputValue);
-                          }
-                        }}
-                        renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
-                        fullWidth
-                      />
+                    <TableCell sx={{ width: 90, textAlign: 'center' }}>
+                      <Chip label={row.Unit || 'PCS'} size="small" sx={{ fontWeight: 600, bgcolor: '#f1f5f9' }} />
                     </TableCell>
                     <TableCell align="center" sx={{ width: 45 }}>
                       <IconButton color="error" size="small" onClick={() => removeArrayRow(setInItems, inItems, index)} disabled={!hasDeletePermission() || inItems.length === 1}>
@@ -1135,20 +1136,8 @@ const StockTransfer = ({ user }) => {
                     </TableCell>
                     <TableCell sx={{ width: 140 }}><TextField type="number" size="small" value={row.Pcs} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Pcs', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
                     <TableCell sx={{ width: 150 }}><TextField type="number" size="small" value={row.Weight} onChange={(e) => handleArrayChange(setScrapItems, scrapItems, index, 'Weight', e.target.value)} inputProps={{ style: { textAlign: 'right' } }} fullWidth /></TableCell>
-                    <TableCell sx={{ width: 120 }}>
-                      <Autocomplete
-                        options={unitOptions}
-                        freeSolo
-                        value={row.Unit || ''}
-                        onChange={(e, newValue) => handleArrayChange(setScrapItems, scrapItems, index, 'Unit', newValue || '')}
-                        onInputChange={(e, newInputValue) => {
-                          if (e && e.type === 'change') {
-                            handleArrayChange(setScrapItems, scrapItems, index, 'Unit', newInputValue);
-                          }
-                        }}
-                        renderInput={(params) => <TextField {...params} placeholder="Unit" size="small" />}
-                        fullWidth
-                      />
+                    <TableCell sx={{ width: 90, textAlign: 'center' }}>
+                      <Chip label={row.Unit || 'KG'} size="small" sx={{ fontWeight: 600, bgcolor: '#f1f5f9' }} />
                     </TableCell>
                     <TableCell align="center" sx={{ width: 45 }}>
                       <IconButton color="error" size="small" onClick={() => removeArrayRow(setScrapItems, scrapItems, index)} disabled={!hasDeletePermission()}>
