@@ -14,7 +14,7 @@
     "update-version": "node scripts/update-version.js",
     "dev": "concurrently -k \"npm run dev -w frontend\" \"npm run dev -w backend\"",
     "build:frontend": "npm run build --prefix frontend",
-    "build": "npm run build:frontend"
+    "build": "npm run build:frontend && node scripts/sync-dist.js"
   },
   "dependencies": {
     "cors": "^2.8.6",

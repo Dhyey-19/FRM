@@ -93,8 +93,8 @@ app.get('/api/health', (req, res) => {
 const fs = require('fs');
 const https = require('https');
 const candidateDistPaths = [
-  path.resolve(__dirname, '../public'),
   path.resolve(__dirname, '../frontend/dist'),
+  path.resolve(__dirname, '../public'),
   path.resolve(__dirname, 'public')
 ];
 let frontendDistPath = null;

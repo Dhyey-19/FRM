@@ -20,7 +20,6 @@ out/
 *.zip
 dist.zip
 publish/
-public/
 
 # SQLite database and temporary files (local data not stored in git)
 *.db
@@ -41,6 +40,7 @@ certs/
 *.cer
 *.crt
 registration.json
+!backend/database/registration.json
 
 # Environment variables / Secrets
 .env

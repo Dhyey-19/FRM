@@ -198,7 +198,27 @@ async function getDatabase() {
       return String(val);
     });
 
-    // 5. Automatically execute any pending database migrations
+    // 5. Register DATEDIFF(part, start, end)
+    dbInstance.create_function('DATEDIFF', (part, start, end) => {
+      if (!start || !end) return 0;
+      const d1 = new Date(start);
+      const d2 = new Date(end);
+      if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 0;
+      const diffMs = d2.getTime() - d1.getTime();
+      const p = String(part || '').toLowerCase();
+      if (p === 'day' || p === 'd' || p === 'dd') {
+        return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      }
+      if (p === 'month' || p === 'm' || p === 'mm') {
+        return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+      }
+      if (p === 'year' || p === 'y' || p === 'yy' || p === 'yyyy') {
+        return d2.getFullYear() - d1.getFullYear();
+      }
+      return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    });
+
+    // 6. Automatically execute any pending database migrations
     try {
       const { runMigrations } = require('../database/migrator');
       await runMigrations(dbInstance, saveToDisk);
@@ -249,6 +269,7 @@ function transformQuery(sqlText) {
   q = q.replace(/\bCAST\s*\(\s*(.+?)\s+AS\s+DATE\s*\)/gi, 'DATE($1)');
   q = q.replace(/\bCONVERT\s*\(\s*VARCHAR\s*\(\s*\d+\s*\)\s*,\s*([^,]+?)\s*,\s*120\s*\)/gi, 'SUBSTR($1, 1, 10)');
   q = q.replace(/\bDATEADD\s*\(\s*([a-zA-Z]+)\s*,/gi, "DATEADD('$1',");
+  q = q.replace(/\bDATEDIFF\s*\(\s*([a-zA-Z]+)\s*,/gi, "DATEDIFF('$1',");
 
   const outputMatch = q.match(/INSERT\s+INTO\s+([^\s(]+)\s*(\([^)]+\))\s*OUTPUT\s+INSERTED\.([^\s(]+(?:\s*,\s*INSERTED\.[^\s(]+)*)\s*VALUES\s*(\([^)]+\))/i);
   if (outputMatch) {

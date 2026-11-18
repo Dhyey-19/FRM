@@ -672,24 +672,6 @@ exports.getDashboardNotifications = async (req, res) => {
     let statusMap = new Map();
     let closedRowsList = [];
     try {
-      await pool.request().query(`
-        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NotificationLogStatus')
-        BEGIN
-          CREATE TABLE [dbo].[NotificationLogStatus] (
-            [NotificationId] VARCHAR(150) NOT NULL PRIMARY KEY,
-            [NotificationType] VARCHAR(50) NULL,
-            [Title] NVARCHAR(255) NULL,
-            [Message] NVARCHAR(1000) NULL,
-            [Status] VARCHAR(20) NOT NULL DEFAULT 'Open',
-            [GeneratedAt] DATETIME NOT NULL DEFAULT GETDATE(),
-            [ClosedAt] DATETIME NULL,
-            [ClosedBy] VARCHAR(100) NULL,
-            [ClosedReason] NVARCHAR(500) NULL,
-            [UpdatedAt] DATETIME NOT NULL DEFAULT GETDATE()
-          );
-        END
-      `);
-
       const statusRes = await pool.request().query(`
         SELECT NotificationId, NotificationType, Title, Message, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason
         FROM NotificationLogStatus
@@ -1259,19 +1241,22 @@ exports.getDashboardNotifications = async (req, res) => {
 
         // Persist discovered open alert so its initial GeneratedAt timestamp is recorded
         try {
-          await pool.request()
+          const checkRes = await pool.request()
             .input('NotificationId', n.id)
-            .input('NotificationType', n.type || '')
-            .input('Title', (n.title || '').slice(0, 255))
-            .input('Message', (n.message || '').slice(0, 1000))
-            .input('GeneratedAt', new Date(n.generatedAt))
-            .query(`
-              IF NOT EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
-              BEGIN
+            .query('SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId');
+
+          if (!checkRes.recordset || checkRes.recordset.length === 0) {
+            await pool.request()
+              .input('NotificationId', n.id)
+              .input('NotificationType', n.type || '')
+              .input('Title', (n.title || '').slice(0, 255))
+              .input('Message', (n.message || '').slice(0, 1000))
+              .input('GeneratedAt', new Date(n.generatedAt))
+              .query(`
                 INSERT INTO NotificationLogStatus (NotificationId, NotificationType, Title, Message, Status, GeneratedAt)
                 VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Open', @GeneratedAt)
-              END
-            `);
+              `);
+          }
         } catch (e) {
           // ignore duplicate insert errors
         }
@@ -1348,30 +1333,37 @@ exports.closeNotification = async (req, res) => {
       }
     }
 
-    await pool.request()
+    const checkRes = await pool.request()
       .input('NotificationId', id)
-      .input('NotificationType', type || null)
-      .input('Title', title ? String(title).slice(0, 255) : null)
-      .input('Message', message ? String(message).slice(0, 1000) : null)
-      .input('ClosedBy', currentUser)
-      .input('ClosedReason', closedReason || 'Closed by user confirmation')
-      .query(`
-        IF EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
-        BEGIN
+      .query('SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId');
+
+    if (checkRes.recordset && checkRes.recordset.length > 0) {
+      await pool.request()
+        .input('NotificationId', id)
+        .input('ClosedBy', currentUser)
+        .input('ClosedReason', closedReason || 'Closed by user confirmation')
+        .query(`
           UPDATE NotificationLogStatus
           SET Status = 'Closed',
-              ClosedAt = GETDATE(),
+              ClosedAt = CURRENT_TIMESTAMP,
               ClosedBy = @ClosedBy,
               ClosedReason = @ClosedReason,
-              UpdatedAt = GETDATE()
+              UpdatedAt = CURRENT_TIMESTAMP
           WHERE NotificationId = @NotificationId
-        END
-        ELSE
-        BEGIN
+        `);
+    } else {
+      await pool.request()
+        .input('NotificationId', id)
+        .input('NotificationType', type || null)
+        .input('Title', title ? String(title).slice(0, 255) : null)
+        .input('Message', message ? String(message).slice(0, 1000) : null)
+        .input('ClosedBy', currentUser)
+        .input('ClosedReason', closedReason || 'Closed by user confirmation')
+        .query(`
           INSERT INTO NotificationLogStatus (NotificationId, NotificationType, Title, Message, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason, UpdatedAt)
-          VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Closed', GETDATE(), GETDATE(), @ClosedBy, @ClosedReason, GETDATE())
-        END
-      `);
+          VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Closed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, @ClosedBy, @ClosedReason, CURRENT_TIMESTAMP)
+        `);
+    }
 
     return res.status(200).json({ success: true, message: 'Notification closed successfully' });
   } catch (error) {
@@ -1416,30 +1408,36 @@ exports.deleteNotification = async (req, res) => {
       }
     }
 
-    await pool.request()
+    const checkRes = await pool.request()
       .input('NotificationId', id)
-      .input('NotificationType', type || null)
-      .input('Title', title ? String(title).slice(0, 255) : null)
-      .input('Message', message ? String(message).slice(0, 1000) : null)
-      .input('ClosedBy', currentUser)
-      .input('ClosedReason', 'Deleted by user')
-      .query(`
-        IF EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
-        BEGIN
+      .query('SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId');
+
+    if (checkRes.recordset && checkRes.recordset.length > 0) {
+      await pool.request()
+        .input('NotificationId', id)
+        .input('ClosedBy', currentUser)
+        .input('ClosedReason', 'Deleted by user')
+        .query(`
           UPDATE NotificationLogStatus
           SET Status = 'Deleted',
-              ClosedAt = GETDATE(),
+              ClosedAt = CURRENT_TIMESTAMP,
               ClosedBy = @ClosedBy,
               ClosedReason = @ClosedReason,
-              UpdatedAt = GETDATE()
+              UpdatedAt = CURRENT_TIMESTAMP
           WHERE NotificationId = @NotificationId
-        END
-        ELSE
-        BEGIN
+        `);
+    } else {
+      await pool.request()
+        .input('NotificationId', id)
+        .input('NotificationType', type || null)
+        .input('Title', title ? String(title).slice(0, 255) : null)
+        .input('Message', message ? String(message).slice(0, 1000) : null)
+        .input('ClosedBy', currentUser)
+        .query(`
           INSERT INTO NotificationLogStatus (NotificationId, NotificationType, Title, Message, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason, UpdatedAt)
-          VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Deleted', GETDATE(), GETDATE(), @ClosedBy, @ClosedReason, GETDATE())
-        END
-      `);
+          VALUES (@NotificationId, @NotificationType, @Title, @Message, 'Deleted', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, @ClosedBy, 'Deleted by user', CURRENT_TIMESTAMP)
+        `);
+    }
 
     return res.status(200).json({ success: true, message: 'Notification deleted successfully' });
   } catch (error) {
@@ -1467,22 +1465,28 @@ exports.deleteAllNotifications = async (req, res) => {
           }
         }
 
-        await pool.request()
+        const checkRes = await pool.request()
           .input('NotificationId', id)
-          .input('ClosedBy', currentUser)
-          .query(`
-            IF EXISTS (SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId)
-            BEGIN
+          .query('SELECT 1 FROM NotificationLogStatus WHERE NotificationId = @NotificationId');
+
+        if (checkRes.recordset && checkRes.recordset.length > 0) {
+          await pool.request()
+            .input('NotificationId', id)
+            .input('ClosedBy', currentUser)
+            .query(`
               UPDATE NotificationLogStatus
-              SET Status = 'Deleted', ClosedAt = GETDATE(), ClosedBy = @ClosedBy, ClosedReason = 'Deleted by user (bulk)', UpdatedAt = GETDATE()
+              SET Status = 'Deleted', ClosedAt = CURRENT_TIMESTAMP, ClosedBy = @ClosedBy, ClosedReason = 'Deleted by user (bulk)', UpdatedAt = CURRENT_TIMESTAMP
               WHERE NotificationId = @NotificationId
-            END
-            ELSE
-            BEGIN
+            `);
+        } else {
+          await pool.request()
+            .input('NotificationId', id)
+            .input('ClosedBy', currentUser)
+            .query(`
               INSERT INTO NotificationLogStatus (NotificationId, Status, GeneratedAt, ClosedAt, ClosedBy, ClosedReason, UpdatedAt)
-              VALUES (@NotificationId, 'Deleted', GETDATE(), GETDATE(), @ClosedBy, 'Deleted by user (bulk)', GETDATE())
-            END
-          `);
+              VALUES (@NotificationId, 'Deleted', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, @ClosedBy, 'Deleted by user (bulk)', CURRENT_TIMESTAMP)
+            `);
+        }
       }
 
       return res.status(200).json({
