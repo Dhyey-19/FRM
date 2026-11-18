@@ -209,6 +209,24 @@ function autoHealSQLiteSchema(db, saveToDisk) {
     console.warn('[AutoHeal] ItemMaster.ItemCategory check:', e.message);
   }
 
+  // 9. Ensure Description column exists in ItemTypeMaster
+  try {
+    const itInfo = db.exec('PRAGMA table_info("ItemTypeMaster");');
+    const cols = (itInfo.length > 0 && itInfo[0].values) ? itInfo[0].values.map(r => r[1]) : [];
+    if (!cols.includes('Description')) {
+      db.exec('ALTER TABLE "ItemTypeMaster" ADD COLUMN "Description" TEXT NULL;');
+      db.exec("UPDATE \"ItemTypeMaster\" SET \"Description\" = 'Finished Goods' WHERE UPPER(\"ItemType\") = 'FG';");
+      db.exec("UPDATE \"ItemTypeMaster\" SET \"Description\" = 'Raw Material' WHERE UPPER(\"ItemType\") = 'RM';");
+      db.exec("UPDATE \"ItemTypeMaster\" SET \"Description\" = 'Semi-Finished Goods' WHERE UPPER(\"ItemType\") = 'SF';");
+      db.exec("UPDATE \"ItemTypeMaster\" SET \"Description\" = 'Bought Out Parts' WHERE UPPER(\"ItemType\") = 'BOP';");
+      db.exec("UPDATE \"ItemTypeMaster\" SET \"Description\" = 'Consumable' WHERE UPPER(\"ItemType\") = 'CONSUMABLE';");
+      db.exec("UPDATE \"ItemTypeMaster\" SET \"Description\" = 'Scrap Material' WHERE UPPER(\"ItemType\") = 'SCRAP';");
+      didModify = true;
+    }
+  } catch (e) {
+    console.warn('[AutoHeal] ItemTypeMaster.Description check:', e.message);
+  }
+
   if (didModify && typeof saveToDisk === 'function') {
     saveToDisk();
   }
