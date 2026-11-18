@@ -271,17 +271,16 @@ function transformQuery(sqlText) {
   q = q.replace(/\bDATEADD\s*\(\s*([a-zA-Z]+)\s*,/gi, "DATEADD('$1',");
   q = q.replace(/\bDATEDIFF\s*\(\s*([a-zA-Z]+)\s*,/gi, "DATEDIFF('$1',");
 
-  const outputMatch = q.match(/INSERT\s+INTO\s+([^\s(]+)\s*(\([^)]+\))\s*OUTPUT\s+INSERTED\.([^\s(]+(?:\s*,\s*INSERTED\.[^\s(]+)*)\s*VALUES\s*(\([^)]+\))/i);
+  const outputRegex = /\s*OUTPUT\s+INSERTED\.([a-zA-Z0-9_,\s.]+?)\s*(?=\bVALUES\b|\bSELECT\b)/i;
+  const outputMatch = q.match(outputRegex);
   if (outputMatch) {
-    const fullMatch = outputMatch[0];
-    const table = outputMatch[1];
-    const cols = outputMatch[2];
-    const outCols = outputMatch[3].replace(/INSERTED\./gi, '');
-    const vals = outputMatch[4];
-    const returningQuery = `INSERT INTO ${table} ${cols} VALUES ${vals} RETURNING ${outCols}`;
-    q = q.replace(fullMatch, returningQuery);
+    const rawOutCols = outputMatch[1];
+    const cleanOutCols = rawOutCols.replace(/INSERTED\./gi, '').trim();
+    q = q.replace(outputMatch[0], ' ');
+    if (!/\bRETURNING\b/i.test(q)) {
+      q = q.replace(/;\s*$/, '').trim() + ` RETURNING ${cleanOutCols}`;
+    }
   }
-  q = q.replace(/\s*OUTPUT\s+INSERTED\.([a-zA-Z0-9_]+)\s*VALUES/gi, ' VALUES');
 
   q = replaceTopInSubqueries(q);
 
@@ -359,9 +358,15 @@ class SQLiteRequest {
     const params = {};
     for (const [k, v] of Object.entries(this.parameters)) {
       const cleanKey = k.startsWith('@') ? k.slice(1) : k;
-      params['@' + cleanKey] = v;
-      params[':' + cleanKey] = v;
-      params['$' + cleanKey] = v;
+      let safeVal = v;
+      if (safeVal instanceof Date) {
+        safeVal = isNaN(safeVal.getTime()) ? null : safeVal.toISOString().slice(0, 19).replace('T', ' ');
+      } else if (typeof safeVal === 'boolean') {
+        safeVal = safeVal ? 1 : 0;
+      }
+      params['@' + cleanKey] = safeVal;
+      params[':' + cleanKey] = safeVal;
+      params['$' + cleanKey] = safeVal;
     }
 
     let lastRecordset = [];
