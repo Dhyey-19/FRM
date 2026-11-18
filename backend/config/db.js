@@ -79,9 +79,7 @@ let currentDbPath = null;
 let inTransaction = false;
 
 function resolveDatabasePath() {
-  const primaryDbPath = path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
-  const legacyDbPath = path.join(BACKEND_ROOT, 'database', 'factoryflow.db');
-  const defaultDbPath = fs.existsSync(primaryDbPath) ? primaryDbPath : (fs.existsSync(legacyDbPath) ? legacyDbPath : primaryDbPath);
+  const defaultDbPath = path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
   
   if (process.env.SQLITE_DB_PATH) {
     if (path.isAbsolute(process.env.SQLITE_DB_PATH)) {

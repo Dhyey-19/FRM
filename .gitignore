@@ -20,9 +20,11 @@ out/
 *.zip
 dist.zip
 publish/
+public/
 
 # SQLite database and temporary files (local data not stored in git)
 *.db
+!backend/database/FRM-BBP.db
 *.sqlite
 *.sqlite3
 *.db-wal

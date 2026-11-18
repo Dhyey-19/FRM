@@ -245,9 +245,7 @@ exports.createBackup = async (req, res) => {
         createdAt: stat.mtime
       });
     } else {
-      const primarySqlite = path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
-      const legacySqlite = path.join(BACKEND_ROOT, 'database', 'factoryflow.db');
-      const sqlitePath = fs.existsSync(primarySqlite) ? primarySqlite : (fs.existsSync(legacySqlite) ? legacySqlite : primarySqlite);
+      const sqlitePath = path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
       const fileName = `frm_bbp_backup_${dateStr}_${timeStr}.db`;
       const backupPath = path.join(BACKUP_DIR, fileName);
 
@@ -358,11 +356,13 @@ exports.uploadAndApplyUpdate = async (req, res) => {
     }
 
     logs.push('[4/4] Checking and applying pending database migrations...');
-    const pool = await connectDB();
     if (config.type === 'mssql') {
+      const pool = await connectDB();
       await runMssqlMigrations(pool, sql);
     } else {
-      await runSQLiteMigrations(pool);
+      const { getDatabase } = require('../config/db');
+      const db = await getDatabase();
+      await runSQLiteMigrations(db);
     }
 
     const updatedVersion = getVersionInfo();
