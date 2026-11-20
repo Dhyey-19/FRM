@@ -32,7 +32,9 @@ import {
   CheckCircle as CheckCircleIcon,
   UploadFile as UploadFileIcon,
   Code as CodeIcon,
-  Security as SecurityIcon
+  Security as SecurityIcon,
+  Restore as RestoreIcon,
+  CloudUpload as CloudUploadIcon
 } from '@mui/icons-material';
 import { APP_VERSION } from '../../config/version';
 
@@ -130,12 +132,16 @@ export const SystemStatusCards = ({ status, backupsCount = 0 }) => (
 );
 
 /**
- * MS SQL Server backup snapshot list, create, download, and delete panel.
+ * Database backup snapshot list, create, download, delete, restore, and upload panel.
  */
 export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, onError }) => {
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [backupToDelete, setBackupToDelete] = useState(null);
   const [deletingBackup, setDeletingBackup] = useState(false);
+  const [backupToRestore, setBackupToRestore] = useState(null);
+  const [restoringBackup, setRestoringBackup] = useState(false);
+  const [uploadingDb, setUploadingDb] = useState(false);
+  const dbInputRef = useRef(null);
 
   const handleCreateBackup = async () => {
     try {
@@ -183,27 +189,98 @@ export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, 
     }
   };
 
+  const handleRestoreBackup = async () => {
+    if (!backupToRestore) return;
+    try {
+      setRestoringBackup(true);
+      if (onError) onError('');
+      if (onSuccess) onSuccess('');
+      const res = await fetch(`${API_BASE}/system/backups/restore/${encodeURIComponent(backupToRestore)}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (onSuccess) onSuccess(`✓ ${data.message || 'Database restored successfully!'}`);
+        if (onRefresh) onRefresh();
+      } else if (onError) {
+        onError(data.message || 'Failed to restore database');
+      }
+    } catch (err) {
+      if (onError) onError('Error restoring backup: ' + err.message);
+    } finally {
+      setRestoringBackup(false);
+      setBackupToRestore(null);
+    }
+  };
+
+  const handleUploadAndRestore = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingDb(true);
+      if (onError) onError('');
+      if (onSuccess) onSuccess('');
+      const formData = new FormData();
+      formData.append('dbFile', file);
+      const res = await fetch(`${API_BASE}/system/backups/upload-restore`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (onSuccess) onSuccess(`✓ ${data.message || 'Database uploaded and restored successfully!'}`);
+        if (onRefresh) onRefresh();
+      } else if (onError) {
+        onError(data.message || 'Failed to upload and restore database');
+      }
+    } catch (err) {
+      if (onError) onError('Error uploading database: ' + err.message);
+    } finally {
+      setUploadingDb(false);
+      if (dbInputRef.current) dbInputRef.current.value = '';
+    }
+  };
+
   return (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66' }}>
-            MS SQL Server Backups (.bak)
+            Database Backups & Restore
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b' }}>
-            Create full database backup snapshots. Download them anytime to an external drive for disaster recovery.
+            Create full snapshots, download them, restore any previous snapshot, or upload a .db file directly.
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={creatingBackup ? <CircularProgress size={18} color="inherit" /> : <BackupIcon />}
-          onClick={handleCreateBackup}
-          disabled={creatingBackup}
-          sx={{ fontWeight: 600 }}
-        >
-          {creatingBackup ? 'Creating Backup...' : 'Create Backup Now'}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <input
+            type="file"
+            ref={dbInputRef}
+            style={{ display: 'none' }}
+            accept=".db,.sqlite,.bak"
+            onChange={handleUploadAndRestore}
+          />
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={uploadingDb ? <CircularProgress size={18} color="inherit" /> : <UploadFileIcon />}
+            onClick={() => dbInputRef.current?.click()}
+            disabled={uploadingDb || creatingBackup || restoringBackup}
+            sx={{ fontWeight: 600 }}
+          >
+            {uploadingDb ? 'Uploading & Restoring...' : 'Upload & Restore .db'}
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={creatingBackup ? <CircularProgress size={18} color="inherit" /> : <BackupIcon />}
+            onClick={handleCreateBackup}
+            disabled={creatingBackup || uploadingDb || restoringBackup}
+            sx={{ fontWeight: 600 }}
+          >
+            {creatingBackup ? 'Creating Backup...' : 'Create Backup Now'}
+          </Button>
+        </Box>
       </Box>
 
       <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: 1.5 }}>
@@ -214,6 +291,7 @@ export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, 
               <TableCell sx={{ fontWeight: 700 }}>Backup Filename</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Date & Time</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Size</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700 }}>Restore</TableCell>
               <TableCell align="center" sx={{ fontWeight: 700 }}>Download</TableCell>
               <TableCell align="center" sx={{ fontWeight: 700 }}>Delete</TableCell>
             </TableRow>
@@ -226,6 +304,17 @@ export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, 
                 <TableCell>{new Date(b.createdAt).toLocaleString()}</TableCell>
                 <TableCell>
                   <Chip label={b.size} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                </TableCell>
+                <TableCell align="center">
+                  <IconButton
+                    color="secondary"
+                    size="small"
+                    onClick={() => setBackupToRestore(b.filename)}
+                    title="Restore this backup"
+                    disabled={restoringBackup}
+                  >
+                    <RestoreIcon fontSize="small" />
+                  </IconButton>
                 </TableCell>
                 <TableCell align="center">
                   <IconButton
@@ -251,14 +340,14 @@ export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, 
             ))}
             {backups.length === 0 && !loadingBackups && (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3, color: '#94a3b8' }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 3, color: '#94a3b8' }}>
                   No backup files yet. Click "Create Backup Now" above to create your first backup snapshot.
                 </TableCell>
               </TableRow>
             )}
             {loadingBackups && (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
@@ -267,6 +356,7 @@ export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, 
         </Table>
       </TableContainer>
 
+      {/* Delete Confirmation Dialog */}
       <Dialog open={Boolean(backupToDelete)} onClose={() => setBackupToDelete(null)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, color: '#dc2626' }}>
           Delete Backup File?
@@ -282,6 +372,34 @@ export const SqlBackupPanel = ({ backups, loadingBackups, onRefresh, onSuccess, 
           </Button>
           <Button onClick={handleDeleteBackup} variant="contained" color="error" disabled={deletingBackup}>
             {deletingBackup ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Restore Confirmation Dialog */}
+      <Dialog open={Boolean(backupToRestore)} onClose={() => !restoringBackup && setBackupToRestore(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66' }}>
+          Restore Database Snapshot?
+        </DialogTitle>
+        <DialogContent dividers>
+          <DialogContentText>
+            Are you sure you want to restore <strong>{backupToRestore}</strong> as the active database?
+            <br /><br />
+            A safety snapshot of the current live database will be created automatically before restoring so no data is ever lost.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setBackupToRestore(null)} color="inherit" disabled={restoringBackup}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleRestoreBackup}
+            variant="contained"
+            color="primary"
+            disabled={restoringBackup}
+            startIcon={restoringBackup ? <CircularProgress size={18} color="inherit" /> : <RestoreIcon />}
+          >
+            {restoringBackup ? 'Restoring...' : 'Yes, Restore'}
           </Button>
         </DialogActions>
       </Dialog>

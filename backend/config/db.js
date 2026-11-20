@@ -79,23 +79,89 @@ let currentDbPath = null;
 let inTransaction = false;
 
 function resolveDatabasePath() {
-  const defaultDbPath = path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
-  
-  if (process.env.SQLITE_DB_PATH) {
-    if (path.isAbsolute(process.env.SQLITE_DB_PATH)) {
-      return process.env.SQLITE_DB_PATH;
+  // 1. Explicit environment variable override
+  const customPath = process.env.SQLITE_DB_PATH;
+  if (customPath && customPath !== 'backend/database/FRM-BBP.db' && customPath !== 'database/FRM-BBP.db') {
+    if (path.isAbsolute(customPath)) {
+      return customPath;
     }
-    const fromRoot = path.resolve(PROJECT_ROOT, process.env.SQLITE_DB_PATH);
+    const fromRoot = path.resolve(PROJECT_ROOT, customPath);
     if (fs.existsSync(fromRoot)) return fromRoot;
 
-    const fromBackend = path.resolve(BACKEND_ROOT, process.env.SQLITE_DB_PATH);
+    const fromBackend = path.resolve(BACKEND_ROOT, customPath);
     if (fs.existsSync(fromBackend)) return fromBackend;
 
-    const fromCwd = path.resolve(process.cwd(), process.env.SQLITE_DB_PATH);
+    const fromCwd = path.resolve(process.cwd(), customPath);
     if (fs.existsSync(fromCwd)) return fromCwd;
+    return fromRoot;
   }
 
-  return defaultDbPath;
+  // 2. Linux PaaS persistent private storage (GoDaddy Node.js Hosting / Cloud container)
+  if (process.platform === 'linux') {
+    const candidateDirs = [
+      process.env.PERSISTENT_DATA_DIR,
+      '/private/database',
+      '/private',
+      path.join(PROJECT_ROOT, 'public', 'assets', 'data'),
+      path.join(BACKEND_ROOT, 'public', 'assets', 'data'),
+      process.env.HOME ? path.join(process.env.HOME, '.frm-data') : null,
+      '/var/data',
+      '/data'
+    ].filter(Boolean);
+
+    for (const baseDir of candidateDirs) {
+      try {
+        if (!fs.existsSync(baseDir)) {
+          try { fs.mkdirSync(baseDir, { recursive: true }); } catch (e) {}
+        }
+        if (fs.existsSync(baseDir)) {
+          // Verify write permissions
+          const testFile = path.join(baseDir, `.write_test_${Date.now()}`);
+          try {
+            fs.writeFileSync(testFile, 'ok');
+            fs.unlinkSync(testFile);
+          } catch (e) {
+            continue; // Not writable, try next candidate
+          }
+
+          const persistentDbFile = path.join(baseDir, 'FRM-BBP.db');
+          const seedPath = path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
+
+          // Seed if missing
+          if (!fs.existsSync(persistentDbFile) && fs.existsSync(seedPath)) {
+            try {
+              fs.copyFileSync(seedPath, persistentDbFile);
+              console.log(`[Database] Seeded initial database to persistent path: ${persistentDbFile}`);
+            } catch (err) {
+              console.warn(`[Database] Could not seed ${persistentDbFile}:`, err.message);
+            }
+          }
+          console.log(`[Database] Using persistent storage at: ${persistentDbFile}`);
+          return persistentDbFile;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 3. Default local path (Windows development)
+  return path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
+}
+
+function resolveBackupDir() {
+  const currentDb = resolveDatabasePath();
+  const dir = path.dirname(currentDb);
+  const backupDir = path.join(dir, 'backups');
+  if (!fs.existsSync(backupDir)) {
+    try { fs.mkdirSync(backupDir, { recursive: true }); } catch (e) {}
+  }
+  return backupDir;
+}
+
+async function reloadDatabase() {
+  if (isMSSQL) return;
+  dbInstance = null;
+  sqlitePoolInstance = null;
+  return await getDatabase();
 }
 
 function saveToDisk() {
@@ -507,7 +573,10 @@ if (isMSSQL && nativeMssql) {
       server: mssqlConfig.server,
       type: 'mssql'
     },
-    getDatabase: () => null
+    getDatabase: () => null,
+    resolveDatabasePath,
+    resolveBackupDir,
+    reloadDatabase
   };
 } else {
   module.exports = {
@@ -518,6 +587,9 @@ if (isMSSQL && nativeMssql) {
       type: 'sqlite',
       getPath: resolveDatabasePath
     },
-    getDatabase
+    getDatabase,
+    resolveDatabasePath,
+    resolveBackupDir,
+    reloadDatabase
   };
 }

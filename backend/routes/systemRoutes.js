@@ -22,14 +22,41 @@ const updateUpload = multer({
   }
 });
 
+const dbUpload = multer({
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase() || '.db';
+      cb(null, `frm-db-upload-${Date.now()}${ext}`);
+    }
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext !== '.db' && ext !== '.sqlite' && ext !== '.bak') {
+      return cb(new Error('Only .db, .sqlite, and .bak database files are supported.'));
+    }
+    cb(null, true);
+  }
+});
+
 // Status & diagnostics
 router.get('/status', systemController.getSystemStatus);
 
-// Database Backups
+// Database Backups & Restore
 router.get('/backups', systemController.getBackups);
 router.post('/backup', systemController.createBackup);
 router.get('/backups/download/:filename', systemController.downloadBackup);
 router.delete('/backups/:filename', systemController.deleteBackup);
+router.post('/backups/restore/:filename', systemController.restoreBackup);
+router.post('/backups/upload-restore', (req, res, next) => {
+  dbUpload.single('dbFile')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message || 'Invalid database upload file.' });
+    }
+    next();
+  });
+}, systemController.uploadAndRestoreBackup);
 
 // Offline compiled package update upload
 router.post('/upload-update', (req, res, next) => {

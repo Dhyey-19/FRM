@@ -2,18 +2,28 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { exec } = require('child_process');
-const { sql, connectDB, config } = require('../config/db');
+const { sql, connectDB, config, resolveDatabasePath, resolveBackupDir, reloadDatabase } = require('../config/db');
 const { runMssqlMigrations, runSQLiteMigrations } = require('../database/migrator');
 const { resolveAppRoots } = require('../utils/appPaths');
 
 const { backendRoot: BACKEND_ROOT, projectRoot: PROJECT_ROOT } = resolveAppRoots(__dirname);
-const BACKUP_DIR = path.join(BACKEND_ROOT, 'database', 'backups');
 const VERSION_FILE_NAME = 'version.json';
 
-function ensureBackupDir() {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+function getBackupDir() {
+  if (typeof resolveBackupDir === 'function') {
+    return resolveBackupDir();
   }
+  const defaultDir = path.join(BACKEND_ROOT, 'database', 'backups');
+  if (!fs.existsSync(defaultDir)) {
+    fs.mkdirSync(defaultDir, { recursive: true });
+  }
+  return defaultDir;
+}
+
+const BACKUP_DIR = getBackupDir();
+
+function ensureBackupDir() {
+  return getBackupDir();
 }
 
 function formatBytes(bytes) {
@@ -195,11 +205,11 @@ exports.getSystemStatus = async (req, res) => {
 // GET /api/system/backups
 exports.getBackups = async (req, res) => {
   try {
-    ensureBackupDir();
-    const files = fs.readdirSync(BACKUP_DIR)
+    const backupDir = getBackupDir();
+    const files = fs.readdirSync(backupDir)
       .filter((f) => f.endsWith('.bak') || f.endsWith('.db'))
       .map((filename) => {
-        const filePath = path.join(BACKUP_DIR, filename);
+        const filePath = path.join(backupDir, filename);
         const stat = fs.statSync(filePath);
         return {
           filename,
@@ -220,7 +230,7 @@ exports.getBackups = async (req, res) => {
 // POST /api/system/backup
 exports.createBackup = async (req, res) => {
   try {
-    ensureBackupDir();
+    const backupDir = getBackupDir();
     const isMSSQL = config.type === 'mssql';
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
@@ -228,7 +238,7 @@ exports.createBackup = async (req, res) => {
 
     if (isMSSQL) {
       const fileName = `FRM_DB_backup_${dateStr}_${timeStr}.bak`;
-      const backupPath = path.join(BACKUP_DIR, fileName);
+      const backupPath = path.join(backupDir, fileName);
 
       const pool = await connectDB();
       await pool.request().query(`
@@ -245,9 +255,9 @@ exports.createBackup = async (req, res) => {
         createdAt: stat.mtime
       });
     } else {
-      const sqlitePath = path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
+      const sqlitePath = typeof resolveDatabasePath === 'function' ? resolveDatabasePath() : path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
       const fileName = `frm_bbp_backup_${dateStr}_${timeStr}.db`;
-      const backupPath = path.join(BACKUP_DIR, fileName);
+      const backupPath = path.join(backupDir, fileName);
 
       if (fs.existsSync(sqlitePath)) {
         fs.copyFileSync(sqlitePath, backupPath);
@@ -272,7 +282,8 @@ exports.createBackup = async (req, res) => {
 exports.downloadBackup = async (req, res) => {
   try {
     const filename = path.basename(req.params.filename);
-    const filePath = path.join(BACKUP_DIR, filename);
+    const backupDir = getBackupDir();
+    const filePath = path.join(backupDir, filename);
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'Backup file not found' });
@@ -289,7 +300,8 @@ exports.downloadBackup = async (req, res) => {
 exports.deleteBackup = async (req, res) => {
   try {
     const filename = path.basename(req.params.filename);
-    const filePath = path.join(BACKUP_DIR, filename);
+    const backupDir = getBackupDir();
+    const filePath = path.join(backupDir, filename);
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'Backup file not found' });
@@ -300,6 +312,124 @@ exports.deleteBackup = async (req, res) => {
   } catch (error) {
     console.error('Error deleting backup:', error);
     res.status(500).json({ message: 'Error deleting backup' });
+  }
+};
+
+// POST /api/system/backups/restore/:filename
+exports.restoreBackup = async (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename);
+    const backupDir = getBackupDir();
+    const backupFilePath = path.join(backupDir, filename);
+
+    if (!fs.existsSync(backupFilePath)) {
+      return res.status(404).json({ message: 'Backup file not found: ' + filename });
+    }
+
+    const isMSSQL = config.type === 'mssql';
+    if (isMSSQL) {
+      return res.status(400).json({ message: 'Direct in-app restore is only supported for SQLite mode. For MS SQL Server, use SQL Server Management Studio (SSMS).' });
+    }
+
+    const currentDbPath = typeof resolveDatabasePath === 'function' ? resolveDatabasePath() : path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
+
+    // 1. Create a safety snapshot of current active DB first
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-');
+    const safetySnapshot = path.join(backupDir, `frm_bbp_pre_restore_${dateStr}_${timeStr}.db`);
+    if (fs.existsSync(currentDbPath)) {
+      try {
+        fs.copyFileSync(currentDbPath, safetySnapshot);
+      } catch (e) {
+        console.warn('Could not create pre-restore snapshot:', e.message);
+      }
+    }
+
+    // 2. Overwrite the active DB with the backup
+    fs.copyFileSync(backupFilePath, currentDbPath);
+
+    // 3. Reload in-memory SQLite database
+    if (typeof reloadDatabase === 'function') {
+      const db = await reloadDatabase();
+      const { autoHealSQLiteSchema } = require('../database/migrator');
+      if (typeof autoHealSQLiteSchema === 'function' && db) {
+        autoHealSQLiteSchema(db);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Database restored successfully from "${filename}". A safety snapshot was saved.`,
+      restoredFrom: filename
+    });
+  } catch (error) {
+    console.error('Error restoring database backup:', error);
+    res.status(500).json({ message: 'Error restoring database: ' + error.message });
+  }
+};
+
+// POST /api/system/backups/upload-restore
+exports.uploadAndRestoreBackup = async (req, res) => {
+  const uploadedFile = req.file;
+  if (!uploadedFile || !uploadedFile.path) {
+    return res.status(400).json({ message: 'Please select a valid .db file to upload and restore.' });
+  }
+
+  try {
+    const isMSSQL = config.type === 'mssql';
+    if (isMSSQL) {
+      return res.status(400).json({ message: 'Upload & restore is only supported for SQLite mode.' });
+    }
+
+    const currentDbPath = typeof resolveDatabasePath === 'function' ? resolveDatabasePath() : path.join(BACKEND_ROOT, 'database', 'FRM-BBP.db');
+    const backupDir = getBackupDir();
+
+    // 1. Create safety snapshot of current DB
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-');
+    const safetySnapshot = path.join(backupDir, `frm_bbp_pre_upload_${dateStr}_${timeStr}.db`);
+    if (fs.existsSync(currentDbPath)) {
+      try {
+        fs.copyFileSync(currentDbPath, safetySnapshot);
+      } catch (e) {
+        console.warn('Could not create pre-upload snapshot:', e.message);
+      }
+    }
+
+    // Archive uploaded file in backup directory
+    const archivedUpload = path.join(backupDir, `frm_bbp_uploaded_${dateStr}_${timeStr}.db`);
+    try {
+      fs.copyFileSync(uploadedFile.path, archivedUpload);
+    } catch (e) {}
+
+    // 2. Overwrite current active DB with uploaded DB
+    fs.copyFileSync(uploadedFile.path, currentDbPath);
+
+    // 3. Reload in-memory SQLite database
+    if (typeof reloadDatabase === 'function') {
+      const db = await reloadDatabase();
+      const { autoHealSQLiteSchema } = require('../database/migrator');
+      if (typeof autoHealSQLiteSchema === 'function' && db) {
+        autoHealSQLiteSchema(db);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Database uploaded and restored successfully! A safety snapshot was saved to ${path.basename(safetySnapshot)}.`,
+      uploadedFile: uploadedFile.originalname
+    });
+  } catch (error) {
+    console.error('Error uploading and restoring backup:', error);
+    res.status(500).json({ message: 'Error restoring uploaded database: ' + error.message });
+  } finally {
+    try {
+      if (uploadedFile && uploadedFile.path && fs.existsSync(uploadedFile.path)) {
+        fs.unlinkSync(uploadedFile.path);
+      }
+    } catch (e) {}
   }
 };
 

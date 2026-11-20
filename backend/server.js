@@ -87,6 +87,23 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running normally' });
 });
 
+// Security: Block direct HTTP access to database files and backup snapshots
+app.use((req, res, next) => {
+  const reqUrl = (req.path || '').toLowerCase();
+  if (
+    reqUrl.endsWith('.db') ||
+    reqUrl.endsWith('.sqlite') ||
+    reqUrl.endsWith('.sqlite3') ||
+    reqUrl.endsWith('.bak') ||
+    reqUrl.includes('/assets/data/') ||
+    reqUrl.includes('/database/') ||
+    reqUrl.includes('/backups/')
+  ) {
+    return res.status(403).json({ error: 'Access forbidden' });
+  }
+  next();
+});
+
 // Serve static frontend files (PWA build) from public or frontend/dist
 const fs = require('fs');
 const https = require('https');
