@@ -39,17 +39,17 @@ import {
   Search as SearchIcon, 
   Edit as EditIcon, 
   Delete as DeleteIcon,
+  Visibility as VisibilityIcon,
+  Close as CloseIcon,
+  Inventory2Outlined as InventoryIcon,
   FileDownload as ExportIcon,
   FileUpload as ImportIcon,
   FilterList as FilterListIcon,
   RestartAlt as ResetIcon,
-  Calculate as CalculateIcon,
   WarningAmber,
   HourglassEmpty
 } from '@mui/icons-material';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
-import ItemCostingCalculatorModal from '../components/costing/ItemCostingCalculatorModal';
-import { SERIES_DEFINITIONS, SIZES, calculateCosting, DEFAULT_CONFIG } from '../utils/itemCostingEngine';
 import * as XLSX from 'xlsx';
 import { ensureNumericWorksheet } from '../utils/excelHelper';
 
@@ -80,6 +80,20 @@ const ItemMaster = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState('add'); // 'add' or 'edit'
   const [dialogError, setDialogError] = useState('');
+
+  // View Details Modal States
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [selectedViewItem, setSelectedViewItem] = useState(null);
+
+  const handleOpenViewModal = (item) => {
+    setSelectedViewItem(item);
+    setViewModalOpen(true);
+  };
+
+  const handleCloseViewModal = () => {
+    setViewModalOpen(false);
+    setSelectedViewItem(null);
+  };
   
   // Quick Dead Stock Modal States
   const [deadStockModalOpen, setDeadStockModalOpen] = useState(false);
@@ -102,11 +116,6 @@ const ItemMaster = () => {
   const [importResults, setImportResults] = useState({ added: [], updated: [], failed: [] });
   const [showImportResults, setShowImportResults] = useState(false);
   const [resultTab, setResultTab] = useState(0);
-
-  // Costing Calculator Modal State
-  const [costingModalOpen, setCostingModalOpen] = useState(false);
-  const [quickCostingSize, setQuickCostingSize] = useState('12"');
-  const [quickCostingMargin, setQuickCostingMargin] = useState(0);
 
   const [formData, setFormData] = useState({
     Category: 'Inhouse',
@@ -228,8 +237,7 @@ const ItemMaster = () => {
   };
 
   // Filter items based on search and dropdowns
-  const standardSeriesList = SERIES_DEFINITIONS.map(s => s.seriesName);
-  const uniqueSeries = ['All', ...new Set([...standardSeriesList, ...items.map(i => i.Series).filter(Boolean)])];
+  const uniqueSeries = ['All', ...new Set(items.map(i => i.Series).filter(Boolean))];
   const uniqueItemCategories = ['All', ...new Set(items.map(i => i.ItemCategory).filter(Boolean))];
 
   const filteredItems = items.filter(item => {
@@ -666,12 +674,16 @@ const ItemMaster = () => {
               label="Sourcing"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 130 }, minWidth: { sm: 130 } }}
+              sx={{ width: { xs: '100%', sm: 180 }, minWidth: { sm: 180 } }}
+              SelectProps={{
+                MenuProps: { PaperProps: { sx: { minWidth: 200, maxHeight: 400 } } },
+                sx: { '& .MuiSelect-select': { whiteSpace: 'nowrap' } }
+              }}
             >
-              <MenuItem value="All">All Sourcing</MenuItem>
-              <MenuItem value="SubContract">Sub-Contract</MenuItem>
-              <MenuItem value="Inhouse">Inhouse</MenuItem>
-              <MenuItem value="BOP">BOP</MenuItem>
+              <MenuItem value="All" sx={{ whiteSpace: 'nowrap' }}>All Sourcing</MenuItem>
+              <MenuItem value="SubContract" sx={{ whiteSpace: 'nowrap' }}>Sub-Contract</MenuItem>
+              <MenuItem value="Inhouse" sx={{ whiteSpace: 'nowrap' }}>Inhouse</MenuItem>
+              <MenuItem value="BOP" sx={{ whiteSpace: 'nowrap' }}>BOP</MenuItem>
             </TextField>
             <TextField
               select
@@ -679,10 +691,16 @@ const ItemMaster = () => {
               label="Item Category"
               value={filterItemCategory}
               onChange={(e) => setFilterItemCategory(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 160 }, minWidth: { sm: 160 } }}
+              sx={{ width: { xs: '100%', sm: 260 }, minWidth: { sm: 260 } }}
+              SelectProps={{
+                MenuProps: { PaperProps: { sx: { minWidth: 280, maxHeight: 400 } } },
+                sx: { '& .MuiSelect-select': { whiteSpace: 'nowrap' } }
+              }}
             >
               {uniqueItemCategories.map(c => (
-                <MenuItem key={c} value={c}>{c === 'All' ? 'All Item Categories' : c}</MenuItem>
+                <MenuItem key={c} value={c} sx={{ whiteSpace: 'nowrap' }}>
+                  {c === 'All' ? 'All Item Categories' : c}
+                </MenuItem>
               ))}
             </TextField>
             <TextField
@@ -691,11 +709,17 @@ const ItemMaster = () => {
               label="Item Type"
               value={filterItemType}
               onChange={(e) => setFilterItemType(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 140 }, minWidth: { sm: 140 } }}
+              sx={{ width: { xs: '100%', sm: 260 }, minWidth: { sm: 260 } }}
+              SelectProps={{
+                MenuProps: { PaperProps: { sx: { minWidth: 280, maxHeight: 400 } } },
+                sx: { '& .MuiSelect-select': { whiteSpace: 'nowrap' } }
+              }}
             >
-              <MenuItem value="All">All Types</MenuItem>
+              <MenuItem value="All" sx={{ whiteSpace: 'nowrap' }}>All Types</MenuItem>
               {itemTypes.map(t => (
-                <MenuItem key={t} value={t}>{getItemTypeLabel(t)}</MenuItem>
+                <MenuItem key={t} value={t} sx={{ whiteSpace: 'nowrap' }}>
+                  {getItemTypeLabel(t)}
+                </MenuItem>
               ))}
             </TextField>
             <TextField
@@ -704,10 +728,16 @@ const ItemMaster = () => {
               label="Series"
               value={filterSeries}
               onChange={(e) => setFilterSeries(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 140 }, minWidth: { sm: 140 } }}
+              sx={{ width: { xs: '100%', sm: 220 }, minWidth: { sm: 220 } }}
+              SelectProps={{
+                MenuProps: { PaperProps: { sx: { minWidth: 240, maxHeight: 400 } } },
+                sx: { '& .MuiSelect-select': { whiteSpace: 'nowrap' } }
+              }}
             >
               {uniqueSeries.map(s => (
-                <MenuItem key={s} value={s}>{s}</MenuItem>
+                <MenuItem key={s} value={s} sx={{ whiteSpace: 'nowrap' }}>
+                  {s === 'All' ? 'All Series' : s}
+                </MenuItem>
               ))}
             </TextField>
             <TextField
@@ -716,13 +746,17 @@ const ItemMaster = () => {
               label="Dead Stock"
               value={filterDeadStock}
               onChange={(e) => setFilterDeadStock(e.target.value)}
-              sx={{ width: { xs: '100%', sm: 150 }, minWidth: { sm: 150 } }}
+              sx={{ width: { xs: '100%', sm: 250 }, minWidth: { sm: 250 } }}
+              SelectProps={{
+                MenuProps: { PaperProps: { sx: { minWidth: 260, maxHeight: 400 } } },
+                sx: { '& .MuiSelect-select': { whiteSpace: 'nowrap' } }
+              }}
             >
-              <MenuItem value="All">All Stock Status</MenuItem>
-              <MenuItem value="Active">🟢 Active Inventory</MenuItem>
-              <MenuItem value="Auto">⚡ Auto Dead Stock</MenuItem>
-              <MenuItem value="Manual">🔴 Manual Dead Stock</MenuItem>
-              <MenuItem value="AllDead">⚠️ All Dead Stock</MenuItem>
+              <MenuItem value="All" sx={{ whiteSpace: 'nowrap' }}>All Stock Status</MenuItem>
+              <MenuItem value="Active" sx={{ whiteSpace: 'nowrap' }}>🟢 Active Inventory</MenuItem>
+              <MenuItem value="Auto" sx={{ whiteSpace: 'nowrap' }}>⚡ Auto Dead Stock</MenuItem>
+              <MenuItem value="Manual" sx={{ whiteSpace: 'nowrap' }}>🔴 Manual Dead Stock</MenuItem>
+              <MenuItem value="AllDead" sx={{ whiteSpace: 'nowrap' }}>⚠️ All Dead Stock</MenuItem>
             </TextField>
           </Box>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
@@ -753,20 +787,6 @@ const ItemMaster = () => {
             </Button>
             <Button 
               variant="contained" 
-              startIcon={<CalculateIcon />}
-              onClick={() => navigate('/dashboard/costing-calculator')}
-              sx={{ 
-                bgcolor: '#be123c', 
-                '&:hover': { bgcolor: '#9f1239' }, 
-                textTransform: 'none', 
-                fontWeight: 600, 
-                boxShadow: 0 
-              }}
-            >
-              Costing Calculator
-            </Button>
-            <Button 
-              variant="contained" 
               startIcon={<AddIcon />}
               onClick={() => handleOpenDialog('add')} 
               disabled={!hasAddPermission()}
@@ -778,7 +798,7 @@ const ItemMaster = () => {
         </Toolbar>
 
         <TableContainer>
-          <Table size="small" sx={{ minWidth: 950, '& .MuiTableRow-root': { height: 36 } }} aria-labelledby="tableTitle">
+          <Table size="small" sx={{ minWidth: 650, '& .MuiTableRow-root': { height: 44 } }} aria-labelledby="tableTitle">
             <TableHead sx={{ backgroundColor: '#f8fafc' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
@@ -787,34 +807,7 @@ const ItemMaster = () => {
                     direction={sortConfig.key === 'ItemCode' ? sortConfig.direction : 'asc'}
                     onClick={() => handleSort('ItemCode')}
                   >
-                    Code
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'SubCode'}
-                    direction={sortConfig.key === 'SubCode' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('SubCode')}
-                  >
-                    Sub Code
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'ItemCategory'}
-                    direction={sortConfig.key === 'ItemCategory' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('ItemCategory')}
-                  >
-                    Item Category
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'Category'}
-                    direction={sortConfig.key === 'Category' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('Category')}
-                  >
-                    Sourcing
+                    Item Code
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
@@ -826,52 +819,22 @@ const ItemMaster = () => {
                     Item Name
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Warehouse</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Location</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'HSNCode'}
-                    direction={sortConfig.key === 'HSNCode' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('HSNCode')}
-                  >
-                    HSN Code
-                  </TableSortLabel>
-                </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
                     active={sortConfig.key === 'ItemType'}
                     direction={sortConfig.key === 'ItemType' ? sortConfig.direction : 'asc'}
                     onClick={() => handleSort('ItemType')}
                   >
-                    Type
+                    Item Type
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
                   <TableSortLabel
-                    active={sortConfig.key === 'Series'}
-                    direction={sortConfig.key === 'Series' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('Series')}
+                    active={sortConfig.key === 'Unit'}
+                    direction={sortConfig.key === 'Unit' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('Unit')}
                   >
-                    Series
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'StdWeight'}
-                    direction={sortConfig.key === 'StdWeight' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('StdWeight')}
-                  >
-                    Std Wt
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Unit</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }} align="right">
-                  <TableSortLabel
-                    active={sortConfig.key === 'Costing'}
-                    direction={sortConfig.key === 'Costing' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('Costing')}
-                  >
-                    Costing (₹)
+                    Unit
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
@@ -883,17 +846,7 @@ const ItemMaster = () => {
                     Closing Stock
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>Reorder Level</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
-                  <TableSortLabel
-                    active={sortConfig.key === 'DeadStockType'}
-                    direction={sortConfig.key === 'DeadStockType' ? sortConfig.direction : 'asc'}
-                    onClick={() => handleSort('DeadStockType')}
-                  >
-                    Dead Stock
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="center" sx={{ fontWeight: 600, color: '#0F3B66' }}>Actions</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, color: '#0F3B66', width: 140 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -901,59 +854,47 @@ const ItemMaster = () => {
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((row) => {
                   const isLowStock = row.ReorderLevel > 0 && (row.ClosingStock || 0) < row.ReorderLevel;
-                  const categoryColor = row.Category === 'SubContract' ? '#ea580c' : (row.Category === 'BOP' ? '#0891b2' : '#0F3B66');
-                  const categoryBg = row.Category === 'SubContract' ? '#fff7ed' : (row.Category === 'BOP' ? '#ecfeff' : '#eff6ff');
 
                   return (
                     <TableRow hover tabIndex={-1} key={`${row.ItemCode}_${row.SubCode || ''}`}>
-                      <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>{row.ItemCode}</TableCell>
-                      <TableCell sx={{ fontWeight: 500, color: row.SubCode ? '#334155' : '#94a3b8' }}>
-                        {row.SubCode || '-'}
+                      <TableCell sx={{ fontWeight: 600, color: '#0F3B66' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>
+                          {row.ItemCode}
+                        </Typography>
+                        {row.SubCode && (
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.72rem' }}>
+                            Sub: {row.SubCode}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                          {row.ItemName}
+                        </Typography>
+                        {row.ItemCategory && (
+                          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.72rem', display: 'block' }}>
+                            {row.ItemCategory}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {row.ItemCategory ? (
+                        {row.ItemType ? (
                           <Chip 
-                            label={row.ItemCategory} 
+                            label={row.ItemType} 
                             size="small" 
                             sx={{ 
-                              fontSize: '0.7rem', 
-                              fontWeight: 600,
+                              fontSize: '0.72rem', 
+                              fontWeight: 700,
                               bgcolor: '#f1f5f9', 
-                              color: '#334155',
+                              color: '#0F3B66',
                               border: '1px solid #cbd5e1',
                               height: 22 
                             }} 
                           />
                         ) : '-'}
                       </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={row.Category === 'SubContract' ? 'Sub-Contract' : (row.Category || 'Inhouse')} 
-                          size="small" 
-                          sx={{ 
-                            fontSize: '0.7rem', 
-                            fontWeight: 700,
-                            bgcolor: categoryBg, 
-                            color: categoryColor,
-                            border: `1px solid ${categoryColor}33`,
-                            height: 22 
-                          }} 
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{row.ItemName}</TableCell>
-                      <TableCell sx={{ color: row.WarehouseNo ? '#1e293b' : '#94a3b8' }}>{row.WarehouseNo || '-'}</TableCell>
-                      <TableCell sx={{ color: row.Location ? '#1e293b' : '#94a3b8' }}>{row.Location || '-'}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: row.HSNCode ? '#0F3B66' : 'text.secondary' }}>
-                          {row.HSNCode || '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{row.ItemType || '-'}</TableCell>
-                      <TableCell>{row.Series || '-'}</TableCell>
-                      <TableCell>{row.StdWeight != null && row.StdWeight !== '' ? Number(row.StdWeight).toFixed(3) : '-'}</TableCell>
-                      <TableCell>{row.Unit}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 500 }}>
-                        {row.Costing != null && row.Costing !== '' ? Number(row.Costing).toFixed(2) : '0.00'}
+                      <TableCell sx={{ fontWeight: 500, color: '#334155' }}>
+                        {row.Unit || '-'}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600, color: isLowStock ? '#ef4444' : 'inherit' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -968,69 +909,17 @@ const ItemMaster = () => {
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        {row.ReorderLevel != null && Number(row.ReorderLevel) > 0 ? (
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706' }}>
-                            {row.ReorderLevel}
-                          </Typography>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {row.DeadStockType === 'Manual' || row.IsDeadStock === 1 ? (
-                          <Tooltip title="Manually declared as Dead Stock. Click to change.">
-                            <Chip 
-                              label="Manual Dead Stock" 
-                              size="small" 
-                              onClick={() => handleOpenDeadStockModal(row)}
-                              sx={{ 
-                                bgcolor: '#fee2e2', 
-                                color: '#991b1b', 
-                                fontWeight: 700, 
-                                fontSize: '0.7rem', 
-                                cursor: 'pointer',
-                                height: 22,
-                                '&:hover': { bgcolor: '#fca5a5' }
-                              }} 
-                            />
-                          </Tooltip>
-                        ) : row.DeadStockType === 'Auto' ? (
-                          <Tooltip title={`Auto Dead Stock (No movement in ${row.DeadStockDays || 0}d). Click to change.`}>
-                            <Chip 
-                              label={`Auto (${row.DeadStockDays || 0}d)`} 
-                              size="small" 
-                              onClick={() => handleOpenDeadStockModal(row)}
-                              sx={{ 
-                                bgcolor: '#fef3c7', 
-                                color: '#92400e', 
-                                fontWeight: 700, 
-                                fontSize: '0.7rem', 
-                                cursor: 'pointer',
-                                height: 22,
-                                '&:hover': { bgcolor: '#fde68a' }
-                              }} 
-                            />
-                          </Tooltip>
-                        ) : (
-                          <Tooltip title="Active inventory. Click to declare as Dead Stock.">
-                            <Chip 
-                              label="Active" 
-                              size="small" 
-                              variant="outlined" 
-                              onClick={() => handleOpenDeadStockModal(row)}
-                              sx={{ 
-                                color: '#059669', 
-                                borderColor: '#a7f3d0', 
-                                fontSize: '0.7rem', 
-                                cursor: 'pointer',
-                                height: 22,
-                                '&:hover': { bgcolor: '#ecfdf5' }
-                              }} 
-                            />
-                          </Tooltip>
-                        )}
-                      </TableCell>
                       <TableCell align="center">
-                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.5, flexWrap: 'nowrap' }}>
+                          <Tooltip title="View Item Details">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleOpenViewModal(row)}
+                              sx={{ color: '#0284c7', '&:hover': { bgcolor: '#e0f2fe' } }}
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Edit Item">
                             <IconButton color="primary" size="small" onClick={() => handleOpenDialog('edit', row)} disabled={!hasEditPermission()}>
                               <EditIcon fontSize="small" />
@@ -1048,7 +937,7 @@ const ItemMaster = () => {
                 })}
               {sortedItems.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={16} align="center" sx={{ py: 3, color: '#64748b' }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3, color: '#64748b' }}>
                     No items found matching the selected filters.
                   </TableCell>
                 </TableRow>
@@ -1086,7 +975,7 @@ const ItemMaster = () => {
             
             {/* Sourcing Category & Sanitary Item Category */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" sx={{ minWidth: { sm: 320 } }}>
                 <InputLabel id="item-category-label">Sourcing Category *</InputLabel>
                 <Select
                   labelId="item-category-label"
@@ -1094,24 +983,35 @@ const ItemMaster = () => {
                   name="Category"
                   value={formData.Category || 'Inhouse'}
                   onChange={handleInputChange}
-                  sx={{ fontWeight: 600 }}
+                  sx={{ fontWeight: 600, '& .MuiSelect-select': { whiteSpace: 'nowrap' } }}
+                  MenuProps={{
+                    PaperProps: { sx: { minWidth: 380, maxHeight: 400 } }
+                  }}
+                  renderValue={(selected) => {
+                    const map = {
+                      SubContract: 'Sub-Contract (External sub-contractors)',
+                      Inhouse: 'Inhouse (In-house factory production)',
+                      BOP: 'BOP (Bought-Out Parts)'
+                    };
+                    return map[selected] || selected;
+                  }}
                 >
-                  <MenuItem value="SubContract">
+                  <MenuItem value="SubContract" sx={{ whiteSpace: 'nowrap' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Chip label="Sub-Contract" size="small" sx={{ bgcolor: '#fff7ed', color: '#ea580c', fontWeight: 700, height: 20 }} />
-                      <Typography variant="body2" sx={{ color: '#475569' }}>- External sub-contractors</Typography>
+                      <Typography variant="body2" sx={{ color: '#475569', whiteSpace: 'nowrap' }}>- External sub-contractors</Typography>
                     </Box>
                   </MenuItem>
-                  <MenuItem value="Inhouse">
+                  <MenuItem value="Inhouse" sx={{ whiteSpace: 'nowrap' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Chip label="Inhouse" size="small" sx={{ bgcolor: '#eff6ff', color: '#0F3B66', fontWeight: 700, height: 20 }} />
-                      <Typography variant="body2" sx={{ color: '#475569' }}>- In-house factory production</Typography>
+                      <Typography variant="body2" sx={{ color: '#475569', whiteSpace: 'nowrap' }}>- In-house factory production</Typography>
                     </Box>
                   </MenuItem>
-                  <MenuItem value="BOP">
+                  <MenuItem value="BOP" sx={{ whiteSpace: 'nowrap' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Chip label="BOP" size="small" sx={{ bgcolor: '#ecfeff', color: '#0891b2', fontWeight: 700, height: 20 }} />
-                      <Typography variant="body2" sx={{ color: '#475569' }}>- Bought-Out Parts</Typography>
+                      <Typography variant="body2" sx={{ color: '#475569', whiteSpace: 'nowrap' }}>- Bought-Out Parts</Typography>
                     </Box>
                   </MenuItem>
                 </Select>
@@ -1193,7 +1093,7 @@ const ItemMaster = () => {
                 options={itemTypes}
                 getOptionLabel={(option) => getItemTypeLabel(option)}
                 renderOption={(props, option) => (
-                  <li {...props} key={option}>
+                  <li {...props} key={option} style={{ whiteSpace: 'nowrap' }}>
                     {getItemTypeLabel(option)}
                   </li>
                 )}
@@ -1203,7 +1103,22 @@ const ItemMaster = () => {
                 }}
                 fullWidth
                 size="small"
-                renderInput={(params) => <TextField {...params} label="Item Type" />}
+                sx={{ flex: 1.5, minWidth: { sm: 300 } }}
+                slotProps={{
+                  popper: {
+                    sx: { minWidth: 340 }
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Item Type" 
+                    InputProps={{
+                      ...params.InputProps,
+                      sx: { '& input': { whiteSpace: 'nowrap', textOverflow: 'ellipsis' } }
+                    }}
+                  />
+                )}
               />
               <Autocomplete
                 autoHighlight
@@ -1216,8 +1131,16 @@ const ItemMaster = () => {
                 }}
                 fullWidth
                 size="small"
+                sx={{ flex: 1, minWidth: { sm: 160 } }}
+                renderOption={(props, option) => (
+                  <li {...props} key={option} style={{ whiteSpace: 'nowrap' }}>
+                    {option}
+                  </li>
+                )}
                 renderInput={(params) => <TextField {...params} label="Unit *" required />}
               />
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <Autocomplete
                 autoHighlight
                 autoSelect
@@ -1229,7 +1152,27 @@ const ItemMaster = () => {
                 }}
                 fullWidth
                 size="small"
-                renderInput={(params) => <TextField {...params} label="Series Name" />}
+                sx={{ minWidth: { sm: 300 } }}
+                slotProps={{
+                  popper: {
+                    sx: { minWidth: 320 }
+                  }
+                }}
+                renderOption={(props, option) => (
+                  <li {...props} key={option} style={{ whiteSpace: 'nowrap' }}>
+                    {option}
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Series Name" 
+                    InputProps={{
+                      ...params.InputProps,
+                      sx: { '& input': { whiteSpace: 'nowrap', textOverflow: 'ellipsis' } }
+                    }}
+                  />
+                )}
               />
             </Box>
 
@@ -1239,72 +1182,6 @@ const ItemMaster = () => {
               <TextField label="MRP (₹) [Sale Price]" name="MRP" type="number" inputProps={{ step: "0.01" }} value={formData.MRP} onChange={handleInputChange} fullWidth size="small" />
               <TextField label="Costing (₹)" name="Costing" type="number" inputProps={{ step: "0.01" }} value={formData.Costing} onChange={handleInputChange} fullWidth size="small" />
             </Box>
-
-            {/* Automated Costing & Sale Price Calculator Helper */}
-            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#fff1f2', borderColor: '#fecdd3' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: '#be123c', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <CalculateIcon sx={{ fontSize: 16 }} /> Costing Formula Helper (From Raw Rates)
-                </Typography>
-                <Button 
-                  size="small" 
-                  onClick={() => navigate('/dashboard/costing-calculator')}
-                  sx={{ textTransform: 'none', fontSize: '0.75rem', color: '#be123c', p: 0, minWidth: 'auto', fontWeight: 600 }}
-                >
-                  Open Full Calculator
-                </Button>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                <FormControl size="small" sx={{ width: 110 }}>
-                  <InputLabel>Size</InputLabel>
-                  <Select
-                    value={quickCostingSize}
-                    label="Size"
-                    onChange={(e) => setQuickCostingSize(e.target.value)}
-                  >
-                    {SIZES.map(s => (
-                      <MenuItem key={s.size} value={s.size}>{s.size}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <TextField
-                  size="small"
-                  label="Margin (₹)"
-                  type="number"
-                  value={quickCostingMargin}
-                  onChange={(e) => setQuickCostingMargin(e.target.value)}
-                  sx={{ width: 120, bgcolor: '#ffffff' }}
-                  InputProps={{ startAdornment: <InputAdornment position="start">₹</InputAdornment> }}
-                />
-
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={() => {
-                    const match = SERIES_DEFINITIONS.find(s => 
-                      formData.Series && (formData.Series.includes(s.seriesKey) || s.seriesName.includes(formData.Series))
-                    ) || SERIES_DEFINITIONS[0];
-
-                    const calc = calculateCosting(DEFAULT_CONFIG, {
-                      [match.seriesKey]: { [quickCostingSize]: Number(quickCostingMargin) || 0 }
-                    });
-                    const sData = calc.series.find(s => s.seriesKey === match.seriesKey);
-                    const szData = sData?.sizes.find(sz => sz.size === quickCostingSize);
-                    if (szData) {
-                      setFormData(prev => ({
-                        ...prev,
-                        Costing: szData.totalCost.toFixed(2),
-                        MRP: szData.salePrice.toFixed(2)
-                      }));
-                    }
-                  }}
-                  sx={{ bgcolor: '#be123c', '&:hover': { bgcolor: '#9f1239' }, textTransform: 'none', fontWeight: 600 }}
-                >
-                  Auto-Calculate Cost & Sale Price
-                </Button>
-              </Box>
-            </Paper>
 
             {/* Stock Quantities */}
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
@@ -1350,7 +1227,7 @@ const ItemMaster = () => {
               </Typography>
               
               <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: 'flex-start' }}>
-                <FormControl fullWidth size="small">
+                <FormControl fullWidth size="small" sx={{ minWidth: { sm: 340 } }}>
                   <InputLabel id="dead-stock-type-label">Declaration Mode</InputLabel>
                   <Select
                     labelId="dead-stock-type-label"
@@ -1358,19 +1235,23 @@ const ItemMaster = () => {
                     name="DeadStockType"
                     value={formData.DeadStockType || 'None'}
                     onChange={handleInputChange}
+                    sx={{ '& .MuiSelect-select': { whiteSpace: 'nowrap' } }}
+                    MenuProps={{
+                      PaperProps: { sx: { minWidth: 360, maxHeight: 350 } }
+                    }}
                   >
-                    <MenuItem value="None">
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>
+                    <MenuItem value="None" sx={{ whiteSpace: 'nowrap' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669', whiteSpace: 'nowrap' }}>
                         🟢 None (Active Inventory)
                       </Typography>
                     </MenuItem>
-                    <MenuItem value="Auto">
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706' }}>
+                    <MenuItem value="Auto" sx={{ whiteSpace: 'nowrap' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706', whiteSpace: 'nowrap' }}>
                         ⚡ Auto (No movement in X days)
                       </Typography>
                     </MenuItem>
-                    <MenuItem value="Manual">
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#dc2626' }}>
+                    <MenuItem value="Manual" sx={{ whiteSpace: 'nowrap' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#dc2626', whiteSpace: 'nowrap' }}>
                         🔴 Manual (Declare as Dead Stock now)
                       </Typography>
                     </MenuItem>
@@ -1418,12 +1299,285 @@ const ItemMaster = () => {
         </DialogActions>
       </Dialog>
 
+      {/* View Item Details Modal */}
+      <Dialog
+        open={viewModalOpen}
+        onClose={handleCloseViewModal}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 2.5, overflow: 'hidden' }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#f8fafc', 
+          borderBottom: '1px solid #e2e8f0', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          py: 2,
+          px: 3
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: 2, 
+              bgcolor: '#0F3B66', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              color: '#ffffff'
+            }}>
+              <InventoryIcon />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F3B66', lineHeight: 1.2 }}>
+                {selectedViewItem?.ItemName || 'Item Details'}
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                <Chip 
+                  label={`Code: ${selectedViewItem?.ItemCode || '-'}`} 
+                  size="small" 
+                  sx={{ fontWeight: 700, bgcolor: '#0F3B66', color: '#ffffff', height: 22, fontSize: '0.75rem' }} 
+                />
+                {selectedViewItem?.SubCode && (
+                  <Chip 
+                    label={`Sub: ${selectedViewItem.SubCode}`} 
+                    size="small" 
+                    sx={{ fontWeight: 600, bgcolor: '#e2e8f0', color: '#334155', height: 22, fontSize: '0.75rem' }} 
+                  />
+                )}
+                <Chip 
+                  label={selectedViewItem?.Category === 'SubContract' ? 'Sub-Contract' : (selectedViewItem?.Category || 'Inhouse')} 
+                  size="small" 
+                  sx={{ 
+                    fontWeight: 700, 
+                    bgcolor: selectedViewItem?.Category === 'SubContract' ? '#fff7ed' : (selectedViewItem?.Category === 'BOP' ? '#ecfeff' : '#eff6ff'), 
+                    color: selectedViewItem?.Category === 'SubContract' ? '#ea580c' : (selectedViewItem?.Category === 'BOP' ? '#0891b2' : '#0F3B66'),
+                    height: 22, 
+                    fontSize: '0.75rem' 
+                  }} 
+                />
+                {selectedViewItem?.ItemType && (
+                  <Chip 
+                    label={selectedViewItem.ItemType} 
+                    size="small" 
+                    sx={{ fontWeight: 600, bgcolor: '#f1f5f9', color: '#0F3B66', border: '1px solid #cbd5e1', height: 22, fontSize: '0.75rem' }} 
+                  />
+                )}
+              </Box>
+            </Box>
+          </Box>
+          <IconButton onClick={handleCloseViewModal} size="small" sx={{ color: '#64748b' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent dividers sx={{ p: 3, bgcolor: '#ffffff' }}>
+          {selectedViewItem && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              
+              {/* Section 1: Identification & General Details */}
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1.5 }}>
+                  General Information
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Item Code</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F3B66' }}>{selectedViewItem.ItemCode}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Sub Code</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>{selectedViewItem.SubCode || '—'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Item Name</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b' }}>{selectedViewItem.ItemName}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Sanitary / Item Category</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>{selectedViewItem.ItemCategory || '—'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Sourcing Category</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>{selectedViewItem.Category || 'Inhouse'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>HSN Code</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#0F3B66' }}>{selectedViewItem.HSNCode || '—'}</Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 2: Classification & Physical Attributes */}
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#ffffff', borderColor: '#e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1.5 }}>
+                  Classification & Specifications
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' }, gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Item Type</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>{getItemTypeLabel(selectedViewItem.ItemType) || '—'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Series / Brand</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>{selectedViewItem.Series || '—'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Unit of Measure</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>{selectedViewItem.Unit || '—'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Standard Weight</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
+                      {selectedViewItem.StdWeight != null && selectedViewItem.StdWeight !== '' ? `${Number(selectedViewItem.StdWeight).toFixed(3)} Kg` : '—'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 3: Warehouse & Storage */}
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#ffffff', borderColor: '#e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1.5 }}>
+                  Storage & Location
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Warehouse No</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: selectedViewItem.WarehouseNo ? '#1e293b' : '#94a3b8' }}>
+                      {selectedViewItem.WarehouseNo || 'Not specified'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Location / Bin / Rack</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: selectedViewItem.Location ? '#1e293b' : '#94a3b8' }}>
+                      {selectedViewItem.Location || 'Not specified'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 4: Inventory & Stock Levels */}
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1.5 }}>
+                  Inventory & Stock Levels
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Opening Stock</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#334155' }}>
+                      {selectedViewItem.OpeningStock || 0} <Typography component="span" variant="caption" sx={{ color: '#64748b' }}>{selectedViewItem.Unit}</Typography>
+                    </Typography>
+                  </Box>
+                  <Box sx={{ 
+                    p: 1.5, 
+                    bgcolor: (selectedViewItem.ReorderLevel > 0 && (selectedViewItem.ClosingStock || 0) < selectedViewItem.ReorderLevel) ? '#fef2f2' : '#ffffff', 
+                    borderRadius: 1.5, 
+                    border: (selectedViewItem.ReorderLevel > 0 && (selectedViewItem.ClosingStock || 0) < selectedViewItem.ReorderLevel) ? '1px solid #fecaca' : '1px solid #e2e8f0' 
+                  }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Closing Stock</Typography>
+                      {(selectedViewItem.ReorderLevel > 0 && (selectedViewItem.ClosingStock || 0) < selectedViewItem.ReorderLevel) && (
+                        <Chip label="Low Stock" size="small" color="error" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }} />
+                      )}
+                    </Box>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 700, 
+                      color: (selectedViewItem.ReorderLevel > 0 && (selectedViewItem.ClosingStock || 0) < selectedViewItem.ReorderLevel) ? '#dc2626' : '#0F3B66' 
+                    }}>
+                      {selectedViewItem.ClosingStock || 0} <Typography component="span" variant="caption" sx={{ color: '#64748b' }}>{selectedViewItem.Unit}</Typography>
+                    </Typography>
+                  </Box>
+                  <Box sx={{ p: 1.5, bgcolor: '#ffffff', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block' }}>Reorder Level</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: selectedViewItem.ReorderLevel ? '#d97706' : '#94a3b8' }}>
+                      {selectedViewItem.ReorderLevel != null && Number(selectedViewItem.ReorderLevel) > 0 ? selectedViewItem.ReorderLevel : 'Not set'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 5: Costing & Sale Price */}
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#ffffff', borderColor: '#e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1.5 }}>
+                  Pricing & Valuation
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#f0fdf4', borderRadius: 1.5, border: '1px solid #bbf7d0' }}>
+                    <Typography variant="caption" sx={{ color: '#166534', fontWeight: 600, display: 'block' }}>Costing</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#15803d' }}>
+                      ₹ {selectedViewItem.Costing != null && selectedViewItem.Costing !== '' ? Number(selectedViewItem.Costing).toFixed(2) : '0.00'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ p: 1.5, bgcolor: '#eff6ff', borderRadius: 1.5, border: '1px solid #bfdbfe' }}>
+                    <Typography variant="caption" sx={{ color: '#1e40af', fontWeight: 600, display: 'block' }}>MRP / Sale Price</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1d4ed8' }}>
+                      ₹ {selectedViewItem.MRP != null && selectedViewItem.MRP !== '' ? Number(selectedViewItem.MRP).toFixed(2) : '0.00'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 6: Dead Stock Status */}
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', borderColor: '#e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F3B66', mb: 1.5 }}>
+                  Dead Stock Status
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                  {selectedViewItem.DeadStockType === 'Manual' || selectedViewItem.IsDeadStock === 1 ? (
+                    <Chip 
+                      label="Manual Dead Stock (Declared manually)" 
+                      sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 700 }} 
+                    />
+                  ) : selectedViewItem.DeadStockType === 'Auto' ? (
+                    <Chip 
+                      label={`Auto Dead Stock (Inactivity threshold: ${selectedViewItem.DeadStockDays || 0} days)`} 
+                      sx={{ bgcolor: '#fef3c7', color: '#92400e', fontWeight: 700 }} 
+                    />
+                  ) : (
+                    <Chip 
+                      label="Active Inventory (Normal Movement)" 
+                      variant="outlined" 
+                      sx={{ color: '#059669', borderColor: '#a7f3d0', fontWeight: 700 }} 
+                    />
+                  )}
+                </Box>
+              </Paper>
+
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e2e8f0', justifyContent: 'space-between' }}>
+          <Button onClick={handleCloseViewModal} color="inherit" sx={{ textTransform: 'none', fontWeight: 600 }}>
+            Close
+          </Button>
+          {hasEditPermission() && (
+            <Button 
+              variant="contained" 
+              startIcon={<EditIcon />}
+              onClick={() => {
+                const itemToEdit = selectedViewItem;
+                handleCloseViewModal();
+                handleOpenDialog('edit', itemToEdit);
+              }}
+              sx={{ bgcolor: '#0F3B66', '&:hover': { bgcolor: '#F88A01' }, textTransform: 'none', fontWeight: 600 }}
+            >
+              Edit Item
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
       {/* Quick Dead Stock Status Modal */}
       <Dialog
         open={deadStockModalOpen}
         onClose={handleCloseDeadStockModal}
-        maxWidth="xs"
+        maxWidth="sm"
         fullWidth
+        PaperProps={{ sx: { borderRadius: 2.5 } }}
       >
         <DialogTitle sx={{ fontWeight: 700, color: '#0F3B66', borderBottom: '1px solid #e2e8f0', pb: 1.5 }}>
           Dead Stock Declaration
@@ -1440,26 +1594,30 @@ const ItemMaster = () => {
                 </Typography>
               </Box>
 
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" sx={{ minWidth: 320 }}>
                 <InputLabel id="quick-dead-stock-mode-label">Declaration Mode</InputLabel>
                 <Select
                   labelId="quick-dead-stock-mode-label"
                   label="Declaration Mode"
                   value={quickDeadStockType}
                   onChange={(e) => setQuickDeadStockType(e.target.value)}
+                  sx={{ '& .MuiSelect-select': { whiteSpace: 'nowrap' } }}
+                  MenuProps={{
+                    PaperProps: { sx: { minWidth: 360, maxHeight: 350 } }
+                  }}
                 >
-                  <MenuItem value="None">
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>
+                  <MenuItem value="None" sx={{ whiteSpace: 'nowrap' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669', whiteSpace: 'nowrap' }}>
                       🟢 None (Active Inventory)
                     </Typography>
                   </MenuItem>
-                  <MenuItem value="Auto">
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706' }}>
+                  <MenuItem value="Auto" sx={{ whiteSpace: 'nowrap' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#d97706', whiteSpace: 'nowrap' }}>
                       ⚡ Auto (No movement in X days)
                     </Typography>
                   </MenuItem>
-                  <MenuItem value="Manual">
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#dc2626' }}>
+                  <MenuItem value="Manual" sx={{ whiteSpace: 'nowrap' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#dc2626', whiteSpace: 'nowrap' }}>
                       🔴 Manual (Declare as Dead Stock now)
                     </Typography>
                   </MenuItem>

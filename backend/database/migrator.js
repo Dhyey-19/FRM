@@ -138,54 +138,7 @@ function autoHealSQLiteSchema(db, saveToDisk) {
     console.warn('[AutoHeal] CRM_Leads check:', e.message);
   }
 
-  // 6. ItemCostingConfig
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS "ItemCostingConfig" (
-        "Id" INTEGER PRIMARY KEY AUTOINCREMENT,
-        "ConfigKey" TEXT NOT NULL UNIQUE,
-        "PipeRatePerMeter" NUMERIC NOT NULL DEFAULT 23.0000,
-        "BrassRatePerKg" NUMERIC NOT NULL DEFAULT 950.0000,
-        "HcpPipeRatePerMeter" NUMERIC NOT NULL DEFAULT 27.0000,
-        "NylonInsertRate" NUMERIC NOT NULL DEFAULT 1.5000,
-        "NylonNutRate" NUMERIC NOT NULL DEFAULT 2.5000,
-        "SS201NutRate" NUMERIC NOT NULL DEFAULT 5.2500,
-        "SS304NutRate" NUMERIC NOT NULL DEFAULT 8.0000,
-        "SSInnerRate" NUMERIC NOT NULL DEFAULT 2.5000,
-        "BrassInsertConv" NUMERIC NOT NULL DEFAULT 300.0000,
-        "BrassInsertWeight" NUMERIC NOT NULL DEFAULT 0.0040,
-        "BrassNutNConv" NUMERIC NOT NULL DEFAULT 230.0000,
-        "BrassNutNWeight" NUMERIC NOT NULL DEFAULT 0.0110,
-        "BrassNutPCConv" NUMERIC NOT NULL DEFAULT 350.0000,
-        "BrassNutPCWeight" NUMERIC NOT NULL DEFAULT 0.0120,
-        "CapRate" NUMERIC NOT NULL DEFAULT 2.5000,
-        "KeyRate" NUMERIC NOT NULL DEFAULT 1.0000,
-        "WasherRate" NUMERIC NOT NULL DEFAULT 0.8000,
-        "LabourRate" NUMERIC NOT NULL DEFAULT 2.0000,
-        "PackingRate" NUMERIC NOT NULL DEFAULT 1.0000,
-        "MarginsJson" TEXT,
-        "UpdatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      INSERT OR IGNORE INTO "ItemCostingConfig" (
-        "ConfigKey", "PipeRatePerMeter", "BrassRatePerKg", "HcpPipeRatePerMeter",
-        "NylonInsertRate", "NylonNutRate", "SS201NutRate", "SS304NutRate", "SSInnerRate",
-        "BrassInsertConv", "BrassInsertWeight", "BrassNutNConv", "BrassNutNWeight",
-        "BrassNutPCConv", "BrassNutPCWeight", "CapRate", "KeyRate", "WasherRate",
-        "LabourRate", "PackingRate"
-      ) VALUES (
-        'DEFAULT', 23.0000, 950.0000, 27.0000,
-        1.5000, 2.5000, 5.2500, 8.0000, 2.5000,
-        300.0000, 0.0040, 230.0000, 0.0110,
-        350.0000, 0.0120, 2.5000, 1.0000, 0.8000,
-        2.0000, 1.0000
-      );
-    `);
-    didModify = true;
-  } catch (e) {
-    console.warn('[AutoHeal] ItemCostingConfig check:', e.message);
-  }
-
-  // 7. Ensure Costing column exists in DepartmentMaster
+  // 6. Ensure Costing column exists in DepartmentMaster
   try {
     const dmInfo = db.exec('PRAGMA table_info("DepartmentMaster");');
     const cols = (dmInfo.length > 0 && dmInfo[0].values) ? dmInfo[0].values.map(r => r[1]) : [];
